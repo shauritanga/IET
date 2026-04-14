@@ -1,12 +1,14 @@
 import {useState, useRef, useEffect} from "react";
 import type { Accept } from "react-dropzone";
+import {useMutation} from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { useFilePicker, type PickedFile } from "~/hooks/useFilePicker";
-import { useUploadFile } from "~/hooks/useUploadFile";
 import { generateUniqueId } from "~/hooks/useStableIds";
 import { stopEventWithCallback } from "~/utils/stop-event-with-callback";
 import {Pen,Camera} from "@solar-icons/react/ssr";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
+import http from "~/utils/http";
 
 const IMAGE_ACCEPT: Accept = {
     "image/jpeg": [".jpg", ".jpeg"],
@@ -31,25 +33,71 @@ export const ImagePicker = ({
                             }: ImagePickerProps) => {
     const [preview, setPreview] = useState<string | undefined>(value);
     const inputId = useRef(generateUniqueId()).current;
+    const objectUrlRef = useRef<string | null>(null);
+    const committedValueRef = useRef<string | undefined>(value);
 
     useEffect(() => {
+        committedValueRef.current = value;
         if (value !== undefined) {
             setPreview(value);
+            return;
+        }
+
+        if (!objectUrlRef.current) {
+            setPreview(undefined);
         }
     }, [value]);
 
-    const { uploadFile, isUploading } = useUploadFile({
-        onSuccess: (data) => {
-            onChange?.(data.url);
+    useEffect(() => {
+        return () => {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+            }
+        };
+    }, []);
+
+    const { mutate: uploadFile, isPending: isUploading } = useMutation({
+        mutationFn: async (file: File) => {
+            const formData = new FormData();
+            formData.append("photo", file);
+
+            const response = await http.post<{
+                success: boolean;
+                data: { profilePhotoUrl: string };
+                message: string;
+            }>("/users/profile/photo", formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            });
+
+            return response.data.data.profilePhotoUrl;
         },
-        onError: () => {
-            setPreview(undefined);
-            onChange?.(undefined);
+        onSuccess: (data) => {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+                objectUrlRef.current = null;
+            }
+            setPreview(data);
+            onChange?.(data);
+        },
+        onError: (error: any) => {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+                objectUrlRef.current = null;
+            }
+            setPreview(committedValueRef.current);
+            onChange?.(committedValueRef.current);
+            toast.error(error?.response?.data?.message ?? "Failed to upload photo");
         },
     });
 
     const handleFileChange = (pickedFile: PickedFile) => {
+        if (objectUrlRef.current) {
+            URL.revokeObjectURL(objectUrlRef.current);
+        }
         const objectUrl = URL.createObjectURL(pickedFile.file);
+        objectUrlRef.current = objectUrl;
         setPreview(objectUrl);
         uploadFile(pickedFile.file);
     };

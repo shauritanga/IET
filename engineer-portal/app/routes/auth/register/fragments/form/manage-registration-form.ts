@@ -5,9 +5,12 @@ export const RegistrationFormSchema = z.object({
     email: z.string().email(),
     password: z
         .string()
-        .min(6, "Password must be at least 6 characters")
-        .regex(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]+$/, "Password must contain both letters and numbers"),
-    confirmPassword: z.string().min(6, "Confirm password must be at least 6 characters"),
+        .min(8, "Password must be at least 8 characters")
+        .regex(
+            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+            "Password must include uppercase, lowercase, number, and special character"
+        ),
+    confirmPassword: z.string().min(8, "Confirm password must be at least 8 characters"),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],

@@ -5,27 +5,62 @@ import { useNavigate } from "react-router";
 import { getApplicationDraft } from "~/routes/application/requests/handle-resume";
 import type { ApplicationDraftData, ApplicationStep } from "~/routes/application/type";
 import type { APIResponse, TErrorMessage } from "~/types/types";
+import { getApplicationId } from "~/utils/appplication";
 
-const stepRouteMap: Record<ApplicationStep, string> = {
-    PERSONAL_DETAILS: "/application/personal-details",
-    REGISTRATION_DETAILS: "/application/registration-details",
-    EXPERIENCE: "/application/experience",
-    REFERENCES: "/application/references",
-    DECLARATION: "/application/submission",
-    PAYMENT: "/application/submission",
+const orderedApplicationSteps: ApplicationStep[] = [
+    "PERSONAL_DETAILS",
+    "REGISTRATION_DETAILS",
+    "EDUCATION_EXPERIENCE",
+    "REFERENCES",
+    "DECLARATION",
+];
+
+export const getApplicationRoute = (
+    draft: ApplicationDraftData | null | undefined,
+) => {
+    if (!draft?.hasActiveRegistration) {
+        return "/application/personal-details";
+    }
+
+    if (draft.status === "IN_REVIEW" || draft.status === "APPROVED") {
+        return "/application/welcome";
+    }
+
+    const nextIncompleteStep = orderedApplicationSteps.find(
+        (step) => !draft.completedSteps.includes(step),
+    );
+
+    switch (nextIncompleteStep ?? draft.currentStep) {
+        case "PERSONAL_DETAILS":
+            return "/application/personal-details";
+        case "REGISTRATION_DETAILS":
+            return "/application/registration-details";
+        case "EDUCATION_EXPERIENCE":
+            return "/application/experience";
+        case "REFERENCES":
+            return "/application/references";
+        case "DECLARATION":
+        case "EMAIL_VERIFICATION":
+        case "PAYMENT":
+            return "/application/submission";
+        default:
+            return "/application/personal-details";
+    }
 };
 
 // ── Separate hook just for the initial redirect ──────────────────────────────
 export const useResumeApplication = () => {
     const navigate = useNavigate();
     const hasRedirected = useRef(false);
+    const applicationId = getApplicationId();
 
     const query = useQuery<APIResponse<ApplicationDraftData>, TErrorMessage>({
         queryKey: ["application-draft"],
         queryFn: getApplicationDraft,
-        staleTime: Infinity, // ← don't refetch during navigation
+        enabled: !!applicationId,
+        staleTime: 0,
         refetchOnWindowFocus: false,
-        refetchOnMount: false, // ← don't re-run when stepping between pages
+        refetchOnMount: true,
     });
 
     useEffect(() => {
@@ -33,14 +68,7 @@ export const useResumeApplication = () => {
 
         hasRedirected.current = true;
 
-        const { hasActiveRegistration, currentStep } = query.data.data;
-
-        if (!hasActiveRegistration) {
-            navigate("/application/personal-details", { replace: true });
-            return;
-        }
-
-        const redirectTo = stepRouteMap[currentStep!] ?? "/application/personal-details";
+        const redirectTo = getApplicationRoute(query.data.data);
         navigate(redirectTo, { replace: true });
     }, [query.data]);
 
@@ -49,11 +77,14 @@ export const useResumeApplication = () => {
 
 // ── Separate hook just for reading draft data (no redirect) ──────────────────
 export const useGetApplicationDraft = () => {
+    const applicationId = getApplicationId();
+
     return useQuery<APIResponse<ApplicationDraftData>, TErrorMessage>({
         queryKey: ["application-draft"], // same key — reads from cache, no refetch
         queryFn: getApplicationDraft,
-        staleTime: Infinity,
+        enabled: !!applicationId,
+        staleTime: 0,
         refetchOnWindowFocus: false,
-        refetchOnMount: false,
+        refetchOnMount: true,
     });
 };

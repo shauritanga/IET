@@ -37,6 +37,7 @@ import {
   VerifyRegistrationEmailDto,
   ExperienceEducationDto,
 } from '../dto/registration-steps.dto';
+import { UpdatePersonalDetailsDto } from '../dto/update-registration.dto';
 
 @ApiTags('Registrations')
 @Controller('registrations')
@@ -79,6 +80,45 @@ export class RegistrationController {
     @Body() dto: CreateRegistrationDto,
   ) {
     const result = await this.registrationService.createRegistration(dto, user.id);
+    return {
+      success: true,
+      data: result,
+      message: 'Personal details saved successfully',
+    };
+  }
+
+  @Patch(':applicationId/steps/personal-details')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update personal details (Step 1)' })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Personal details saved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          applicationId: '550e8400-e29b-41d4-a716-446655440000',
+          userId: '550e8400-e29b-41d4-a716-446655440001',
+          currentStep: 'PERSONAL_DETAILS',
+          completedSteps: ['PERSONAL_DETAILS'],
+          nextStep: 'REGISTRATION_DETAILS',
+        },
+        message: 'Personal details saved successfully',
+      },
+    },
+  })
+  async updatePersonalDetails(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() user: UserEntity,
+    @Body() dto: UpdatePersonalDetailsDto,
+  ) {
+    const result = await this.registrationService.updatePersonalDetails(
+      applicationId,
+      user.id,
+      dto,
+    );
     return {
       success: true,
       data: result,

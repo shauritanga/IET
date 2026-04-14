@@ -9,6 +9,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuid } from 'uuid';
 import * as path from 'path';
+import { mkdir, writeFile, unlink } from 'fs/promises';
 
 export interface UploadResult {
   key: string;
@@ -22,11 +23,13 @@ export interface UploadResult {
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private readonly client: S3Client;
+  private readonly client: S3Client | null;
   private readonly bucket: string;
   private readonly cdnUrl: string;
   private readonly endpoint: string;
   private readonly storageEnabled: boolean;
+  private readonly appUrl: string;
+  private readonly localUploadRoot: string;
 
   constructor(private configService: ConfigService) {
     const key = configService.get<string>('DO_SPACES_KEY');
@@ -37,6 +40,8 @@ export class StorageService {
     this.bucket = configService.get<string>('DO_SPACES_BUCKET', '');
     this.cdnUrl = configService.get<string>('DO_SPACES_CDN_URL', '');
     this.endpoint = endpoint;
+    this.appUrl = configService.get<string>('APP_URL', 'http://localhost:3000');
+    this.localUploadRoot = path.join(process.cwd(), 'uploads');
     this.storageEnabled = !!(key && secret && endpoint && this.bucket);
 
     if (this.storageEnabled) {
@@ -50,8 +55,9 @@ export class StorageService {
         `Storage service initialized with bucket: ${this.bucket}`,
       );
     } else {
+      this.client = null;
       this.logger.warn(
-        'Storage service not configured - file uploads will fail',
+        'Storage service not configured - using local file storage',
       );
     }
   }
@@ -70,7 +76,7 @@ export class StorageService {
     folder: string = 'uploads',
   ): Promise<UploadResult> {
     if (!this.storageEnabled) {
-      throw new BadRequestException('File storage is not configured');
+      return this.uploadFileLocally(buffer, originalName, mimeType, folder);
     }
 
     const ext = path.extname(originalName).toLowerCase();
@@ -109,10 +115,18 @@ export class StorageService {
    * Delete a file from S3/Spaces by key
    */
   async deleteFile(key: string): Promise<void> {
-    if (!this.storageEnabled) return;
+    if (!this.storageEnabled) {
+      const filePath = path.join(this.localUploadRoot, key);
+      try {
+        await unlink(filePath);
+      } catch (error) {
+        this.logger.error(`Delete failed for ${key}: ${error.message}`);
+      }
+      return;
+    }
 
     try {
-      await this.client.send(
+      await this.client!.send(
         new DeleteObjectCommand({
           Bucket: this.bucket,
           Key: key,
@@ -129,11 +143,11 @@ export class StorageService {
    */
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
     if (!this.storageEnabled) {
-      throw new BadRequestException('File storage is not configured');
+      return this.buildLocalUrl(key);
     }
 
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
-    return getSignedUrl(this.client, command, { expiresIn });
+    return getSignedUrl(this.client!, command, { expiresIn });
   }
 
   /**
@@ -162,5 +176,40 @@ export class StorageService {
     // Parse from endpoint: https://sfo3.digitaloceanspaces.com
     const endpointUrl = new URL(this.endpoint);
     return `https://${this.bucket}.${endpointUrl.host}/${key}`;
+  }
+
+  private async uploadFileLocally(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+    folder: string,
+  ): Promise<UploadResult> {
+    const ext = path.extname(originalName).toLowerCase();
+    const key = `${folder}/${uuid()}${ext}`;
+    const filePath = path.join(this.localUploadRoot, key);
+
+    try {
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, buffer);
+
+      const url = this.buildLocalUrl(key);
+      this.logger.log(`Uploaded file locally: ${key} (${buffer.length} bytes)`);
+
+      return {
+        key,
+        url,
+        bucket: 'local',
+        size: buffer.length,
+        mimeType,
+        originalName,
+      };
+    } catch (error) {
+      this.logger.error(`Local upload failed: ${error.message}`, error.stack);
+      throw new BadRequestException(`File upload failed: ${error.message}`);
+    }
+  }
+
+  private buildLocalUrl(key: string): string {
+    return `${this.appUrl.replace(/\/$/, '')}/uploads/${key}`;
   }
 }

@@ -18,6 +18,7 @@ import { UserEntity } from '../../user/entities/user.entity';
 import { EmailService } from '../../shared/services/email.service';
 import { StorageService } from '../../shared/services/storage.service';
 import { CreateRegistrationDto } from '../dto/create-registration.dto';
+import { UpdatePersonalDetailsDto } from '../dto/update-registration.dto';
 import {
   RegistrationDetailsDto,
   AddEducationDto,
@@ -124,6 +125,62 @@ export class RegistrationService {
         `Failed to create registration: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Update personal details (Step 1)
+   */
+  async updatePersonalDetails(
+    applicationId: string,
+    userId: string,
+    dto: UpdatePersonalDetailsDto,
+  ): Promise<{
+    applicationId: string;
+    userId: string;
+    currentStep: RegistrationStep;
+    completedSteps: RegistrationStep[];
+    nextStep: RegistrationStep;
+  }> {
+    const registration = await this.getRegistrationForUser(
+      applicationId,
+      userId,
+    );
+
+    this.validateCanUpdate(registration);
+
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    await this.userRepository.update(userId, {
+      ...(dto.title !== undefined ? { title: dto.title } : {}),
+      ...(dto.firstName !== undefined ? { firstName: dto.firstName } : {}),
+      ...(dto.middleName !== undefined ? { middleName: dto.middleName } : {}),
+      ...(dto.lastName !== undefined ? { lastName: dto.lastName } : {}),
+      ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
+      ...(dto.phoneNumber !== undefined ? { phoneNumber: dto.phoneNumber } : {}),
+      ...(dto.dateOfBirth !== undefined
+        ? { dateOfBirth: new Date(dto.dateOfBirth) }
+        : {}),
+      ...(dto.nationality !== undefined ? { nationality: dto.nationality } : {}),
+      ...(dto.employer !== undefined ? { employer: dto.employer } : {}),
+      ...(dto.position !== undefined ? { position: dto.position } : {}),
+    });
+
+    if (!registration.completedSteps.includes(RegistrationStep.PERSONAL_DETAILS)) {
+      registration.completedSteps.push(RegistrationStep.PERSONAL_DETAILS);
+    }
+    registration.currentStep = RegistrationStep.PERSONAL_DETAILS;
+    await this.registrationRepository.save(registration);
+
+    return {
+      applicationId: registration.id,
+      userId,
+      currentStep: RegistrationStep.PERSONAL_DETAILS,
+      completedSteps: registration.completedSteps,
+      nextStep: RegistrationStep.REGISTRATION_DETAILS,
+    };
   }
 
   /**

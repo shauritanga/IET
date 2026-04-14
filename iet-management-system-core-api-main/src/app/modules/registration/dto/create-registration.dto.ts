@@ -131,7 +131,10 @@ export class CreateRegistrationDto {
     description: 'Profile photo URL — upload via POST /api/v1/uploads first to get this URL',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'profilePhotoUrl must be a valid URL' })
+  @IsUrl(
+    { require_tld: false },
+    { message: 'profilePhotoUrl must be a valid URL' },
+  )
   profilePhotoUrl?: string;
 
 }

@@ -9,20 +9,19 @@ import {
 import { Button } from "~/components/ui/button";
 import { useNavigate } from "react-router";
 import {useMembershipModalStore} from "~/stores/useMembershipModalStore";
-import {useLogout} from "~/routes/auth/logout";
 
 
 export default function MembershipRequiredModal() {
-    const { isOpen } = useMembershipModalStore();
+    const { isOpen, close } = useMembershipModalStore();
     const navigate = useNavigate();
-    const logout = useLogout();
 
     return (
-        <Dialog open={isOpen} onOpenChange={() => {}}>
-            <DialogContent
-                onPointerDownOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-            >
+        <Dialog open={isOpen} onOpenChange={(open) => {
+            if (!open) {
+                close();
+            }
+        }}>
+            <DialogContent>
                 <DialogHeader>
                     <div className="flex items-center justify-center w-14 h-14 rounded-full bg-[#390909]/10 mx-auto mb-2">
                         <svg
@@ -45,19 +44,14 @@ export default function MembershipRequiredModal() {
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="mt-4 flex gap-2">
-                    {/*<Button*/}
-                    {/*    type="button"*/}
-                    {/*    variant="outline"*/}
-                    {/*    size="lg"*/}
-                    {/*    onClick={logout}*/}
-                    {/*>*/}
-                    {/*    Logout*/}
-                    {/*</Button>*/}
                     <Button
                         type="button"
                         className="w-full bg-[#390909] hover:bg-[#390909]/90"
                         size="lg"
-                        onClick={() => navigate("/application", { replace: true })}
+                        onClick={() => {
+                            close();
+                            navigate("/application", { replace: true });
+                        }}
                     >
                         Continue Application
                     </Button>

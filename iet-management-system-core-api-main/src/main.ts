@@ -11,6 +11,8 @@ import {
 import { setupSwagger } from './app/common/docs/swagger';
 import { HttpExceptionFilter } from './app/common/exception/http-exception.filter';
 import { ConfigService } from '@nestjs/config';
+import { join } from 'path';
+import * as express from 'express';
 
 declare const module: any;
 
@@ -31,6 +33,8 @@ async function bootstrap() {
     .get<string>(
       'FRONTEND_ORIGINS',
       [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
         'http://localhost:4000',
         'http://127.0.0.1:4000',
         'http://localhost:4100',
@@ -40,6 +44,8 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const privateNetworkDevOriginPattern =
+    /^http:\/\/(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::(?:4000|4100|5173))$/;
 
   // Global Exception Filter
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -75,6 +81,7 @@ async function bootstrap() {
 
   // API Prefix
   app.setGlobalPrefix('api/v1', { exclude: ['health', ''] });
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   // Swagger Documentation
   if (swaggerEnabled) {
@@ -84,7 +91,12 @@ async function bootstrap() {
   // CORS
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || frontendOrigins.includes(origin)) {
+      if (
+        !origin ||
+        frontendOrigins.includes(origin) ||
+        (environment === 'development' &&
+          privateNetworkDevOriginPattern.test(origin))
+      ) {
         callback(null, true);
         return;
       }

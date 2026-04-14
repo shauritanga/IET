@@ -7,20 +7,52 @@ import {
     useManagePersonalDetailsForm
 } from "~/routes/application/personal-details/forms/manage-personal-details-form";
 import {useSubmitPersonalDetails} from "~/routes/application/personal-details/repository/useSubmitPersonalDetails";
-import {useLogout} from "~/routes/auth/logout";
 import {Spinner} from "~/components/ui/spinner";
+import type {TErrorMessage} from "~/types/types";
 
 
 const PersonalDetails = () => {
     const navigate = useNavigate();
-    const {form, isLoading} = useManagePersonalDetailsForm();
-    const logout = useLogout()
+    const {form} = useManagePersonalDetailsForm();
 
-    const {mutate: submitPersonalDetails, isPending} = useSubmitPersonalDetails(
-        () => navigate("/application/registration-details", {replace: true})
-    );
+    const handleValidationError = (error: TErrorMessage) => {
+        const fieldErrors = error.response?.data.errors ?? [];
+        let firstInvalidField: string | null = null;
+
+        fieldErrors.forEach((fieldError) => {
+            if (!fieldError.property || !fieldError.message) {
+                return;
+            }
+
+            if (!firstInvalidField) {
+                firstInvalidField = fieldError.property;
+            }
+
+            form.setError(fieldError.property as keyof PersonalDetailsFormType, {
+                type: "server",
+                message: fieldError.message,
+            });
+        });
+
+        if (!firstInvalidField) {
+            return;
+        }
+
+        const selector = `[name="${firstInvalidField}"], #${firstInvalidField}`;
+        const fieldElement = document.querySelector(selector);
+        if (fieldElement instanceof HTMLElement) {
+            fieldElement.scrollIntoView({ behavior: "smooth", block: "center" });
+            fieldElement.focus();
+        }
+    };
+
+    const {mutate: submitPersonalDetails, isPending} = useSubmitPersonalDetails({
+        onSuccess: () => navigate("/application/registration-details", {replace: true}),
+        onValidationError: handleValidationError,
+    });
 
     const submit = (value: PersonalDetailsFormType) => {
+        form.clearErrors();
         submitPersonalDetails(value);
     };
 
@@ -36,7 +68,14 @@ const PersonalDetails = () => {
                     <PersonalDetailsForm/>
                 </div>
                 <div className={"w-full flex items-center justify-between mt-8 lg:mt-0"}>
-                    <Button type={"button"} size={"lg"} onClick={logout} className={"lg:hidden"}>Back to Login</Button>
+                    <Button
+                        type={"button"}
+                        size={"lg"}
+                        onClick={() => navigate("/dashboard/home", { replace: true })}
+                        className={"lg:hidden"}
+                    >
+                        Cancel
+                    </Button>
                     <div className={"hidden lg:block"}/>
                     <Button type={"submit"} size={"lg"} disabled={isPending}>
                         {isPending ? <Spinner/> : "Continue"}

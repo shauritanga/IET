@@ -6,9 +6,9 @@ import type { ReferenceDetailsFormType } from "../forms/manage-reference-forms";
 
 
 export async function submitReferenceDetails(data: ReferenceDetailsFormType) {
-      const applicationId = getApplicationId()
+    const applicationId = getApplicationId()
     const response = await http.post<APIResponse<ApplicationResponse>>(
-        `registrations/${applicationId}/references`,
+        `/registrations/${applicationId}/references`,
         data
     );
     return response.data;

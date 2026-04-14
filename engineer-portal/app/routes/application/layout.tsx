@@ -1,4 +1,5 @@
-import { type LoaderFunctionArgs, Outlet, redirect, useLocation } from "react-router";
+import { type LoaderFunctionArgs, Outlet, redirect, useLocation, useNavigate } from "react-router";
+import { useEffect, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import {
     FileCheck,
@@ -10,19 +11,21 @@ import {
 } from "@solar-icons/react/ssr";
 import { cn } from "~/lib/utils";
 import { Spinner } from "~/components/ui/spinner";
-import { useLogout } from "~/routes/auth/logout";
 import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
 import { useInitializeApplication } from "~/routes/application/repository/useInitializeApplication";
+import { getApplicationRoute } from "~/routes/application/repository/useResumeApplication";
 
 const RegisterLayout = () => {
     const path = useLocation();
-    const logout = useLogout();
+    const navigate = useNavigate();
+    const hasAutoRedirected = useRef(false);
 
     // 1️⃣ Auto-create draft if no applicationId cookie exists (runs once on mount)
     const { isInitializing, isError } = useInitializeApplication();
 
     // 2️⃣ Fetch the draft data (only meaningful once we have an applicationId)
     const { isLoading: isDraftLoading } = useGetApplicationDraft();
+    const { data: draft } = useGetApplicationDraft();
 
     const steps = [
         {
@@ -87,6 +90,26 @@ const RegisterLayout = () => {
             </div>
         );
     }
+
+    useEffect(() => {
+        if (hasAutoRedirected.current || !draft?.data?.hasActiveRegistration) {
+            return;
+        }
+
+        const currentPath = path.pathname;
+        const targetPath = getApplicationRoute(draft.data);
+
+        if (
+            currentPath === "/application" ||
+            currentPath === "/application/personal-details"
+        ) {
+            hasAutoRedirected.current = true;
+
+            if (targetPath !== currentPath) {
+                navigate(targetPath, { replace: true });
+            }
+        }
+    }, [draft, navigate, path.pathname]);
 
     return (
         <div className="flex flex-col lg:flex-row lg:gap-4 w-full lg:min-h-dvh">
@@ -187,7 +210,12 @@ const RegisterLayout = () => {
                         </div>
                     </div>
                 </div>
-                <Button onClick={logout} variant={"outline"} size={"lg"} className={"w-fit text-red-600"}>
+                <Button
+                    onClick={() => navigate("/dashboard/home", { replace: true })}
+                    variant={"outline"}
+                    size={"lg"}
+                    className={"w-fit text-red-600"}
+                >
                     Cancel
                 </Button>
             </div>

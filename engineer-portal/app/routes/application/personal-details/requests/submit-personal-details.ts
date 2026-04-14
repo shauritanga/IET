@@ -6,10 +6,15 @@ import {getApplicationId} from "~/utils/appplication";
 
 
 export async function submitPersonalDetails(data: PersonalDetailsFormType) {
-    const applicationId = getApplicationId()
-    const response = await http.patch<APIResponse<ApplicationResponse>>(
-        `/registrations/${applicationId}/steps/personal-details`,
-        data
-    );
+    const applicationId = getApplicationId();
+    const response = applicationId
+        ? await http.patch<APIResponse<ApplicationResponse>>(
+            `/registrations/${applicationId}/steps/personal-details`,
+            data
+        )
+        : await http.post<APIResponse<ApplicationResponse>>(
+            "/registrations",
+            data
+        );
     return response.data;
 }

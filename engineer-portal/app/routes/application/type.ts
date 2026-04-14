@@ -2,7 +2,7 @@ export type ApplicationResponse = {
     applicationId:string;
     userId:string;
     currentStep:string;
-    completedStep:string[];
+    completedSteps:string[];
     nextStep:string;
 }
 
@@ -20,17 +20,18 @@ export interface ApplicationDraftData {
 export type ApplicationStep =
     | "PERSONAL_DETAILS"
     | "REGISTRATION_DETAILS"
-    | "EXPERIENCE"
+    | "EDUCATION_EXPERIENCE"
     | "REFERENCES"
+    | "EMAIL_VERIFICATION"
     | "DECLARATION"
     | "PAYMENT";
 
 export type ApplicationStatus =
     | "DRAFT"
-    | "SUBMITTED"
+    | "IN_REVIEW"
     | "APPROVED"
     | "REJECTED"
-    | "PENDING";
+    | "CHANGES_REQUESTED";
 
 export interface Registration {
     id: string;
@@ -49,6 +50,7 @@ export interface Registration {
     declarationAgreed: boolean;
     declarationSignature: string | null;
     declarationDate: string | null;
+    referenceNumber?: string | null;
 }
 
 export interface PersonalDetails {

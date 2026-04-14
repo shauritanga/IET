@@ -17,8 +17,10 @@ The local admin app runs on `http://localhost:4100`.
 Copy `.env.example` to `.env` if needed:
 
 ```bash
-VITE_API_BASE_URL=http://127.0.0.1:3000/api/v1
+VITE_API_BASE_URL=/api/v1
 ```
+
+For LAN testing, start the app with `npm run dev` and open `http://YOUR-LAN-IP:4100` from another device on the same network. The Vite dev server proxies `/api` to the local backend automatically.
 
 ## Notes
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import {Button} from "~/components/ui/button";
 import {Link} from "react-router"
 import {Field, FieldLabel} from "~/components/ui/field";
@@ -27,11 +26,11 @@ const VerifyEmail = () => {
             </div>
 
             <div className={"w-full flex items-center justify-between"}>
-                <Link to={"/register/references"}>
+                <Link to={"/application/references"}>
                 <Button size={"sm"}>Back</Button>
                 </Link>
                 <div className={"hidden lg:block"}/>
-                <Link to={"/register/submission"}>
+                <Link to={"/application/submission"}>
                     <Button size={"sm"}>Continue</Button>
                 </Link>
             </div>

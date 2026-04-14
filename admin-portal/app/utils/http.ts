@@ -3,7 +3,7 @@ import { clearSession, TOKEN_KEY } from "~/utils/auth";
 import { parseCookie } from "~/utils/cookies";
 
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
   headers: {
     Accept: "application/json",
   },

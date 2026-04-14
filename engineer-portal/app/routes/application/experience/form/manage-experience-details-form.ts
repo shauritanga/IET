@@ -3,6 +3,7 @@ import {useForm, useFieldArray, useWatch} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useEffect} from "react";
 import {useApplicationFormStore} from "~/routes/application/store/useApplicationFormStore";
+import {useGetApplicationDraft} from "~/routes/application/repository/useResumeApplication";
 
 
 export const EducationDetailSchema = z.object({
@@ -52,6 +53,7 @@ export const useManageExperienceForm = () => {
         setSavedEducationCount, setSavedWorkCount,
         _hasHydrated,
     } = useApplicationFormStore();
+    const { data: draft } = useGetApplicationDraft();
 
     const form = useForm<ExperienceDetailsFormType>({
         resolver: zodResolver(ExperienceDetailsFormSchema),
@@ -70,6 +72,46 @@ export const useManageExperienceForm = () => {
             form.reset(experience as Partial<ExperienceDetailsFormType>);
         }
     }, [_hasHydrated]);
+
+    useEffect(() => {
+        const registration = draft?.data?.registration;
+        if (!registration) return;
+
+        const education = registration.educations?.length
+            ? registration.educations.map((item) => ({
+                institutionName: item.institutionName ?? "",
+                country: item.fieldOfStudy ?? "",
+                startDate: item.startDate ?? "",
+                endDate: item.endDate ?? "",
+                courseName: item.qualification ?? "",
+                attachment: undefined,
+            }))
+            : [{ ...defaultEducation }];
+
+        const workExperience = registration.experiences?.length
+            ? registration.experiences.map((item) => ({
+                employer: item.employerName ?? "",
+                position: item.position ?? "",
+                startDate: item.startDate ?? "",
+                endDate: item.endDate ?? "",
+            }))
+            : [{ ...defaultWorkExperience }];
+
+        setSavedEducationCount(registration.educations?.length ?? 0);
+        setSavedWorkCount(registration.experiences?.length ?? 0);
+
+        form.reset({
+            education: [
+                ...education,
+                { ...defaultEducation },
+            ],
+            workExperience: [
+                ...workExperience,
+                { ...defaultWorkExperience },
+            ],
+            cvAttachment: undefined,
+        });
+    }, [draft, form, setSavedEducationCount, setSavedWorkCount]);
 
     const watched = useWatch({ control: form.control });
     useEffect(() => {
