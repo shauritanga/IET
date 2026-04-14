@@ -1,0 +1,17 @@
+enum ApplicationStatus {
+    PENDING = "PENDING",
+    ACTIVE = "ACTIVE",
+    EXPIRED = "EXPIRED",
+    REVOKED = "REVOKED",
+    REJECTED = "REJECTED",
+    SUSPENDED = "SUSPENDED",
+}
+
+enum RegistrationStatus {
+    DRAFT = "DRAFT",
+    SUBMITTED ="SUBMITTED",
+    PENDING_REVIEW = "PENDING_REVIEW",
+    APPROVED = "APPROVED",
+    REJECTED = "REJECTED",
+    CHANGES_REQUESTED = "CHANGES_REQUESTED"
+}

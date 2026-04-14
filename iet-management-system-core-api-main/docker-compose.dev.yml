@@ -1,0 +1,39 @@
+
+# Development override - run with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: iet-db-dev
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-iet_db}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      APP_URL: http://localhost:3000
+      API_URL: http://localhost:3000/api/v1
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-dev_password}
+      DB_NAME: ${DB_NAME:-iet_db}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_key_at_least_32_chars_long}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_key_at_least_32_chars}
+      DATABASE_ENABLED: "true"
+      SWAGGER_ENABLED: "true"
+    ports:
+      - "3000:3000"
+
+  # Remove nginx in dev mode
+  nginx:
+    profiles:
+      - production

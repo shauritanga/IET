@@ -1,0 +1,1782 @@
+{
+  "info": {
+    "name": "IET Management System Core API",
+    "description": "Comprehensive API collection for the IET (Institution of Engineers Tanzania) Management System.\n\nBase URL: {{baseUrl}}/api/v1\n\n## Authentication\nMost endpoints require JWT Bearer token authentication. Use the Login endpoint to get tokens, then they are automatically set via collection scripts.\n\n## Modules\n- Auth (Registration, Login, 2FA, Password Management)\n- Users (Profile, CRUD)\n- Registration (7-step membership application)\n- Events (Listing, Registration, Certificates)\n- Payments (Initiation, History, Webhooks)\n- Membership (Details, Fees, Receipts)\n- Notifications (CRUD, Preferences)\n- Admin (Dashboard, Members, Applications, Analytics)\n- Guest/Public (Calendar, Guest Registration, Dev Fees)",
+    "_postman_id": "iet-mgmt-system-api-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "applicationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "registrationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "educationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "experienceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guestRegistrationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "feeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "certificateCode",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the API service is running and healthy."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication endpoints for user registration, login, token management, password operations, and two-factor authentication.",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.userId) {",
+                  "        pm.collectionVariables.set('userId', res.data.userId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"engineer@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"confirmPassword\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Register a new user account. Sends a verification email with a 6-digit code."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"engineer@example.com\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-email",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-email"]
+            },
+            "description": "Verify email address using the 6-digit code sent during registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"engineer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/resend-verification",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "resend-verification"]
+            },
+            "description": "Resend email verification code if the previous one expired or was not received."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data) {",
+                  "        if (res.data.accessToken) {",
+                  "            pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "        }",
+                  "        if (res.data.refreshToken) {",
+                  "            pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "        }",
+                  "        if (res.data.user && res.data.user.id) {",
+                  "            pm.collectionVariables.set('userId', res.data.user.id);",
+                  "        }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"engineer@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Login with email and password. Returns access token, refresh token, and user details. Tokens are auto-saved to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data) {",
+                  "        if (res.data.accessToken) {",
+                  "            pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "        }",
+                  "        if (res.data.refreshToken) {",
+                  "            pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "        }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            },
+            "description": "Refresh the access token using a valid refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "Logout the current user and invalidate their refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"engineer@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "forgot-password"]
+            },
+            "description": "Request a password reset. Sends a reset token to the provided email."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset-token-from-email\",\n  \"password\": \"NewSecurePass123!\",\n  \"confirmPassword\": \"NewSecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password"]
+            },
+            "description": "Reset password using the token received via email."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePass123!\",\n  \"newPassword\": \"NewSecurePass456!\",\n  \"confirmPassword\": \"NewSecurePass456!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "change-password"]
+            },
+            "description": "Change the current user's password. Requires authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Enable 2FA",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/2fa/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "2fa", "enable"]
+            },
+            "description": "Enable two-factor authentication. Returns a TOTP secret and QR code URL."
+          },
+          "response": []
+        },
+        {
+          "name": "Validate 2FA Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "    }",
+                  "    if (res.data && res.data.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"token\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/2fa/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "2fa", "validate"]
+            },
+            "description": "Validate the 2FA TOTP token after login when 2FA is enabled."
+          },
+          "response": []
+        },
+        {
+          "name": "Disable 2FA",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/2fa/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "2fa", "disable"]
+            },
+            "description": "Disable two-factor authentication for the current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Environment Info",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/env",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "env"]
+            },
+            "description": "Get environment information (development mode only)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "description": "User management endpoints for profile operations and CRUD.",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"phoneNumber\": \"+255712345678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            },
+            "description": "Create a new user directly."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Get all users with pagination. Requires authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            },
+            "description": "Get the current authenticated user's profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"middleName\": \"Edward\",\n  \"lastName\": \"Doe\",\n  \"title\": \"Eng.\",\n  \"gender\": \"MALE\",\n  \"dateOfBirth\": \"1990-01-15\",\n  \"nationality\": \"Tanzanian\",\n  \"phoneNumber\": \"+255712345678\",\n  \"employer\": \"IET Tanzania\",\n  \"position\": \"Software Engineer\",\n  \"location\": \"Dar es Salaam\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "profile"]
+            },
+            "description": "Update the current authenticated user's profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            },
+            "description": "Get a specific user by their ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User by ID",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Updated\",\n  \"lastName\": \"Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            },
+            "description": "Update a user by their ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            },
+            "description": "Soft-delete a user by their ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Registration",
+      "description": "7-step membership registration/application process.",
+      "item": [
+        {
+          "name": "Step 1 - Create Registration (Personal Details)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.applicationId) {",
+                  "        pm.collectionVariables.set('applicationId', res.data.applicationId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Eng.\",\n  \"firstName\": \"John\",\n  \"middleName\": \"Edward\",\n  \"lastName\": \"Doe\",\n  \"gender\": \"MALE\",\n  \"dateOfBirth\": \"1990-01-15\",\n  \"nationality\": \"Tanzanian\",\n  \"email\": \"john.doe@example.com\",\n  \"phoneNumber\": \"+255712345678\",\n  \"employer\": \"ABC Engineering Ltd\",\n  \"position\": \"Civil Engineer\",\n  \"location\": \"Dar es Salaam\",\n  \"password\": \"SecurePass123!\",\n  \"confirmPassword\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations"]
+            },
+            "description": "Step 1: Create a new registration application with personal details. Creates user account if not exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2 - Registration Details",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"engineeringDiscipline\": \"Civil\",\n  \"applicationType\": \"NEW\",\n  \"appliedMembershipClass\": \"GRADUATE\",\n  \"registeredWithStatutoryBoards\": true,\n  \"memberOfOtherInstitutions\": false,\n  \"otherInstitutions\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/steps/registration-details",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "steps", "registration-details"]
+            },
+            "description": "Step 2: Provide engineering discipline, membership class, and other registration details."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3a - Add Education",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('educationId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution\": \"University of Dar es Salaam\",\n  \"qualificationLevel\": \"Bachelor's Degree\",\n  \"fieldOfStudy\": \"Civil Engineering\",\n  \"graduationYear\": 2015\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/education",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "education"]
+            },
+            "description": "Step 3: Add an education entry to the registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3a - Update Education",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"institution\": \"University of Dar es Salaam\",\n  \"qualificationLevel\": \"Master's Degree\",\n  \"fieldOfStudy\": \"Structural Engineering\",\n  \"graduationYear\": 2018\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/education/{{educationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "education", "{{educationId}}"]
+            },
+            "description": "Update an existing education entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3a - Delete Education",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/education/{{educationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "education", "{{educationId}}"]
+            },
+            "description": "Remove an education entry from the registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3b - Add Experience",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('experienceId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"ABC Engineering Ltd\",\n  \"position\": \"Civil Engineer\",\n  \"industry\": \"Construction\",\n  \"startDate\": \"2016-01-01\",\n  \"endDate\": \"2023-12-31\",\n  \"description\": \"Designed and supervised construction of road infrastructure projects\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/experience",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "experience"]
+            },
+            "description": "Step 3: Add a professional experience entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3b - Update Experience",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"XYZ Construction\",\n  \"position\": \"Senior Civil Engineer\",\n  \"industry\": \"Infrastructure\",\n  \"startDate\": \"2020-01-01\",\n  \"description\": \"Leading bridge construction projects\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/experience/{{experienceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "experience", "{{experienceId}}"]
+            },
+            "description": "Update an existing experience entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3b - Delete Experience",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/experience/{{experienceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "experience", "{{experienceId}}"]
+            },
+            "description": "Remove a professional experience entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4 - Add References",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proposer\": {\n    \"membershipNumber\": \"IET-2020-001\",\n    \"name\": \"Dr. James Mwanga\",\n    \"email\": \"james.mwanga@example.com\",\n    \"phone\": \"+255713000001\"\n  },\n  \"supporter\": {\n    \"membershipNumber\": \"IET-2019-042\",\n    \"name\": \"Eng. Sarah Kimaro\",\n    \"email\": \"sarah.kimaro@example.com\",\n    \"phone\": \"+255714000002\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/references",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "references"]
+            },
+            "description": "Step 4: Add proposer and supporter references (must be existing IET members)."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 5 - Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/verify-email",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "verify-email"]
+            },
+            "description": "Step 5: Verify the applicant's email with a verification code."
+          },
+          "response": []
+        },
+        {
+          "name": "Step 7 - Submit Declaration",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"declarationAgreed\": true,\n  \"declarationSignature\": \"John Edward Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}", "submit"]
+            },
+            "description": "Step 7: Submit the declaration and finalize the registration application."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Registration by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations/{{applicationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations", "{{applicationId}}"]
+            },
+            "description": "Get full registration details including education, experience, documents, and references."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Registrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/registrations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "registrations"]
+            },
+            "description": "Get all registrations belonging to the current authenticated user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "description": "Event management - browsing, registration, certificates, and feedback.",
+      "item": [
+        {
+          "name": "List Events",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events?page=1&limit=10&category=CONFERENCE&isPublished=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "category", "value": "CONFERENCE", "disabled": true },
+                { "key": "isPublished", "value": "true", "disabled": true }
+              ]
+            },
+            "description": "List events with filtering and pagination. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('eventId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/{{eventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "{{eventId}}"]
+            },
+            "description": "Get detailed information about a specific event. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Register for Event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('registrationId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"specialRequirements\": \"Vegetarian meals preferred\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/{{eventId}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "{{eventId}}", "register"]
+            },
+            "description": "Register the current authenticated user for an event."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Event Registrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/registrations/me?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "registrations", "me"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Get the current user's event registrations."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Event Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Schedule conflict\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/registrations/{{registrationId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "registrations", "{{registrationId}}", "cancel"]
+            },
+            "description": "Cancel an event registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Certificate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/registrations/{{registrationId}}/certificate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "registrations", "{{registrationId}}", "certificate"]
+            },
+            "description": "Get the CPD certificate for a completed event registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Event Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excellent conference with great speakers and networking opportunities.\",\n  \"wouldRecommend\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/registrations/{{registrationId}}/feedback",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "events", "registrations", "{{registrationId}}", "feedback"]
+            },
+            "description": "Submit feedback for an attended event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "description": "Payment processing, history, and webhook endpoints.",
+      "item": [
+        {
+          "name": "Initiate Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('paymentId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentType\": \"APPLICATION_FEE\",\n  \"amount\": 50000,\n  \"paymentMethod\": \"MPESA\",\n  \"phoneNumber\": \"+255712345678\",\n  \"description\": \"IET Membership Application Fee\",\n  \"referenceId\": \"{{applicationId}}\",\n  \"referenceType\": \"registration\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments"]
+            },
+            "description": "Initiate a payment via the selected payment gateway (M-Pesa, Airtel, Tigo, Selcom, DPO)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/me?page=1&limit=10&status=COMPLETED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "me"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "COMPLETED", "disabled": true }
+              ]
+            },
+            "description": "Get the current user's payment history with optional filtering."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payment Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "{{paymentId}}"]
+            },
+            "description": "Get details of a specific payment."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Gateway Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/gateway/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "gateway", "status"]
+            },
+            "description": "Check the configuration status of all payment gateways."
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook - M-Pesa Callback",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Body\": {\n    \"stkCallback\": {\n      \"MerchantRequestID\": \"merchant-req-123\",\n      \"CheckoutRequestID\": \"checkout-req-456\",\n      \"ResultCode\": 0,\n      \"ResultDesc\": \"The service request is processed successfully.\",\n      \"CallbackMetadata\": {\n        \"Item\": [\n          { \"Name\": \"Amount\", \"Value\": 50000 },\n          { \"Name\": \"MpesaReceiptNumber\", \"Value\": \"QJI7XXXXX\" },\n          { \"Name\": \"TransactionDate\", \"Value\": 20240101120000 },\n          { \"Name\": \"PhoneNumber\", \"Value\": 255712345678 }\n        ]\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/webhooks/mpesa",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "webhooks", "mpesa"]
+            },
+            "description": "M-Pesa payment callback webhook (called by M-Pesa servers)."
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook - Selcom Callback",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transid\": \"selcom-tx-789\",\n  \"order_id\": \"order-123\",\n  \"reference\": \"ref-456\",\n  \"result\": \"SUCCESS\",\n  \"resultcode\": \"000\",\n  \"amount\": 50000,\n  \"channel\": \"MASTERCARD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/webhooks/selcom",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "webhooks", "selcom"]
+            },
+            "description": "Selcom payment callback webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook - DPO Callback",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TransactionToken\": \"dpo-token-123\",\n  \"TransactionRef\": \"dpo-ref-456\",\n  \"TransactionAmount\": \"50000\",\n  \"TransactionCurrency\": \"TZS\",\n  \"CustomerEmail\": \"engineer@example.com\",\n  \"Result\": \"000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/payments/webhooks/dpo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "payments", "webhooks", "dpo"]
+            },
+            "description": "DPO (Direct Pay Online) payment callback webhook."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Membership",
+      "description": "Membership management - details, fee payments, and receipts.",
+      "item": [
+        {
+          "name": "Get My Membership",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/memberships/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "memberships", "me"]
+            },
+            "description": "Get the current user's membership details including status, class, and expiry."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/memberships/me/fees?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "memberships", "me", "fees"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Get membership fee payment history."
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Membership Fee",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2024,\n  \"paymentMethod\": \"MPESA\",\n  \"phoneNumber\": \"+255712345678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/memberships/me/fees/pay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "memberships", "me", "fees", "pay"]
+            },
+            "description": "Initiate payment for annual membership fee."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee Receipt",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/memberships/me/fees/2024/receipt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "memberships", "me", "fees", "2024", "receipt"]
+            },
+            "description": "Get the payment receipt for a specific year's membership fee."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "Notification management - listing, read status, and preferences.",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications?page=1&limit=20&isRead=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "isRead", "value": "false", "disabled": true }
+              ]
+            },
+            "description": "Get the current user's notifications with pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "{{notificationId}}", "read"]
+            },
+            "description": "Mark a specific notification as read."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/mark-all-read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "mark-all-read"]
+            },
+            "description": "Mark all notifications as read."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/{{notificationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "{{notificationId}}"]
+            },
+            "description": "Delete a specific notification."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "preferences"]
+            },
+            "description": "Get the current user's notification preferences (email, SMS, push)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": {\n    \"paymentReminders\": true,\n    \"eventReminders\": true,\n    \"applicationUpdates\": true,\n    \"membershipExpiry\": true,\n    \"generalAnnouncements\": false\n  },\n  \"sms\": {\n    \"paymentReminders\": true,\n    \"eventReminders\": false\n  },\n  \"push\": {\n    \"paymentReminders\": true,\n    \"eventReminders\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "preferences"]
+            },
+            "description": "Update notification delivery preferences."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "unread-count"]
+            },
+            "description": "Get the count of unread notifications."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Admin-only endpoints for dashboard, member management, application review, and analytics. Requires ADMIN or SUPER_ADMIN role.",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/dashboard/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "dashboard", "stats"]
+            },
+            "description": "Get dashboard statistics including total members, pending applications, revenue, etc."
+          },
+          "response": []
+        },
+        {
+          "name": "List Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/members?page=1&limit=10&status=ACTIVE&membershipClass=MIET",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "members"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "ACTIVE", "disabled": true },
+                { "key": "membershipClass", "value": "MIET", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            },
+            "description": "List all members with pagination, filtering by status, class, and search."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Member Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/members/{{memberId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "members", "{{memberId}}"]
+            },
+            "description": "Get detailed information about a specific member."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Approved after verification\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/members/{{memberId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "members", "{{memberId}}", "status"]
+            },
+            "description": "Update a member's membership status (ACTIVE, SUSPENDED, REVOKED, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Members CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/members/export",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "members", "export"]
+            },
+            "description": "Export all members data as a CSV file."
+          },
+          "response": []
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/applications?page=1&limit=10&status=SUBMITTED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "applications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "SUBMITTED", "disabled": true }
+              ]
+            },
+            "description": "List membership applications for review with filtering."
+          },
+          "response": []
+        },
+        {
+          "name": "Review Application",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comments\": \"Application meets all requirements. Education and experience verified.\",\n  \"assignedMembershipClass\": \"GRADUATE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/applications/{{applicationId}}/review",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "applications", "{{applicationId}}", "review"]
+            },
+            "description": "Review and approve/reject a membership application."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Member Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/analytics/members?period=yearly&year=2024",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "analytics", "members"],
+              "query": [
+                { "key": "period", "value": "yearly" },
+                { "key": "year", "value": "2024" }
+              ]
+            },
+            "description": "Get member analytics and statistics."
+          },
+          "response": []
+        },
+        {
+          "name": "Event Check-In",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationId\": \"{{registrationId}}\",\n  \"ticketNumber\": \"TKT-2024-001\",\n  \"eventId\": \"{{eventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/events/check-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "events", "check-in"]
+            },
+            "description": "Check-in a guest or member at an event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guest / Public",
+      "description": "Public endpoints for guest event registration, calendar, development fees, and certificate verification.",
+      "item": [
+        {
+          "name": "Get Public Calendar",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/calendar?month=1&year=2024",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "calendar"],
+              "query": [
+                { "key": "month", "value": "1", "disabled": true },
+                { "key": "year", "value": "2024", "disabled": true }
+              ]
+            },
+            "description": "Get the public events calendar."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Instructions",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/instructions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "instructions"]
+            },
+            "description": "Get system usage instructions for public users."
+          },
+          "response": []
+        },
+        {
+          "name": "Guest Event Registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('guestRegistrationId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Smith\",\n  \"email\": \"jane.smith@company.com\",\n  \"phoneNumber\": \"+255713456789\",\n  \"organization\": \"ABC Construction Ltd\",\n  \"position\": \"Project Manager\",\n  \"nationality\": \"Tanzanian\",\n  \"specialRequirements\": \"Wheelchair accessible seating\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/events/{{eventId}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "events", "{{eventId}}", "register"]
+            },
+            "description": "Register as a guest for a public event (no account required)."
+          },
+          "response": []
+        },
+        {
+          "name": "Guest Registration Payment",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"MPESA\",\n  \"phoneNumber\": \"+255713456789\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/registrations/{{guestRegistrationId}}/pay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "registrations", "{{guestRegistrationId}}", "pay"]
+            },
+            "description": "Initiate payment for a guest event registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Lookup Registration",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/registrations/lookup?ticketNumber=TKT-2024-001&email=jane.smith@company.com",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "registrations", "lookup"],
+              "query": [
+                { "key": "ticketNumber", "value": "TKT-2024-001", "disabled": true },
+                { "key": "email", "value": "jane.smith@company.com", "disabled": true }
+              ]
+            },
+            "description": "Look up a guest registration by ticket number or email."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest Name Tag",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/registrations/{{guestRegistrationId}}/name-tag",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "registrations", "{{guestRegistrationId}}", "name-tag"]
+            },
+            "description": "Generate and get a name tag for a guest registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest Certificate",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/registrations/{{guestRegistrationId}}/certificate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "registrations", "{{guestRegistrationId}}", "certificate"]
+            },
+            "description": "Get the attendance certificate for a guest."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Development Fee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const res = pm.response.json();",
+                  "    if (res.data && res.data.id) {",
+                  "        pm.collectionVariables.set('feeId', res.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Jane Smith\",\n  \"email\": \"jane.smith@company.com\",\n  \"phoneNumber\": \"+255713456789\",\n  \"amount\": 100000,\n  \"purpose\": \"IET Building Fund Contribution\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/development-fees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "development-fees"]
+            },
+            "description": "Create a development fee contribution."
+          },
+          "response": []
+        },
+        {
+          "name": "Pay Development Fee",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"MPESA\",\n  \"phoneNumber\": \"+255713456789\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/development-fees/{{feeId}}/pay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "development-fees", "{{feeId}}", "pay"]
+            },
+            "description": "Pay a development fee contribution."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Certificate",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/certificates/verify/{{certificateCode}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "certificates", "verify", "{{certificateCode}}"]
+            },
+            "description": "Verify the authenticity of a certificate using its unique code."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "institution-of-engineers-admin-portal",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20 <21",
+    "npm": ">=10 <11"
+  },
+  "scripts": {
+    "build": "react-router build",
+    "dev": "react-router dev",
+    "dev:host": "react-router dev --host 0.0.0.0",
+    "start": "react-router-serve ./build/server/index.js",
+    "typecheck": "react-router typegen && tsc"
+  },
+  "dependencies": {
+    "@react-router/node": "^7.13.1",
+    "@react-router/remix-routes-option-adapter": "^7.13.1",
+    "@react-router/serve": "^7.13.1",
+    "@tanstack/react-query": "^5.91.3",
+    "axios": "^1.13.6",
+    "isbot": "^5.1.36",
+    "lucide-react": "^1.8.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router": "^7.13.1",
+    "remix-flat-routes": "^0.8.5"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^7.13.1",
+    "@types/node": "^22.19.15",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}
