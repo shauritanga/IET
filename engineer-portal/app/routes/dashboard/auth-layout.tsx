@@ -12,62 +12,76 @@ import {getFromStorage} from "~/utils/storage";
 import {USER_KEY} from "~/utils/http";
 import type {User} from "../auth/types";
 import {Avatar, AvatarFallback, AvatarImage} from "@radix-ui/react-avatar";
-import {Skeleton} from "~/components/ui/skeleton";
 import {getInitials} from "~/utils/string-utils";
+import {getRegistrationStatusLabel} from "~/utils/application-status";
+import {useGetUserProfile} from "~/routes/dashboard/profile/repositories/handle-get-user-profile";
 
 
 export default function AuthLayout() {
     const {toggleSidebar} = useSidebar();
     const user = getFromStorage<User>(USER_KEY);
+    const {data: profileData} = useGetUserProfile();
+    const registrationCaption = getRegistrationStatusLabel(
+        profileData?.data.registrationStatus ?? user?.registrationStatus,
+    );
 
     return (
         <main className="flex w-full lg:h-screen">
             <AppSidebar/>
             <SidebarInset className="px-4 lg:p-2 lg:py-2 flex-1">
-                <div className="lg:bg-[#F5F0F0] h-full rounded-xl flex flex-col lg:p-4">
+                <div className="h-full rounded-[24px] bg-[#F5F0F0] flex flex-col p-3 lg:p-4">
 
                     {/* Fixed Header - Mobile */}
                     <div
-                        className="flex w-screen fixed top-0 items-center lg:hidden justify-between pr-7.5 py-2.5 bg-white">
-                        <div className="rounded-full p-2 bg-[#f5f0f0]">
+                        className="fixed top-0 left-0 z-20 flex w-full items-center justify-between border-b border-[#EFE4E1] bg-[#F5F0F0]/95 px-4 py-2.5 backdrop-blur lg:hidden">
+                        <div className="rounded-[14px] border border-[#E8DEDB] bg-white p-2 shadow-[0_4px_10px_rgba(92,68,64,0.05)]">
                             <HamburgerMenu className="size-6" onClick={toggleSidebar}/>
                         </div>
                         <div className="flex gap-2 items-center">
                             <ExtendedBadge
                                 children={<Card className="size-5"/>}
-                                caption={user?.registrationStatus ?? "No Application"}
+                                caption={registrationCaption}
+                                className="h-10 rounded-[16px] border border-[#E8DEDB] bg-white px-2 py-1 shadow-[0_4px_10px_rgba(92,68,64,0.05)]"
+                                indicatorClassName="bg-[#F6F1EF] p-1"
+                                captionClassName="text-xs font-medium text-[#5B4540]"
                             />
-                            <div className="rounded-full p-2 bg-[#f5f0f0]">
-                                <Bell className="size-6" weight="BoldDuotone"/>
+                            <div className="flex size-10 items-center justify-center rounded-[14px] border border-[#E8DEDB] bg-white shadow-[0_4px_10px_rgba(92,68,64,0.05)]">
+                                <Bell className="size-[18px] text-[#6F5A56]" weight="BoldDuotone"/>
                             </div>
-                            <div className="rounded-full p-2 bg-[#f5f0f0]">
-                                <UserRounded className="size-6" weight="BoldDuotone"/>
+                            <div className="flex size-10 items-center justify-center rounded-[14px] border border-[#E8DEDB] bg-white shadow-[0_4px_10px_rgba(92,68,64,0.05)]">
+                                <UserRounded className="size-[18px] text-[#6F5A56]" weight="BoldDuotone"/>
                             </div>
                         </div>
                     </div>
 
                     {/* Fixed Header - Desktop */}
-                    <div className="shrink-0 hidden w-full lg:flex justify-between items-center px-4 gap-2 mb-2">
+                    <div className="mb-2 hidden w-full shrink-0 items-center justify-between px-2 lg:flex">
                         <div>
                             <SidebarTrigger/>
                         </div>
-                        <div className="shrink-0 flex items-center gap-2">
+                        <div className="shrink-0 flex items-center gap-2.5">
                             <ExtendedBadge
-                                children={<Card className="size-5" weight="BoldDuotone"/>}
-                                caption={user?.registrationStatus ?? "No Application"}
+                                children={<Card className="size-4" weight="BoldDuotone"/>}
+                                caption={registrationCaption}
+                                className="h-11 rounded-[18px] border border-[#E9DEDA] bg-white px-2.5 py-1 shadow-[0_5px_14px_rgba(92,68,64,0.05)]"
+                                indicatorClassName="bg-[#F7F1EF] p-1.5"
+                                captionClassName="text-sm font-medium tracking-[-0.01em] text-[#4F3934]"
                             />
-                            <div className="rounded-full w-fit flex items-center justify-center p-2 bg-white">
-                                <Bell className="size-5" weight="BoldDuotone"/>
+                            <div className="flex size-11 items-center justify-center rounded-[16px] border border-[#E9DEDA] bg-white shadow-[0_5px_14px_rgba(92,68,64,0.05)]">
+                                <Bell className="size-[18px] text-[#6F5A56]" weight="BoldDuotone"/>
                             </div>
                             <ExtendedBadge
-                                children={<Avatar className="size-5">
-                                    <AvatarImage src={user?.profilePhotoUrl ?? ""} className="size-5 rounded-full"/>
+                                children={<Avatar className="size-8">
+                                    <AvatarImage src={user?.profilePhotoUrl ?? ""} className="size-8 rounded-full object-cover"/>
                                     <AvatarFallback
-                                        className="flex justify-center items-center bg-muted h-full w-full rounded-full">
+                                        className="flex justify-center items-center bg-[#EDE3DF] h-full w-full rounded-full text-xs font-semibold text-[#5E4641]">
                                         {getInitials(user?.fullName ?? "U") || <UserRounded weight={"BoldDuotone"} />}
                                     </AvatarFallback>
                                 </Avatar>}
                                 caption={user?.fullName ?? "UserName"}
+                                className="h-11 rounded-[18px] border border-[#E9DEDA] bg-white px-2.5 py-1 shadow-[0_5px_14px_rgba(92,68,64,0.05)]"
+                                indicatorClassName="bg-transparent p-0"
+                                captionClassName="text-sm font-medium tracking-[-0.01em] text-[#4F3934]"
                             />
                         </div>
                     </div>

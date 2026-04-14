@@ -38,11 +38,16 @@ import {
   ExperienceEducationDto,
 } from '../dto/registration-steps.dto';
 import { UpdatePersonalDetailsDto } from '../dto/update-registration.dto';
+import { PaymentsService } from '../../payments/services/payments.service';
+import { InitiateApplicationPaymentDto } from '../../payments/dto';
 
 @ApiTags('Registrations')
 @Controller('registrations')
 export class RegistrationController {
-  constructor(private registrationService: RegistrationService) {}
+  constructor(
+    private registrationService: RegistrationService,
+    private paymentsService: PaymentsService,
+  ) {}
 
   // ============================================
   // STEP 1: CREATE REGISTRATION (Personal Details)
@@ -591,10 +596,53 @@ export class RegistrationController {
   }
 
   // ============================================
-  // STEP 6: PAYMENT (placeholder - full implementation in payment module)
+  // STEP 6: PAYMENT
   // ============================================
 
-  // Payment endpoints will be in the Payment module
+  @Post(':applicationId/payments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Initiate application fee payment' })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  async initiateApplicationPayment(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() user: UserEntity,
+    @Body() dto: InitiateApplicationPaymentDto,
+  ) {
+    const result = await this.paymentsService.initiateApplicationPayment(
+      user.id,
+      applicationId,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Application payment initiated successfully',
+    };
+  }
+
+  @Get(':applicationId/payment-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get application payment status' })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  async getApplicationPaymentStatus(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() user: UserEntity,
+  ) {
+    const result = await this.paymentsService.getApplicationPaymentStatus(
+      user.id,
+      applicationId,
+    );
+
+    return {
+      success: true,
+      data: result,
+    };
+  }
 
   // ============================================
   // STEP 7: DECLARATION & SUBMISSION

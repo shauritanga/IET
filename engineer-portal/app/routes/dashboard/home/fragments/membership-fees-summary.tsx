@@ -1,50 +1,157 @@
+import {Link} from "react-router";
 import {Button} from "~/components/ui/button";
 import {Card} from "~/components/ui/card";
-import {Badge} from "~/components/ui/badge";
-import { Link } from "react-router";
+import {Skeleton} from "~/components/ui/skeleton";
+import {useMembershipFeeHistory} from "../repositories/useMembershipFeeHistory";
+import type {MembershipFeeHistoryItem} from "../type";
+import type {UserProfile} from "~/routes/dashboard/profile/type";
 
-const MembershipFeesSummary = () => {
+type Props = {
+    profile?: UserProfile;
+    isPending: boolean;
+};
+
+const toCurrency = (amount: number) =>
+    `${amount.toLocaleString()} TZS`;
+
+const getStatusLabel = (status: string) => {
+    switch (status) {
+        case "PAID":
+            return "Paid";
+        case "EXPIRING":
+            return "Expiring";
+        case "OVERDUE":
+            return "Overdue";
+        default:
+            return "Pending";
+    }
+};
+
+const getStatusClasses = (status: string) => {
+    switch (status) {
+        case "PAID":
+            return "bg-[#DDF7E5] text-[#4FA66B]";
+        case "EXPIRING":
+            return "bg-[#F9EDB6] text-[#C7A129]";
+        case "OVERDUE":
+            return "bg-[#FADDD8] text-[#D15548]";
+        default:
+            return "bg-[#EEE8E8] text-[#75625E]";
+    }
+};
+
+const membershipClassLabel = (value?: string | null) =>
+    value?.replaceAll("_", " ") || "Membership";
+
+const deriveFallbackFeeRows = (profile?: UserProfile): MembershipFeeHistoryItem[] => {
+    if (!profile) return [];
+
+    const currentYear = new Date().getFullYear();
+    const joiningYear = profile.joiningDate ? new Date(profile.joiningDate).getFullYear() : currentYear;
+    const annualFee = Number(String(profile.annualMembershipFee).replace(/[^\d.]/g, "")) || 10000;
+    const startYear = Math.max(joiningYear, currentYear - 3);
+
+    return Array.from({length: currentYear - startYear + 1}, (_, index) => {
+        const year = currentYear - index;
+        const isCurrentYear = year === currentYear;
+        const status =
+            isCurrentYear
+                ? profile.isMembershipExpired
+                    ? "OVERDUE"
+                    : (profile.daysUntilExpiry ?? 999) <= 30
+                        ? "EXPIRING"
+                        : "PAID"
+                : "PAID";
+
+        return {
+            year,
+            membershipClass: profile.membershipClass,
+            amount: annualFee,
+            status,
+            paidAt: !isCurrentYear || status === "PAID" ? `${year}-07-10T00:00:00.000Z` : null,
+            dueDate: `${year}-07-10T00:00:00.000Z`,
+        };
+    }).slice(0, 4);
+};
+
+const FeeRow = ({fee}: { fee: MembershipFeeHistoryItem }) => (
+    <div className="grid gap-3 rounded-[22px] border border-[#EEE3DF] bg-white px-4 py-4 shadow-[0_8px_20px_rgba(116,87,79,0.05)] lg:grid-cols-[1.1fr_1.2fr_0.8fr_0.7fr] lg:items-center">
+        <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-[#B19A95]">{fee.year}</p>
+            <p className="mt-1 text-xl font-semibold text-[#4A2F2A]">{membershipClassLabel(fee.membershipClass)}</p>
+        </div>
+
+        <div>
+            <p className="text-xs font-medium text-[#AD9892]">Membership Fees</p>
+            <p className="mt-1 text-xl font-semibold text-[#4A2F2A]">{toCurrency(fee.amount)}</p>
+        </div>
+
+        <div className="flex items-center lg:justify-center">
+            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(fee.status)}`}>
+                {getStatusLabel(fee.status)}
+            </span>
+        </div>
+
+        <div className="flex justify-start lg:justify-end">
+            {fee.status === "EXPIRING" || fee.status === "OVERDUE" || fee.status === "PENDING" ? (
+                <Button
+                    variant="outline"
+                    className="h-10 rounded-xl border-[#E8DDDA] px-4 text-xs font-semibold text-[#5E4742] shadow-none"
+                >
+                    Pay now
+                </Button>
+            ) : (
+                <span className="text-xs font-semibold text-[#8A7570]">Settled</span>
+            )}
+        </div>
+    </div>
+);
+
+const MembershipFeesSummary = ({profile, isPending}: Props) => {
+    const {data, isPending: isFeeHistoryPending} = useMembershipFeeHistory();
+    const fees = data?.data?.length ? data.data : deriveFallbackFeeRows(profile);
+    const loading = isPending || isFeeHistoryPending;
+
     return (
-        <Card className={"shadow-xs lg:col-span-3 lg:border-none p-1.5 gap-2"}>
-            <div className={"flex justify-between items-start p-2"}>
-                <div className={"flex flex-col gap-1"}>
-                    <h3 className={"font-medium lg:text-xl"}>
-                        Membership Fees
-                    </h3>
-                    <p className={"text-xs font-light"}>
-                        View your membership fees here
+        <Card className="gap-4 rounded-[28px] border border-[#EEE4E1] bg-white p-4 shadow-[0_18px_48px_rgba(95,69,60,0.08)] lg:col-span-3">
+            <div className="flex items-start justify-between gap-4 px-2 pt-2">
+                <div>
+                    <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-[#4A2F2A]">Membership Fees</h2>
+                    <p className="mt-1 text-sm text-[#9B8782]">
+                        View your annual subscription history and current fee status.
                     </p>
                 </div>
-                <Link to={"/dashboard/events"}>
-                <Button className={"rounded-full h-0 p-4 bg-muted text-xs"} variant={"ghost"}>
-                    View All
+                <Button
+                    variant="ghost"
+                    asChild
+                    className="h-10 rounded-full bg-[#F7F0EE] px-4 text-xs font-semibold text-[#6B5450]"
+                >
+                    <Link to="/dashboard/memberships">View all</Link>
                 </Button>
-                </Link>
             </div>
-            <Card className={"border-none bg-muted shadow-none p-2 gap-2 h-full"}>
-                <Card
-                    className={"border-none bg-white shadow-none p-4 grid grid-cols-2 lg:grid-cols-4 gap-2 lg:justify-items-center-safe"}>
-                    <div>
-                        <p className={"text-xs font-light text-muted-foreground"}>2025</p>
-                        <p className={"text-sm lg:text-base font-medium"}>Senior Members</p>
-                    </div>
-                    <div>
-                        <p className={"text-xs font-light text-muted-foreground"}>Membership Fees</p>
-                        <p className={"text-sm lg:text-base font-medium"}>10,000{" "}<span
-                            className={"text-muted-foreground"}>TZS</span></p>
-                    </div>
-                    <div className={"flex flex-col justify-center h-full"}>
-                        <Badge>
-                            Expiring
-                        </Badge>
-                    </div>
-                    <div>
-                        <Button className={"rounded-xl p-4 text-xs h-0 shadow-none"} variant={"outline"}>
-                            Pay Now
-                        </Button>
-                    </div>
-                </Card>
-            </Card>
+
+            <div className="rounded-[24px] border border-[#F1E8E5] bg-[#FCF8F7] p-3">
+                <div className="space-y-3">
+                    {loading ? (
+                        <>
+                            <Skeleton className="h-24 w-full rounded-[22px]" />
+                            <Skeleton className="h-24 w-full rounded-[22px]" />
+                            <Skeleton className="h-24 w-full rounded-[22px]" />
+                        </>
+                    ) : fees.length > 0 ? (
+                        fees.slice(0, 4).map((fee) => (
+                            <FeeRow key={`${fee.year}-${fee.status}`} fee={fee} />
+                        ))
+                    ) : (
+                        <div className="rounded-[22px] border border-dashed border-[#E7D9D5] bg-white px-5 py-10 text-center">
+                            <p className="text-base font-semibold text-[#5A413D]">No membership fee records yet</p>
+                            <p className="mt-2 text-sm text-[#8C7670]">
+                                Your fee history will appear here once membership billing records are available.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
         </Card>
     );
 };

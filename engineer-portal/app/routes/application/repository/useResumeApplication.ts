@@ -12,6 +12,7 @@ const orderedApplicationSteps: ApplicationStep[] = [
     "REGISTRATION_DETAILS",
     "EDUCATION_EXPERIENCE",
     "REFERENCES",
+    "PAYMENT",
     "DECLARATION",
 ];
 

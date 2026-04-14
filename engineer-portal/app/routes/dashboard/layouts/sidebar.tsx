@@ -10,15 +10,22 @@ import {
     SidebarMenuItem,
 } from "~/components/ui/sidebar"
 import {menuItems} from "~/routes/dashboard/layouts/sidebar-list-items";
-import {Logout2} from "@solar-icons/react/ssr";
 import {Link, NavLink, useNavigate} from "react-router";
-import {useLogout} from "~/routes/auth/logout";
 import {Button} from "~/components/ui/button";
+import {
+    getMembershipApplicationCtaLabel,
+    shouldShowMembershipApplicationCta,
+} from "~/utils/application-status";
+import {useGetUserProfile} from "~/routes/dashboard/profile/repositories/handle-get-user-profile";
 
 
 export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
-    const logout = useLogout();
     const navigate = useNavigate();
+    const {data} = useGetUserProfile();
+    const registrationStatus = data?.data.registrationStatus;
+    const shouldShowApplicationCta = shouldShowMembershipApplicationCta(registrationStatus);
+    const applicationCtaLabel = getMembershipApplicationCtaLabel(registrationStatus);
+
     return (
         <Sidebar variant="floating" {...props} className="pr-0 border-none">
             <SidebarHeader>
@@ -55,21 +62,15 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 </SidebarGroup>
             </SidebarContent>
             <SidebarFooter className={"mb-4 lg:mb-0"}>
-                <Button asChild size="lg" onClick={() => navigate("/application")}>
-                    <div className={"font-medium text-muted-foreground"}>
-                        Apply for Membership
-                    </div>
-                </Button>
-                <SidebarMenuButton asChild size="lg" onClick={logout}>
-                    <div className={"font-medium text-muted-foreground"}>
-                        <div className="flex items-center justify-center rounded-lg">
-                            <Logout2 weight={"BoldDuotone"} size={24}/>
-                        </div>
-                        <div>
-                            Logout
-                        </div>
-                    </div>
-                </SidebarMenuButton>
+                {shouldShowApplicationCta ? (
+                    <Button
+                        size="lg"
+                        onClick={() => navigate("/application")}
+                        className="h-12 rounded-2xl bg-[#390909] text-white shadow-[0_14px_32px_rgba(57,9,9,0.18)] hover:bg-[#4A1212]"
+                    >
+                        {applicationCtaLabel}
+                    </Button>
+                ) : null}
             </SidebarFooter>
         </Sidebar>
     )

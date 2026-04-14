@@ -9,16 +9,21 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { PaymentEntity } from '../entities/payment.entity';
 import { UserEntity } from '../../user/entities/user.entity';
+import { RegistrationEntity } from '../../registration/entities';
 import {
   InitiatePaymentDto,
+  InitiateApplicationPaymentDto,
   MpesaCallbackDto,
   SelcomCallbackDto,
   PaymentQueryDto,
 } from '../dto';
 import {
+  ApplicationStatus,
   PaymentStatus,
   PaymentMethod,
   PaymentType,
+  RegistrationCategory,
+  RegistrationStep,
 } from '../../../common/enums';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
 import { SmsService } from '../../shared/services/sms.service';
@@ -28,12 +33,24 @@ import { v4 as uuid4 } from 'uuid';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
+  private readonly completedGatewayStatuses = new Set([
+    'SUCCESS',
+    'SUCCESSFUL',
+    'SUCCEEDED',
+    'COMPLETED',
+    'COMPLETE',
+    'SETTLED',
+    'PAID',
+    'APPROVED',
+  ]);
 
   constructor(
     @InjectRepository(PaymentEntity)
     private paymentRepository: Repository<PaymentEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(RegistrationEntity)
+    private registrationRepository: Repository<RegistrationEntity>,
     private configService: ConfigService,
     private paymentGateway: PaymentGatewayService,
     private smsService: SmsService,
@@ -85,7 +102,21 @@ export class PaymentsService {
     payment.metadata = dto.metadata || {};
     payment.idempotencyKey = uuid4();
 
-    const savedPayment = await this.paymentRepository.save(payment);
+    let savedPayment = await this.paymentRepository.save(payment);
+    const providerOrderReference = this.paymentGateway.usesClickPesa(
+      dto.paymentMethod,
+    )
+      ? this.buildClickPesaOrderReference(savedPayment.id)
+      : savedPayment.id;
+
+    if (this.paymentGateway.usesClickPesa(dto.paymentMethod)) {
+      savedPayment.metadata = {
+        ...savedPayment.metadata,
+        providerOrderReference,
+      };
+      savedPayment = await this.paymentRepository.save(savedPayment);
+    }
+    const apiUrl = this.configService.get<string>('API_URL');
 
     // Use PaymentGatewayService
     const gatewayResult = await this.paymentGateway.initiatePayment(
@@ -95,9 +126,12 @@ export class PaymentsService {
         currency: 'TZS',
         phoneNumber: dto.phoneNumber,
         email: user.email,
-        reference: savedPayment.id,
+        reference: providerOrderReference,
         description: payment.description,
-        callbackUrl: `${this.configService.get('API_URL')}/payments/webhooks/${dto.paymentMethod.toLowerCase()}`,
+        callbackUrl: this.paymentGateway.getCallbackUrl(
+          dto.paymentMethod,
+          apiUrl,
+        ),
         metadata: dto.metadata,
       },
     );
@@ -110,7 +144,15 @@ export class PaymentsService {
       ? PaymentStatus.PROCESSING
       : PaymentStatus.FAILED;
 
-    if (!gatewayResult.success) {
+    const hasGatewayReference =
+      !!gatewayResult.transactionId || !!gatewayResult.paymentUrl;
+
+    if (gatewayResult.success && !hasGatewayReference) {
+      savedPayment.status = PaymentStatus.FAILED;
+      savedPayment.errorMessage =
+        gatewayResult.message ||
+        'Payment provider did not return a valid payment reference';
+    } else if (!gatewayResult.success) {
       savedPayment.errorMessage = gatewayResult.message;
     }
 
@@ -129,6 +171,272 @@ export class PaymentsService {
       paymentUrl: gatewayResult.paymentUrl,
       mobileMoneyRef: gatewayResult.transactionId,
       message: gatewayResult.message,
+    };
+  }
+
+  async initiateApplicationPayment(
+    userId: string,
+    applicationId: string,
+    dto: InitiateApplicationPaymentDto,
+  ): Promise<{
+    applicationId: string;
+    paymentCompleted: boolean;
+    paymentId: string;
+    paymentStatus: PaymentStatus;
+    amount: number;
+    currency: string;
+    paymentMethod: PaymentMethod;
+    paymentUrl?: string;
+    mobileMoneyRef?: string;
+    phoneNumber?: string;
+    transactionRef?: string;
+    applicationType: RegistrationCategory;
+    message?: string;
+  }> {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    if (
+      registration.status !== ApplicationStatus.DRAFT &&
+      registration.status !== ApplicationStatus.CHANGES_REQUESTED
+    ) {
+      throw new BadRequestException(
+        'Application payment can only be made for editable registrations',
+      );
+    }
+
+    const requiredSteps = [
+      RegistrationStep.PERSONAL_DETAILS,
+      RegistrationStep.REGISTRATION_DETAILS,
+      RegistrationStep.EDUCATION_EXPERIENCE,
+      RegistrationStep.REFERENCES,
+    ];
+
+    const missingSteps = requiredSteps.filter(
+      (step) => !registration.completedSteps.includes(step),
+    );
+
+    if (missingSteps.length > 0) {
+      throw new BadRequestException(
+        `Please complete these steps before payment: ${missingSteps.join(', ')}`,
+      );
+    }
+
+    if (registration.paymentCompleted && registration.paymentId) {
+      const completedPayment = await this.paymentRepository.findOne({
+        where: { id: registration.paymentId, userId },
+      });
+
+      return {
+        applicationId: registration.id,
+        paymentCompleted: true,
+        paymentId: registration.paymentId,
+        paymentStatus: completedPayment?.status ?? PaymentStatus.COMPLETED,
+        amount:
+          completedPayment?.amount ??
+          this.getApplicationFeeAmount(dto.applicationType),
+        currency: completedPayment?.currency ?? 'TZS',
+        paymentMethod: completedPayment?.paymentMethod ?? dto.paymentMethod,
+        paymentUrl: completedPayment?.paymentUrl,
+        mobileMoneyRef: completedPayment?.mobileMoneyRef,
+        phoneNumber: completedPayment?.phoneNumber,
+        transactionRef: completedPayment?.transactionRef,
+        applicationType: dto.applicationType,
+        message: 'Application fee is already completed',
+      };
+    }
+
+    const amount = this.getApplicationFeeAmount(dto.applicationType);
+
+    const reusablePayment = await this.paymentRepository.findOne({
+      where: {
+        userId,
+        referenceId: registration.id,
+        referenceType: 'registration',
+        paymentType: PaymentType.APPLICATION_FEE,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (
+      reusablePayment &&
+      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
+        reusablePayment.status,
+      )
+    ) {
+      const syncedPayment = await this.syncPaymentState(reusablePayment);
+      const hasOutdatedAmount = this.isOutdatedApplicationPaymentAmount(
+        syncedPayment,
+        amount,
+      );
+
+      if (this.canRetryApplicationPayment(syncedPayment) || hasOutdatedAmount) {
+        await this.markPaymentFailed(
+          syncedPayment.id,
+          hasOutdatedAmount
+            ? `Retrying application payment with updated fee amount ${amount}`
+            : 'Retrying application payment after stale or incomplete provider initiation',
+        );
+      } else {
+        return {
+          applicationId: registration.id,
+          paymentCompleted: syncedPayment.status === PaymentStatus.COMPLETED,
+          paymentId: syncedPayment.id,
+          paymentStatus: syncedPayment.status,
+          amount: syncedPayment.amount,
+          currency: syncedPayment.currency,
+          paymentMethod: syncedPayment.paymentMethod,
+          paymentUrl: syncedPayment.paymentUrl,
+          mobileMoneyRef: syncedPayment.mobileMoneyRef,
+          phoneNumber: syncedPayment.phoneNumber,
+          transactionRef: syncedPayment.transactionRef,
+          applicationType: dto.applicationType,
+          message:
+            syncedPayment.status === PaymentStatus.COMPLETED
+              ? 'Application fee payment already completed'
+              : 'An application payment is already in progress',
+        };
+      }
+    }
+
+    const payment = await this.initiatePayment(userId, {
+      paymentType: PaymentType.APPLICATION_FEE,
+      amount,
+      paymentMethod: dto.paymentMethod,
+      phoneNumber: dto.phoneNumber,
+      description: `${this.getApplicationCategoryLabel(dto.applicationType)} Application Fee`,
+      referenceId: registration.id,
+      referenceType: 'registration',
+      metadata: {
+        applicationId: registration.id,
+        applicationType: dto.applicationType,
+      },
+    });
+
+    registration.paymentId = payment.paymentId;
+    registration.paymentCompleted = payment.status === PaymentStatus.COMPLETED;
+    await this.registrationRepository.save(registration);
+
+    return {
+      paymentCompleted: registration.paymentCompleted,
+      applicationId: registration.id,
+      paymentId: payment.paymentId,
+      paymentStatus: payment.status,
+      amount: payment.amount,
+      currency: payment.currency,
+      paymentMethod: payment.paymentMethod,
+      paymentUrl: payment.paymentUrl,
+      mobileMoneyRef: payment.mobileMoneyRef,
+      phoneNumber: dto.phoneNumber,
+      transactionRef: undefined,
+      applicationType: dto.applicationType,
+      message: payment.message,
+    };
+  }
+
+  async getApplicationPaymentStatus(userId: string, applicationId: string) {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: applicationId, userId },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    const payment = await this.paymentRepository.findOne({
+      where: {
+        userId,
+        referenceId: registration.id,
+        referenceType: 'registration',
+        paymentType: PaymentType.APPLICATION_FEE,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!payment) {
+      return {
+        applicationId: registration.id,
+        paymentCompleted: registration.paymentCompleted,
+        paymentId: registration.paymentId,
+        paymentStatus: registration.paymentCompleted
+          ? PaymentStatus.COMPLETED
+          : null,
+        paymentMethod: null,
+        paymentUrl: null,
+        phoneNumber: null,
+        transactionRef: null,
+        amount: null,
+        currency: 'TZS',
+        applicationType: null,
+        message: registration.paymentCompleted
+          ? 'Application fee payment completed'
+          : 'Application fee payment has not been initiated yet',
+      };
+    }
+
+    const syncedPayment = await this.syncPaymentState(payment);
+    const expectedAmount =
+      syncedPayment.metadata?.applicationType === RegistrationCategory.GRADUATE
+        ? this.getApplicationFeeAmount(RegistrationCategory.GRADUATE)
+        : this.getApplicationFeeAmount(RegistrationCategory.STANDARD);
+
+    if (
+      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
+        syncedPayment.status,
+      ) &&
+      this.isOutdatedApplicationPaymentAmount(syncedPayment, expectedAmount)
+    ) {
+      await this.markPaymentFailed(
+        syncedPayment.id,
+        `Superseded by updated application fee amount ${expectedAmount}`,
+      );
+
+      return {
+        applicationId: registration.id,
+        paymentCompleted: registration.paymentCompleted,
+        paymentId: registration.paymentId,
+        paymentStatus: null,
+        paymentMethod: null,
+        paymentUrl: null,
+        phoneNumber: null,
+        transactionRef: null,
+        amount: expectedAmount,
+        currency: 'TZS',
+        applicationType:
+          syncedPayment.metadata?.applicationType ??
+          registration.registrationCategory ??
+          null,
+        message: 'Application fee payment has not been initiated yet',
+      };
+    }
+
+    return {
+      applicationId: registration.id,
+      paymentCompleted: syncedPayment.status === PaymentStatus.COMPLETED,
+      paymentId: syncedPayment.id,
+      paymentStatus: syncedPayment.status,
+      paymentMethod: syncedPayment.paymentMethod,
+      paymentUrl: syncedPayment.paymentUrl ?? null,
+      phoneNumber: syncedPayment.phoneNumber ?? null,
+      transactionRef: syncedPayment.transactionRef ?? null,
+      amount:
+        syncedPayment.status === PaymentStatus.COMPLETED
+          ? syncedPayment.amount
+          : expectedAmount,
+      currency: syncedPayment.currency,
+      applicationType:
+        syncedPayment.metadata?.applicationType ??
+        registration.registrationCategory ??
+        null,
+      message:
+        syncedPayment.status === PaymentStatus.COMPLETED
+          ? 'Application fee payment completed'
+          : syncedPayment.errorMessage || 'Payment is awaiting confirmation',
     };
   }
 
@@ -233,6 +541,7 @@ export class PaymentsService {
       payment.receiptNumber = await this.generateReceiptNumber();
 
       await this.paymentRepository.save(payment);
+      await this.updateRegistrationPaymentStatus(payment);
 
       // Send notifications
       await this.sendPaymentNotifications(payment);
@@ -288,6 +597,7 @@ export class PaymentsService {
       };
 
       await this.paymentRepository.save(payment);
+      await this.updateRegistrationPaymentStatus(payment);
       this.logger.log(
         `Selcom payment ${payment.id} processed, status: ${payment.status}`,
       );
@@ -296,6 +606,75 @@ export class PaymentsService {
     } catch (error) {
       this.logger.error(
         `Error processing Selcom callback: ${error.message}`,
+        error.stack,
+      );
+      return { status: 'OK' };
+    }
+  }
+
+  async handleClickPesaCallback(data: any): Promise<{ status: string }> {
+    try {
+      const payload = Array.isArray(data) ? data[0] : data;
+      const orderReference =
+        payload?.orderReference || payload?.paymentReference || payload?.reference;
+
+      if (!orderReference) {
+        this.logger.warn('ClickPesa callback received without order reference');
+        return { status: 'OK' };
+      }
+
+      const paymentById = await this.paymentRepository.findOne({
+        where: { id: orderReference },
+      });
+      const payment =
+        paymentById ||
+        (await this.findPaymentByProviderOrderReference(orderReference));
+
+      if (!payment) {
+        this.logger.warn(
+          `ClickPesa callback for unknown payment: ${orderReference}`,
+        );
+        return { status: 'OK' };
+      }
+
+      const rawStatus = String(
+        payload?.status || payload?.paymentStatus || payload?.transactionStatus || '',
+      ).toUpperCase();
+
+      if (this.completedGatewayStatuses.has(rawStatus)) {
+        payment.status = PaymentStatus.COMPLETED;
+        payment.completedAt = payload?.updatedAt
+          ? new Date(payload.updatedAt)
+          : new Date();
+        payment.transactionRef =
+          payload?.paymentReference ||
+          payload?.transactionReference ||
+          payment.transactionRef;
+        payment.receiptNumber =
+          payment.receiptNumber || (await this.generateReceiptNumber());
+        await this.sendPaymentNotifications(payment);
+      } else if (rawStatus === 'FAILED') {
+        payment.status = PaymentStatus.FAILED;
+        payment.errorMessage = payload?.message || 'ClickPesa payment failed';
+      } else if (rawStatus === 'CANCELLED') {
+        payment.status = PaymentStatus.CANCELLED;
+        payment.errorMessage = payload?.message || 'ClickPesa payment cancelled';
+      } else {
+        payment.status = PaymentStatus.PROCESSING;
+      }
+
+      payment.providerResponse = {
+        ...payment.providerResponse,
+        clickpesaCallback: payload,
+      };
+
+      const savedPayment = await this.paymentRepository.save(payment);
+      await this.updateRegistrationPaymentStatus(savedPayment);
+
+      return { status: 'OK' };
+    } catch (error) {
+      this.logger.error(
+        `Error processing ClickPesa callback: ${error.message}`,
         error.stack,
       );
       return { status: 'OK' };
@@ -362,7 +741,9 @@ export class PaymentsService {
     payment.completedAt = new Date();
     payment.receiptNumber = await this.generateReceiptNumber();
 
-    return this.paymentRepository.save(payment);
+    const savedPayment = await this.paymentRepository.save(payment);
+    await this.updateRegistrationPaymentStatus(savedPayment);
+    return savedPayment;
   }
 
   /**
@@ -375,7 +756,9 @@ export class PaymentsService {
     const payment = await this.getPaymentById(paymentId);
     payment.status = PaymentStatus.FAILED;
     payment.errorMessage = reason;
-    return this.paymentRepository.save(payment);
+    const savedPayment = await this.paymentRepository.save(payment);
+    await this.updateRegistrationPaymentStatus(savedPayment);
+    return savedPayment;
   }
 
   // ============================================
@@ -387,7 +770,147 @@ export class PaymentsService {
       PaymentMethod.MPESA,
       PaymentMethod.AIRTEL_MONEY,
       PaymentMethod.TIGO_PESA,
-    ].includes(method);
+      PaymentMethod.HALOPESA,
+      ].includes(method);
+  }
+
+  private getApplicationFeeAmount(category: RegistrationCategory): number {
+    return category === RegistrationCategory.GRADUATE
+      ? Number(this.configService.get('APPLICATION_FEE_GRADUATE') || 5000)
+      : Number(this.configService.get('APPLICATION_FEE_STANDARD') || 10000);
+  }
+
+  private getApplicationCategoryLabel(category: RegistrationCategory): string {
+    return category === RegistrationCategory.GRADUATE ? 'Graduate' : 'Standard';
+  }
+
+  private isOutdatedApplicationPaymentAmount(
+    payment: PaymentEntity,
+    expectedAmount: number,
+  ): boolean {
+    return (
+      payment.paymentType === PaymentType.APPLICATION_FEE &&
+      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(payment.status) &&
+      payment.amount !== expectedAmount
+    );
+  }
+
+  private buildClickPesaOrderReference(paymentId: string): string {
+    const compactId = paymentId.replace(/[^a-zA-Z0-9]/g, '');
+    return `PAY${compactId.slice(-17)}`;
+  }
+
+  private async findPaymentByProviderOrderReference(
+    orderReference: string,
+  ): Promise<PaymentEntity | null> {
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where(`payment.metadata ->> 'providerOrderReference' = :orderReference`, {
+        orderReference,
+      })
+      .getOne();
+  }
+
+  private async syncPaymentState(payment: PaymentEntity): Promise<PaymentEntity> {
+    if (
+      ![PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(payment.status)
+    ) {
+      await this.updateRegistrationPaymentStatus(payment);
+      return payment;
+    }
+
+    const providerReference =
+      payment.mobileMoneyRef ||
+      payment.transactionRef ||
+      payment.metadata?.providerOrderReference ||
+      payment.id;
+
+    const gatewayStatus = await this.paymentGateway.checkPaymentStatus(
+      payment.paymentMethod,
+      providerReference,
+    );
+
+    if (gatewayStatus.status === 'COMPLETED') {
+      payment.status = PaymentStatus.COMPLETED;
+      payment.transactionRef =
+        gatewayStatus.transactionId || payment.transactionRef;
+      payment.completedAt = gatewayStatus.paidAt || new Date();
+      payment.receiptNumber =
+        payment.receiptNumber || (await this.generateReceiptNumber());
+      payment.errorMessage = null;
+    } else if (gatewayStatus.status === 'FAILED') {
+      payment.status = PaymentStatus.FAILED;
+      payment.errorMessage = gatewayStatus.message;
+    } else if (gatewayStatus.status === 'CANCELLED') {
+      payment.status = PaymentStatus.CANCELLED;
+      payment.errorMessage = gatewayStatus.message;
+    } else {
+      payment.status = PaymentStatus.PROCESSING;
+    }
+
+    payment.providerResponse = {
+      ...payment.providerResponse,
+      statusCheck: gatewayStatus,
+    };
+
+    const savedPayment = await this.paymentRepository.save(payment);
+    await this.updateRegistrationPaymentStatus(savedPayment);
+    return savedPayment;
+  }
+
+  private canRetryApplicationPayment(payment: PaymentEntity): boolean {
+    if (![PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(payment.status)) {
+      return false;
+    }
+
+    const hasProviderReference =
+      !!payment.mobileMoneyRef || !!payment.transactionRef || !!payment.paymentUrl;
+
+    const lastStatusCheckSuccess =
+      payment.providerResponse?.statusCheck?.success !== false;
+
+    const ageMs =
+      Date.now() - new Date(payment.updatedAt || payment.createdAt).getTime();
+
+    return !hasProviderReference || !lastStatusCheckSuccess || ageMs > 5 * 60 * 1000;
+  }
+
+  private async updateRegistrationPaymentStatus(
+    payment: PaymentEntity,
+  ): Promise<void> {
+    if (
+      payment.referenceType !== 'registration' ||
+      !payment.referenceId ||
+      payment.paymentType !== PaymentType.APPLICATION_FEE
+    ) {
+      return;
+    }
+
+    const registration = await this.registrationRepository.findOne({
+      where: { id: payment.referenceId },
+    });
+
+    if (!registration) {
+      return;
+    }
+
+    registration.paymentId = payment.id;
+    registration.paymentCompleted = payment.status === PaymentStatus.COMPLETED;
+
+    if (payment.status === PaymentStatus.COMPLETED) {
+      if (!registration.completedSteps.includes(RegistrationStep.PAYMENT)) {
+        registration.completedSteps.push(RegistrationStep.PAYMENT);
+      }
+
+      if (
+        registration.status === ApplicationStatus.DRAFT &&
+        !registration.completedSteps.includes(RegistrationStep.DECLARATION)
+      ) {
+        registration.currentStep = RegistrationStep.PAYMENT;
+      }
+    }
+
+    await this.registrationRepository.save(registration);
   }
 
   private async generateReceiptNumber(): Promise<string> {
@@ -395,7 +918,7 @@ export class PaymentsService {
     const result = await this.paymentRepository
       .createQueryBuilder('payment')
       .select(
-        'MAX(CAST(SUBSTRING(payment.receiptNumber, 13) AS INTEGER))',
+        'MAX(CAST(SUBSTRING(payment.receiptNumber, 14) AS INTEGER))',
         'maxNum',
       )
       .where('payment.receiptNumber LIKE :pattern', {

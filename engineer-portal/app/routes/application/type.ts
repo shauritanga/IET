@@ -17,6 +17,35 @@ export interface ApplicationDraftData {
     registration: Registration | null;
 }
 
+export type ApplicationPaymentMethod =
+    | "AIRTEL_MONEY"
+    | "TIGO_PESA"
+    | "HALOPESA"
+    | "SELCOM";
+
+export type ApplicationPaymentStatusType =
+    | "PENDING"
+    | "PROCESSING"
+    | "COMPLETED"
+    | "FAILED"
+    | "CANCELLED"
+    | null;
+
+export interface ApplicationPaymentStatus {
+    applicationId: string;
+    paymentCompleted: boolean;
+    paymentId: string | null;
+    paymentStatus: ApplicationPaymentStatusType;
+    paymentMethod: ApplicationPaymentMethod | null;
+    paymentUrl: string | null;
+    phoneNumber: string | null;
+    transactionRef: string | null;
+    amount: number | null;
+    currency: string;
+    applicationType: "GRADUATE" | "STANDARD" | null;
+    message: string;
+}
+
 export type ApplicationStep =
     | "PERSONAL_DETAILS"
     | "REGISTRATION_DETAILS"

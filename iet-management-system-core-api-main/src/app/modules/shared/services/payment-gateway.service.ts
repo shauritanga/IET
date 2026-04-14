@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentMethod } from '../../../common/enums';
+import { createHmac } from 'crypto';
 
 export interface PaymentRequest {
   amount: number;
@@ -49,10 +50,35 @@ export interface PaymentStatusResponse {
 @Injectable()
 export class PaymentGatewayService {
   private readonly logger = new Logger(PaymentGatewayService.name);
+  private readonly completedStatuses = new Set([
+    'SUCCESS',
+    'SUCCESSFUL',
+    'SUCCEEDED',
+    'COMPLETED',
+    'COMPLETE',
+    'SETTLED',
+    'PAID',
+    'APPROVED',
+  ]);
   private readonly isDevelopment: boolean;
+  private readonly clickPesaBaseUrl: string;
+  private readonly clickPesaClientId: string;
+  private readonly clickPesaApiKey: string;
+  private readonly clickPesaChecksumKey: string;
+  private readonly clickPesaUseChecksum: boolean;
+  private clickPesaToken: string | null = null;
+  private clickPesaTokenExpiresAt = 0;
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
+    this.clickPesaBaseUrl = configService.get<string>('CLICKPESA_BASE_URL')!;
+    this.clickPesaClientId = configService.get<string>('CLICKPESA_CLIENT_ID')!;
+    this.clickPesaApiKey = configService.get<string>('CLICKPESA_API_KEY')!;
+    this.clickPesaChecksumKey =
+      configService.get<string>('CLICKPESA_CHECKSUM_KEY') || '';
+    this.clickPesaUseChecksum = !!configService.get<boolean>(
+      'CLICKPESA_USE_CHECKSUM',
+    );
   }
 
   /**
@@ -67,12 +93,14 @@ export class PaymentGatewayService {
     );
 
     switch (method) {
-      case PaymentMethod.MPESA:
-        return this.initiateMpesa(request);
       case PaymentMethod.AIRTEL_MONEY:
         return this.initiateAirtelMoney(request);
       case PaymentMethod.TIGO_PESA:
         return this.initiateTigoPesa(request);
+      case PaymentMethod.HALOPESA:
+        return this.initiateHaloPesa(request);
+      case PaymentMethod.MPESA:
+        return this.initiateMpesa(request);
       case PaymentMethod.SELCOM:
         return this.initiateSelcom(request);
       case PaymentMethod.DPO_BANK:
@@ -90,6 +118,10 @@ export class PaymentGatewayService {
     transactionId: string,
   ): Promise<PaymentStatusResponse> {
     this.logger.log(`Checking ${method} payment status for ${transactionId}`);
+
+    if (this.usesClickPesa(method)) {
+      return this.checkClickPesaPaymentStatus(transactionId);
+    }
 
     // Mock implementation - always returns completed
     if (this.isDevelopment) {
@@ -126,6 +158,10 @@ export class PaymentGatewayService {
     }
 
     const formattedPhone = this.formatTanzanianPhone(request.phoneNumber);
+
+    if (this.isClickPesaConfigured()) {
+      return this.initiateClickPesaMobilePayment('MPESA', request, formattedPhone);
+    }
 
     if (this.isDevelopment) {
       return this.mockMpesaPayment(request, formattedPhone);
@@ -190,6 +226,14 @@ export class PaymentGatewayService {
 
     const formattedPhone = this.formatTanzanianPhone(request.phoneNumber);
 
+    if (this.isClickPesaConfigured()) {
+      return this.initiateClickPesaMobilePayment(
+        'AIRTEL_MONEY',
+        request,
+        formattedPhone,
+      );
+    }
+
     if (this.isDevelopment) {
       return this.mockAirtelPayment(request, formattedPhone);
     }
@@ -243,6 +287,14 @@ export class PaymentGatewayService {
 
     const formattedPhone = this.formatTanzanianPhone(request.phoneNumber);
 
+    if (this.isClickPesaConfigured()) {
+      return this.initiateClickPesaMobilePayment(
+        'TIGO_PESA',
+        request,
+        formattedPhone,
+      );
+    }
+
     if (this.isDevelopment) {
       return this.mockTigoPayment(request, formattedPhone);
     }
@@ -254,6 +306,56 @@ export class PaymentGatewayService {
     // - TIGO_CALLBACK_URL
 
     return this.mockTigoPayment(request, formattedPhone);
+  }
+
+  private async initiateHaloPesa(
+    request: PaymentRequest,
+  ): Promise<PaymentResponse> {
+    if (!request.phoneNumber) {
+      throw new BadRequestException(
+        'Phone number is required for HaloPesa payment',
+      );
+    }
+
+    const formattedPhone = this.formatTanzanianPhone(request.phoneNumber);
+
+    if (this.isClickPesaConfigured()) {
+      return this.initiateClickPesaMobilePayment(
+        'HALOPESA',
+        request,
+        formattedPhone,
+      );
+    }
+
+    if (this.isDevelopment) {
+      return this.mockHaloPesaPayment(request, formattedPhone);
+    }
+
+    return this.mockHaloPesaPayment(request, formattedPhone);
+  }
+
+  private async mockHaloPesaPayment(
+    request: PaymentRequest,
+    phoneNumber: string,
+  ): Promise<PaymentResponse> {
+    await this.delay(200);
+
+    const transactionId = `HALOPESA_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    this.logger.log(`[MOCK HALOPESA] Payment initiated`);
+    this.logger.log(`[MOCK HALOPESA] Phone: ${phoneNumber}`);
+    this.logger.log(
+      `[MOCK HALOPESA] Amount: ${request.amount} ${request.currency}`,
+    );
+    this.logger.log(`[MOCK HALOPESA] TransactionId: ${transactionId}`);
+
+    return {
+      success: true,
+      transactionId,
+      status: 'INITIATED',
+      message: 'Payment request sent. Please check your phone to authorize.',
+      rawResponse: { mock: true, transactionId },
+    };
   }
 
   private async mockTigoPayment(
@@ -287,6 +389,10 @@ export class PaymentGatewayService {
   private async initiateSelcom(
     request: PaymentRequest,
   ): Promise<PaymentResponse> {
+    if (this.usesClickPesa(PaymentMethod.SELCOM)) {
+      return this.initiateClickPesaCardPayment(request);
+    }
+
     if (this.isDevelopment) {
       return this.mockSelcomPayment(request);
     }
@@ -373,6 +479,464 @@ export class PaymentGatewayService {
     };
   }
 
+  usesClickPesa(method: PaymentMethod): boolean {
+    return (
+      this.isClickPesaConfigured() &&
+      [
+        PaymentMethod.AIRTEL_MONEY,
+        PaymentMethod.TIGO_PESA,
+        PaymentMethod.HALOPESA,
+        PaymentMethod.MPESA,
+        PaymentMethod.SELCOM,
+      ].includes(method)
+    );
+  }
+
+  getCallbackUrl(method: PaymentMethod, apiUrl?: string): string | undefined {
+    if (this.usesClickPesa(method)) {
+      return (
+        this.configService.get<string>('CLICKPESA_CALLBACK_URL') ||
+        (apiUrl ? `${apiUrl}/payments/webhooks/clickpesa` : undefined)
+      );
+    }
+
+    return apiUrl
+      ? `${apiUrl}/payments/webhooks/${method.toLowerCase()}`
+      : undefined;
+  }
+
+  private isClickPesaConfigured(): boolean {
+    return Boolean(this.clickPesaClientId && this.clickPesaApiKey);
+  }
+
+  private async getClickPesaToken(): Promise<string> {
+    if (this.clickPesaToken && Date.now() < this.clickPesaTokenExpiresAt) {
+      return this.clickPesaToken;
+    }
+
+    const response = await fetch(`${this.clickPesaBaseUrl}/generate-token`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'client-id': this.clickPesaClientId,
+        'api-key': this.clickPesaApiKey,
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new BadRequestException(
+        `ClickPesa authentication failed: ${body || response.statusText}`,
+      );
+    }
+
+    const payload = (await response.json()) as
+      | { token?: string; access_token?: string; expires_in?: number }
+      | undefined;
+
+    const rawToken = payload?.token || payload?.access_token;
+    const token = rawToken?.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      throw new BadRequestException('ClickPesa authentication returned no token');
+    }
+
+    const expiresInMs = Math.max(((payload?.expires_in || 3600) - 60) * 1000, 60000);
+    this.clickPesaToken = token;
+    this.clickPesaTokenExpiresAt = Date.now() + expiresInMs;
+    return token;
+  }
+
+  private async initiateClickPesaMobilePayment(
+    channel: 'MPESA' | 'AIRTEL_MONEY' | 'TIGO_PESA' | 'HALOPESA',
+    request: PaymentRequest,
+    phoneNumber: string,
+  ): Promise<PaymentResponse> {
+    const token = await this.getClickPesaToken();
+    const normalizedPhoneNumber = phoneNumber.replace(/^\+/, '');
+    const requestedChannel = this.mapChannelToClickPesaMethodName(channel);
+
+    const previewBodyBase = {
+      amount: String(request.amount),
+      currency: request.currency,
+      orderReference: request.reference,
+      phoneNumber: normalizedPhoneNumber,
+      fetchSenderDetails: false,
+    };
+    const checksum = this.clickPesaUseChecksum
+      ? this.buildClickPesaChecksum(previewBodyBase)
+      : undefined;
+    const previewBody = {
+      ...previewBodyBase,
+      ...(checksum ? { checksum } : {}),
+    };
+
+    this.logger.log(
+      `ClickPesa preview checksum payload (${request.reference}): ${this.describeClickPesaChecksumPayload(
+        previewBodyBase,
+      )}`,
+    );
+    this.logger.log(
+      `ClickPesa preview request body (${request.reference}): ${JSON.stringify(
+        previewBody,
+      )}`,
+    );
+
+    let previewPayload: any = null;
+
+    try {
+      const previewResponse = await fetch(
+        `${this.clickPesaBaseUrl}/payments/preview-ussd-push-request`,
+        {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(previewBody),
+        },
+      );
+
+      previewPayload = await previewResponse.json().catch(() => ({}));
+
+      this.logger.log(
+        `ClickPesa preview response for ${requestedChannel} (${request.reference}) [${previewResponse.status} ${previewResponse.statusText}]: ${JSON.stringify(
+          previewPayload,
+        )}`,
+      );
+
+      if (previewResponse.ok) {
+        const activeMethods: string[] = Array.isArray(previewPayload?.activeMethods)
+          ? previewPayload.activeMethods
+              .map((method: any) => String(method?.name || '').toUpperCase())
+              .filter(Boolean)
+          : [];
+
+        if (
+          activeMethods.length > 0 &&
+          !activeMethods.includes(requestedChannel)
+        ) {
+          throw new BadRequestException(
+            `Selected payment method is not available for this number. Available methods: ${activeMethods.join(', ')}`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          `ClickPesa preview failed for ${requestedChannel}: ${
+            previewPayload?.message || previewResponse.statusText
+          }. Continuing with payment initiation.`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `ClickPesa preview request errored for ${requestedChannel}: ${
+          error instanceof Error ? error.message : String(error)
+        }. Continuing with payment initiation.`,
+      );
+    }
+
+    const bodyBase = {
+      amount: String(request.amount),
+      currency: request.currency,
+      phoneNumber: normalizedPhoneNumber,
+      orderReference: request.reference,
+    };
+    const initiateChecksum = this.clickPesaUseChecksum
+      ? this.buildClickPesaChecksum(bodyBase)
+      : undefined;
+    const body = {
+      ...bodyBase,
+      ...(initiateChecksum ? { checksum: initiateChecksum } : {}),
+    };
+
+    this.logger.log(
+      `ClickPesa initiate checksum payload (${request.reference}): ${this.describeClickPesaChecksumPayload(
+        bodyBase,
+      )}`,
+    );
+    this.logger.log(
+      `ClickPesa initiate request body (${request.reference}): ${JSON.stringify(
+        body,
+      )}`,
+    );
+
+    const response = await fetch(
+      `${this.clickPesaBaseUrl}/payments/initiate-ussd-push-request`,
+      {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    const payload = await response.json().catch(() => ({}));
+
+    this.logger.log(
+      `ClickPesa initiate response for ${requestedChannel} (${request.reference}) [${response.status} ${response.statusText}]: ${JSON.stringify(
+        payload,
+      )}`,
+    );
+
+    if (!response.ok) {
+      const providerMessage =
+        payload?.message ||
+        payload?.error ||
+        payload?.errors?.[0]?.message ||
+        payload?.details ||
+        previewPayload?.message;
+
+      throw new BadRequestException(
+        providerMessage
+          ? `ClickPesa mobile payment initiation failed for ${requestedChannel}: ${providerMessage}`
+          : `ClickPesa mobile payment initiation failed for ${requestedChannel} (HTTP ${response.status} ${response.statusText})`,
+      );
+    }
+
+    return {
+      success: true,
+      transactionId:
+        payload?.transactionReference ||
+        payload?.paymentReference ||
+        payload?.requestId ||
+        request.reference,
+      providerRef:
+        payload?.providerReference || payload?.orderReference || request.reference,
+      checkoutRequestId: payload?.requestId,
+      status: 'PENDING',
+      message:
+        payload?.message ||
+        'Payment request sent. Please confirm the transaction on your phone.',
+      rawResponse: {
+        preview: previewPayload,
+        initiate: payload,
+      },
+    };
+  }
+
+  private mapChannelToClickPesaMethodName(
+    channel: 'MPESA' | 'AIRTEL_MONEY' | 'TIGO_PESA' | 'HALOPESA',
+  ): string {
+    switch (channel) {
+      case 'AIRTEL_MONEY':
+        return 'AIRTEL-MONEY';
+      case 'TIGO_PESA':
+        return 'TIGO-PESA';
+      case 'HALOPESA':
+        return 'HALOPESA';
+      case 'MPESA':
+        return 'M-PESA';
+      default:
+        return channel;
+    }
+  }
+
+  private async initiateClickPesaCardPayment(
+    request: PaymentRequest,
+  ): Promise<PaymentResponse> {
+    const token = await this.getClickPesaToken();
+    const bodyBase = {
+      amount: request.amount,
+      currency: request.currency,
+      orderReference: request.reference,
+      description: request.description,
+      customerEmail: request.email,
+      callbackUrl: request.callbackUrl,
+    };
+    const checksum = this.clickPesaUseChecksum
+      ? this.buildClickPesaChecksum(bodyBase)
+      : undefined;
+    const body = {
+      ...bodyBase,
+      ...(checksum ? { checksum } : {}),
+    };
+
+    const response = await fetch(
+      `${this.clickPesaBaseUrl}/payments/initiate-card-payment`,
+      {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    const payload = await response.json().catch(() => ({}));
+
+    this.logger.log(
+      `ClickPesa card initiate response (${request.reference}) [${response.status} ${response.statusText}]: ${JSON.stringify(
+        payload,
+      )}`,
+    );
+
+    if (!response.ok) {
+      const providerMessage =
+        payload?.message ||
+        payload?.error ||
+        payload?.errors?.[0]?.message ||
+        payload?.details;
+
+      throw new BadRequestException(
+        providerMessage
+          ? `ClickPesa card payment initiation failed: ${providerMessage}`
+          : `ClickPesa card payment initiation failed (HTTP ${response.status} ${response.statusText})`,
+      );
+    }
+
+    return {
+      success: true,
+      transactionId:
+        payload?.transactionReference ||
+        payload?.paymentReference ||
+        request.reference,
+      paymentUrl:
+        payload?.checkoutUrl || payload?.paymentUrl || payload?.redirectUrl,
+      status: 'PENDING',
+      message:
+        payload?.message ||
+        'Checkout created. Redirect customer to the payment page.',
+      rawResponse: payload,
+    };
+  }
+
+  private async checkClickPesaPaymentStatus(
+    orderReference: string,
+  ): Promise<PaymentStatusResponse> {
+    const token = await this.getClickPesaToken();
+    const response = await fetch(
+      `${this.clickPesaBaseUrl}/payments/${orderReference}`,
+      {
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const payload = await response.json().catch(() => ({}));
+
+    this.logger.log(
+      `ClickPesa status response (${orderReference}) [${response.status} ${response.statusText}]: ${JSON.stringify(
+        payload,
+      )}`,
+    );
+
+    if (!response.ok) {
+      return {
+        success: false,
+        status: 'PENDING',
+        transactionId: orderReference,
+        message: payload?.message || 'Unable to verify ClickPesa payment status',
+      };
+    }
+
+    const paymentRecord = Array.isArray(payload) ? payload[0] : payload;
+    const rawStatus = String(
+      paymentRecord?.status ||
+        paymentRecord?.paymentStatus ||
+        paymentRecord?.transactionStatus ||
+        '',
+    ).toUpperCase();
+
+    const status = this.completedStatuses.has(rawStatus)
+      ? 'COMPLETED'
+      : rawStatus === 'FAILED'
+        ? 'FAILED'
+        : rawStatus === 'CANCELLED'
+          ? 'CANCELLED'
+          : 'PENDING';
+
+    return {
+      success: true,
+      status,
+      transactionId:
+        paymentRecord?.transactionReference ||
+        paymentRecord?.paymentReference ||
+        orderReference,
+      amount: paymentRecord?.amount || paymentRecord?.collectedAmount,
+      paidAt: paymentRecord?.paidAt
+        ? new Date(paymentRecord.paidAt)
+        : paymentRecord?.updatedAt
+          ? new Date(paymentRecord.updatedAt)
+          : undefined,
+      message:
+        paymentRecord?.message || `ClickPesa status: ${rawStatus || 'PENDING'}`,
+    };
+  }
+
+  private buildClickPesaChecksum(payload: Record<string, any>): string | undefined {
+    const secret = this.clickPesaChecksumKey || this.clickPesaApiKey;
+    if (!secret) {
+      return undefined;
+    }
+
+    const canonicalize = (value: any): any => {
+      if (value === null || typeof value !== 'object') {
+        return value;
+      }
+
+      if (Array.isArray(value)) {
+        return value.map(canonicalize);
+      }
+
+      return Object.keys(value)
+        .sort()
+        .reduce(
+          (acc, key) => {
+            if (key === 'checksum' || key === 'checksumMethod') {
+              return acc;
+            }
+
+            acc[key] = canonicalize(value[key]);
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
+    };
+
+    const payloadString = JSON.stringify(canonicalize(payload));
+    return createHmac('sha256', secret).update(payloadString).digest('hex');
+  }
+
+  private describeClickPesaChecksumPayload(payload: Record<string, any>): string {
+    const canonicalize = (value: any): any => {
+      if (value === null || typeof value !== 'object') {
+        return value;
+      }
+
+      if (Array.isArray(value)) {
+        return value.map(canonicalize);
+      }
+
+      return Object.keys(value)
+        .sort()
+        .reduce(
+          (acc, key) => {
+            if (key === 'checksum' || key === 'checksumMethod') {
+              return acc;
+            }
+
+            acc[key] = canonicalize(value[key]);
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
+    };
+
+    return JSON.stringify(canonicalize(payload));
+  }
+
   // ============================================
   // WEBHOOK VERIFICATION
   // ============================================
@@ -437,22 +1001,36 @@ export class PaymentGatewayService {
    * Get payment provider configuration status
    */
   getProviderStatus(): Record<string, { configured: boolean; mode: string }> {
+    const clickPesaConfigured = this.isClickPesaConfigured();
+    const clickPesaMode = clickPesaConfigured ? 'clickpesa' : this.isDevelopment ? 'mock' : 'live';
+
     return {
       mpesa: {
-        configured: !!this.configService.get('MPESA_CONSUMER_KEY'),
-        mode: this.isDevelopment ? 'mock' : 'live',
+        configured:
+          clickPesaConfigured || !!this.configService.get('MPESA_CONSUMER_KEY'),
+        mode: clickPesaMode,
       },
       airtel: {
-        configured: !!this.configService.get('AIRTEL_CLIENT_ID'),
-        mode: this.isDevelopment ? 'mock' : 'live',
+        configured:
+          clickPesaConfigured || !!this.configService.get('AIRTEL_CLIENT_ID'),
+        mode: clickPesaMode,
       },
       tigo: {
-        configured: !!this.configService.get('TIGO_ACCOUNT_ID'),
-        mode: this.isDevelopment ? 'mock' : 'live',
+        configured:
+          clickPesaConfigured || !!this.configService.get('TIGO_ACCOUNT_ID'),
+        mode: clickPesaMode,
+      },
+      halopesa: {
+        configured: clickPesaConfigured,
+        mode: clickPesaMode,
       },
       selcom: {
         configured: !!this.configService.get('SELCOM_API_KEY'),
-        mode: this.isDevelopment ? 'mock' : 'live',
+        mode: clickPesaConfigured
+          ? 'clickpesa'
+          : this.isDevelopment
+            ? 'mock'
+            : 'live',
       },
       dpo: {
         configured: !!this.configService.get('DPO_COMPANY_TOKEN'),

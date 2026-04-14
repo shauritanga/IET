@@ -665,6 +665,12 @@ export class RegistrationService {
       );
     }
 
+    if (!registration.paymentCompleted) {
+      throw new BadRequestException(
+        'Please complete the application fee payment before submitting your application',
+      );
+    }
+
     // Generate reference number
     const referenceNumber = await this.generateReferenceNumber();
 

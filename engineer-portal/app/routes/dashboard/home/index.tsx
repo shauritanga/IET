@@ -7,20 +7,16 @@ import { useGetUserProfile } from "../profile/repositories/handle-get-user-profi
 const Home = () => {
     const { data, isPending } = useGetUserProfile();
     const profile = data?.data;
-
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return "Good Morning";
-        if (hour < 18) return "Good Afternoon";
-        return "Good Evening";
-    };
+    const firstName = profile?.firstName || "Member";
 
     return (
-        <section className={"py-4 lg:p-4 flex flex-col overflow-y-scroll"}>
-            <h2 className={"text-3xl mb-4 font-bold"}>{getGreeting()} 👋</h2>
+        <section className="flex flex-col gap-6 py-4 lg:p-4">
+            <h2 className="text-[42px] font-semibold tracking-[-0.03em] text-[#4A2F2A]">
+                Hello {firstName} <span className="inline-block text-[34px]">👋</span>
+            </h2>
             <TrainingEventsSummary />
-            <div className={"grid grid-cols-1 lg:grid-cols-5 gap-4 mt-4 "}>
-                <MembershipFeesSummary />
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+                <MembershipFeesSummary profile={profile} isPending={isPending} />
                 <MemberDetailsCard profile={profile} isPending={isPending}/>
             </div>
         </section>

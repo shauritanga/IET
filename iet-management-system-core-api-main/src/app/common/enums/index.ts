@@ -106,9 +106,10 @@ export enum RegistrationCategory {
 // ============================================
 
 export enum PaymentMethod {
-  MPESA = 'MPESA',
   AIRTEL_MONEY = 'AIRTEL_MONEY',
   TIGO_PESA = 'TIGO_PESA',
+  HALOPESA = 'HALOPESA',
+  MPESA = 'MPESA',
   SELCOM = 'SELCOM',
   DPO_BANK = 'DPO_BANK',
 }

@@ -3,8 +3,10 @@ import { useForm } from "react-hook-form";
 import z from "zod";
 
 export const DeclarationFormSchema = z.object({
-    declarationDate:z.string(),
-    declarationAgreed:z.boolean(),
+    declarationDate: z.string().min(1, "Declaration date is required"),
+    declarationAgreed: z.literal(true, {
+        errorMap: () => ({ message: "You must agree to the declaration before submitting." }),
+    }),
 });
 
 export type DeclarationFormType = z.infer<typeof DeclarationFormSchema>

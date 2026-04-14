@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentMethod, PaymentType } from '../../../common/enums';
+import { RegistrationCategory } from '../../../common/enums';
 
 export class InitiatePaymentDto {
   @ApiProperty({
@@ -76,6 +77,27 @@ export class PaymentQueryDto {
   @IsOptional()
   @IsString()
   type?: string;
+}
+
+export class InitiateApplicationPaymentDto {
+  @ApiProperty({
+    example: 'GRADUATE',
+    enum: RegistrationCategory,
+    description: 'Registration category used to determine application fee',
+  })
+  @IsNotEmpty()
+  @IsEnum(RegistrationCategory)
+  applicationType: RegistrationCategory;
+
+  @ApiProperty({ example: 'MPESA', enum: PaymentMethod })
+  @IsNotEmpty()
+  @IsEnum(PaymentMethod)
+  paymentMethod: PaymentMethod;
+
+  @ApiPropertyOptional({ example: '+255712000000' })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
 }
 
 // M-Pesa Callback DTO

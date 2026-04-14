@@ -50,4 +50,19 @@ export default () => ({
   DO_SPACES_REGION: process.env.DO_SPACES_REGION || 'us-east-1',
   DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET || '',
   DO_SPACES_CDN_URL: process.env.DO_SPACES_CDN_URL || '',
+
+  // ClickPesa payment settings
+  CLICKPESA_BASE_URL:
+    process.env.CLICKPESA_BASE_URL ||
+    'https://api.clickpesa.com/third-parties',
+  CLICKPESA_CLIENT_ID: process.env.CLICKPESA_CLIENT_ID || '',
+  CLICKPESA_API_KEY: process.env.CLICKPESA_API_KEY || '',
+  CLICKPESA_USE_CHECKSUM: process.env.CLICKPESA_USE_CHECKSUM === 'true',
+  CLICKPESA_CALLBACK_URL: process.env.CLICKPESA_CALLBACK_URL || '',
+
+  // Application fee configuration
+  APPLICATION_FEE_GRADUATE:
+    parseInt(process.env.APPLICATION_FEE_GRADUATE, 10) || 5000,
+  APPLICATION_FEE_STANDARD:
+    parseInt(process.env.APPLICATION_FEE_STANDARD, 10) || 10000,
 });

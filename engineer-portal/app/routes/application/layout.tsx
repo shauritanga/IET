@@ -24,8 +24,7 @@ const RegisterLayout = () => {
     const { isInitializing, isError } = useInitializeApplication();
 
     // 2️⃣ Fetch the draft data (only meaningful once we have an applicationId)
-    const { isLoading: isDraftLoading } = useGetApplicationDraft();
-    const { data: draft } = useGetApplicationDraft();
+    const { isLoading: isDraftLoading, data: draft } = useGetApplicationDraft();
 
     const steps = [
         {
@@ -68,6 +67,26 @@ const RegisterLayout = () => {
     const isStepCompleted = (stepIndex: number) => currentStepIndex > stepIndex;
     const isConnectorActive = (stepIndex: number) => currentStepIndex > stepIndex;
 
+    useEffect(() => {
+        if (hasAutoRedirected.current || !draft?.data?.hasActiveRegistration) {
+            return;
+        }
+
+        const currentPath = path.pathname;
+        const targetPath = getApplicationRoute(draft.data);
+
+        if (
+            currentPath === "/application" ||
+            currentPath === "/application/personal-details"
+        ) {
+            hasAutoRedirected.current = true;
+
+            if (targetPath !== currentPath) {
+                navigate(targetPath, { replace: true });
+            }
+        }
+    }, [draft, navigate, path.pathname]);
+
     // Block render while either initializing the draft OR loading existing draft data
     if (isInitializing || isDraftLoading) {
         return (
@@ -90,26 +109,6 @@ const RegisterLayout = () => {
             </div>
         );
     }
-
-    useEffect(() => {
-        if (hasAutoRedirected.current || !draft?.data?.hasActiveRegistration) {
-            return;
-        }
-
-        const currentPath = path.pathname;
-        const targetPath = getApplicationRoute(draft.data);
-
-        if (
-            currentPath === "/application" ||
-            currentPath === "/application/personal-details"
-        ) {
-            hasAutoRedirected.current = true;
-
-            if (targetPath !== currentPath) {
-                navigate(targetPath, { replace: true });
-            }
-        }
-    }, [draft, navigate, path.pathname]);
 
     return (
         <div className="flex flex-col lg:flex-row lg:gap-4 w-full lg:min-h-dvh">
