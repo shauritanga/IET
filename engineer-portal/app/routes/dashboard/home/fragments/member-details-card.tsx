@@ -1,7 +1,9 @@
+import {useState} from "react";
 import {Card} from "~/components/ui/card";
 import {Avatar, AvatarFallback, AvatarImage} from "@radix-ui/react-avatar";
 import {Skeleton} from "~/components/ui/skeleton";
 import type {UserProfile} from "~/routes/dashboard/profile/type";
+import {Copy} from "@solar-icons/react/ssr";
 
 type Props = {
     profile?: UserProfile;
@@ -48,6 +50,14 @@ const DetailRow = ({label, value, isPending}: { label: string; value: string; is
 
 const MemberDetailsCard = ({profile, isPending}: Props) => {
     const fullName = getFullName(profile);
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyId = () => {
+        navigator.clipboard.writeText(profile?.membershipId || "").then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
 
     return (
         <Card className="gap-4 rounded-[28px] border border-[#EEE4E1] bg-white p-4 shadow-[0_18px_48px_rgba(95,69,60,0.08)] lg:col-span-2">
@@ -69,8 +79,21 @@ const MemberDetailsCard = ({profile, isPending}: Props) => {
                     ) : (
                         <>
                             <h3 className="truncate text-[26px] font-semibold tracking-[-0.02em] text-[#4A2F2A]">{fullName || "Member Profile"}</h3>
-                            <p className="mt-1 text-sm text-[#9B8782]">ID: {profile?.membershipId || "Not assigned"}</p>
-                            <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getBadgeClasses(profile?.membershipStatus)}`}>
+                            <div className="mt-1 flex items-center gap-1.5">
+                                <span className="text-sm text-[#9B8782]">ID: {profile?.membershipId || "Not assigned"}</span>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyId}
+                                    className="text-[#9B8782] hover:text-[#5A3E39] transition-colors"
+                                    title={copied ? "Copied!" : "Copy ID"}
+                                >
+                                    <Copy className="size-[14px]" weight="BoldDuotone" />
+                                </button>
+                            </div>
+                            <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${getBadgeClasses(profile?.membershipStatus)}`}>
+                                {profile?.membershipStatus === "ACTIVE" && (
+                                    <span className="w-2 h-2 rounded-full bg-[#48A764] flex-shrink-0" />
+                                )}
                                 {profile?.membershipStatus === "ACTIVE" ? "Active Member" : (profile?.membershipStatus || "Pending")}
                             </span>
                         </>

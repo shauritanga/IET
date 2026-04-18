@@ -13,7 +13,7 @@ export const menuItems = [
         icon: <Card weight={"BoldDuotone"} size={24}/>
     },
     {
-        title: "Events & Training",
+        title: "Event & Training",
         url: "/dashboard/events",
         icon: <Calendar weight={"BoldDuotone"} size={24}/>
     },

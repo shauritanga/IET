@@ -35,11 +35,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // Log error
-    this.logger.error(
-      `${request.method} ${request.url} - ${status}: ${message}`,
-      exception.stack,
-    );
+    // Skip logging for browser-generated asset requests
+    const ignoredPaths = ['/favicon.ico', '/sw.js', '/robots.txt'];
+    if (!ignoredPaths.includes(request.url)) {
+      this.logger.error(
+        `${request.method} ${request.url} - ${status}: ${message}`,
+        exception.stack,
+      );
+    }
 
     response.status(status).json({
       success: false,

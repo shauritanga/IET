@@ -1,11 +1,13 @@
-import {useState} from "react";
+import {useState, useMemo} from "react";
+import type React from "react";
 import {Link} from "react-router";
-import {Calendar} from "~/components/ui/calendar";
+import {Calendar, CalendarDayButton} from "~/components/ui/calendar";
 import {Button} from "~/components/ui/button";
 import {Card} from "~/components/ui/card";
 import {Skeleton} from "~/components/ui/skeleton";
 import {useUpcomingEvents} from "../repositories/useUpcomingEvents";
 import type {DashboardEvent} from "../type";
+import type {DayButton} from "react-day-picker";
 
 const fallbackEvents: DashboardEvent[] = [
     {
@@ -60,12 +62,18 @@ const categoryClasses = (category: string) => {
     }
 };
 
-const formatEventDate = (value: string) =>
-    new Date(value).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-    });
+const ordinalSuffix = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+const formatEventDate = (value: string) => {
+    const [y, m, d] = value.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    const month = date.toLocaleDateString("en-US", {month: "short"});
+    return `${ordinalSuffix(d)} ${month}, ${y}`;
+};
 
 const formatEventTime = (value: string) =>
     new Date(`1970-01-01T${value}:00`).toLocaleTimeString("en-US", {
@@ -77,6 +85,25 @@ const formatEventTime = (value: string) =>
 const formatEventSchedule = (event: DashboardEvent) => {
     const location = event.isOnline ? "Online" : event.location;
     return `${formatEventDate(event.startDate)}  |  ${formatEventTime(event.startTime)} - ${formatEventTime(event.endTime)}  |  ${location}`;
+};
+
+const getDotColorForCategory = (category: string): string => {
+    switch (category) {
+        case "CONFERENCE":     return "bg-[#55AF6F]";
+        case "ONLINE_SEMINAR": return "bg-[#C6A32B]";
+        default:               return "bg-gray-400";
+    }
+};
+
+const buildEventDotMap = (events: DashboardEvent[]): Map<string, string[]> => {
+    const map = new Map<string, string[]>();
+    for (const event of events) {
+        const key = event.startDate;
+        const color = getDotColorForCategory(event.category);
+        const existing = map.get(key) ?? [];
+        if (existing.length < 3) map.set(key, [...existing, color]);
+    }
+    return map;
 };
 
 const EventCard = ({event}: { event: DashboardEvent }) => (
@@ -108,9 +135,35 @@ const EventCard = ({event}: { event: DashboardEvent }) => (
 const TrainingEventsSummary = () => {
     const {data, isPending} = useUpcomingEvents();
     const events = data?.data?.length ? data.data : fallbackEvents;
+    const parseLocalDate = (iso: string) => {
+        const [y, m, d] = iso.split("-").map(Number);
+        return new Date(y, m - 1, d);
+    };
+
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-        events[0] ? new Date(events[0].startDate) : new Date(),
+        events[0] ? parseLocalDate(events[0].startDate) : new Date(),
     );
+
+    const dotMap = useMemo(() => buildEventDotMap(events), [events]);
+
+    const EventDayButton = useMemo(() => {
+        return function EventDayButtonInner(props: React.ComponentProps<typeof DayButton>) {
+            const dateKey = props.day.date.toLocaleDateString("en-CA");
+            const dots = dotMap.get(dateKey) ?? [];
+            return (
+                <CalendarDayButton {...props}>
+                    {props.children}
+                    {dots.length > 0 && (
+                        <span className="flex gap-[2px] justify-center">
+                            {dots.map((color, i) => (
+                                <span key={i} className={`inline-block w-[3px] h-[3px] rounded-full ${color}`} />
+                            ))}
+                        </span>
+                    )}
+                </CalendarDayButton>
+            );
+        };
+    }, [dotMap]);
 
     return (
         <Card className="gap-4 rounded-[30px] border border-[#EEE4E1] bg-white p-3 shadow-[0_18px_48px_rgba(95,69,60,0.08)]">
@@ -124,18 +177,24 @@ const TrainingEventsSummary = () => {
                             selected={selectedDate}
                             onSelect={setSelectedDate}
                             showOutsideDays
+                            weekStartsOn={1}
                             className="w-full rounded-[20px] bg-transparent p-2"
+                            components={{DayButton: EventDayButton}}
+                            formatters={{
+                                formatWeekdayName: (date) =>
+                                    date.toLocaleDateString("en-US", {weekday: "short"}),
+                            }}
                             classNames={{
                                 month_caption: "flex h-10 w-full items-center justify-center px-12 text-base font-semibold text-[#5A3831]",
                                 button_previous: "size-9 rounded-full border border-[#E7DDDA] bg-white text-[#7D635E]",
                                 button_next: "size-9 rounded-full border border-[#E7DDDA] bg-white text-[#7D635E]",
                                 weekdays: "mb-2 flex",
-                                weekday: "flex-1 text-center text-xs font-semibold uppercase tracking-wide text-[#9D8883]",
+                                weekday: "flex-1 text-center text-xs font-semibold tracking-wide text-[#9D8883]",
                                 week: "mt-1 flex w-full",
-                                day: "relative aspect-square w-full p-1",
+                                day: "relative w-full p-0.5",
                                 outside: "text-[#CBBEBA]",
-                                day_button: "h-10 w-10 rounded-2xl text-sm font-medium text-[#5B3D37] hover:bg-[#F2E8E5] data-[selected-single=true]:bg-[#D84333] data-[selected-single=true]:text-white",
-                                today: "rounded-2xl border border-[#E9796D] bg-transparent text-[#D84333]",
+                                day_button: "h-9 w-9 rounded-xl text-sm font-medium text-[#5B3D37] hover:bg-[#F2E8E5] hover:rounded-full data-[selected-single=true]:bg-[#D84333] data-[selected-single=true]:text-white data-[selected-single=true]:rounded-full",
+                                today: "[&_button]:rounded-full [&_button]:ring-1 [&_button]:ring-[#E9796D] [&_button]:text-[#D84333]",
                             }}
                         />
                     )}

@@ -27,16 +27,21 @@ const getStatusLabel = (status: string) => {
     }
 };
 
-const getStatusClasses = (status: string) => {
+const getDotColor = (status: string) => {
     switch (status) {
-        case "PAID":
-            return "bg-[#DDF7E5] text-[#4FA66B]";
-        case "EXPIRING":
-            return "bg-[#F9EDB6] text-[#C7A129]";
-        case "OVERDUE":
-            return "bg-[#FADDD8] text-[#D15548]";
-        default:
-            return "bg-[#EEE8E8] text-[#75625E]";
+        case "PAID":     return "bg-[#4FA66B]";
+        case "EXPIRING": return "bg-[#C7A129]";
+        case "OVERDUE":  return "bg-[#D15548]";
+        default:         return "bg-[#9B8782]";
+    }
+};
+
+const getDotTextColor = (status: string) => {
+    switch (status) {
+        case "PAID":     return "text-[#4FA66B]";
+        case "EXPIRING": return "text-[#C7A129]";
+        case "OVERDUE":  return "text-[#D15548]";
+        default:         return "text-[#75625E]";
     }
 };
 
@@ -75,33 +80,34 @@ const deriveFallbackFeeRows = (profile?: UserProfile): MembershipFeeHistoryItem[
 };
 
 const FeeRow = ({fee}: { fee: MembershipFeeHistoryItem }) => (
-    <div className="grid gap-3 rounded-[22px] border border-[#EEE3DF] bg-white px-4 py-4 shadow-[0_8px_20px_rgba(116,87,79,0.05)] lg:grid-cols-[1.1fr_1.2fr_0.8fr_0.7fr] lg:items-center">
+    <div className="grid gap-3 rounded-[14px] border border-[#EEE3DF] bg-white px-4 py-3 lg:grid-cols-[1.1fr_1.2fr_0.8fr_0.7fr] lg:items-center">
         <div>
             <p className="text-xs font-medium uppercase tracking-wide text-[#B19A95]">{fee.year}</p>
-            <p className="mt-1 text-xl font-semibold text-[#4A2F2A]">{membershipClassLabel(fee.membershipClass)}</p>
+            <p className="mt-0.5 text-base font-semibold text-[#4A2F2A]">{membershipClassLabel(fee.membershipClass)}</p>
         </div>
 
         <div>
             <p className="text-xs font-medium text-[#AD9892]">Membership Fees</p>
-            <p className="mt-1 text-xl font-semibold text-[#4A2F2A]">{toCurrency(fee.amount)}</p>
+            <p className="mt-0.5 text-base font-semibold text-[#4A2F2A]">{toCurrency(fee.amount)}</p>
         </div>
 
         <div className="flex items-center lg:justify-center">
-            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(fee.status)}`}>
-                {getStatusLabel(fee.status)}
+            <span className="inline-flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getDotColor(fee.status)}`} />
+                <span className={`text-xs font-semibold ${getDotTextColor(fee.status)}`}>
+                    {getStatusLabel(fee.status)}
+                </span>
             </span>
         </div>
 
         <div className="flex justify-start lg:justify-end">
-            {fee.status === "EXPIRING" || fee.status === "OVERDUE" || fee.status === "PENDING" ? (
+            {(fee.status === "EXPIRING" || fee.status === "OVERDUE" || fee.status === "PENDING") && (
                 <Button
                     variant="outline"
                     className="h-10 rounded-xl border-[#E8DDDA] px-4 text-xs font-semibold text-[#5E4742] shadow-none"
                 >
                     Pay now
                 </Button>
-            ) : (
-                <span className="text-xs font-semibold text-[#8A7570]">Settled</span>
             )}
         </div>
     </div>
@@ -118,7 +124,7 @@ const MembershipFeesSummary = ({profile, isPending}: Props) => {
                 <div>
                     <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-[#4A2F2A]">Membership Fees</h2>
                     <p className="mt-1 text-sm text-[#9B8782]">
-                        View your annual subscription history and current fee status.
+                        Lorem ipsum dolor sit amet, consectetur adipis.
                     </p>
                 </div>
                 <Button

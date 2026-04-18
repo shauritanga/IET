@@ -11,8 +11,8 @@ const Home = () => {
 
     return (
         <section className="flex flex-col gap-6 py-4 lg:p-4">
-            <h2 className="text-[42px] font-semibold tracking-[-0.03em] text-[#4A2F2A]">
-                Hello {firstName} <span className="inline-block text-[34px]">👋</span>
+            <h2 className="text-[42px] font-normal tracking-[-0.03em] text-[#4A2F2A]">
+                Hello <span className="font-semibold">{firstName}</span> <span className="inline-block text-[34px]">👋</span>
             </h2>
             <TrainingEventsSummary />
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
