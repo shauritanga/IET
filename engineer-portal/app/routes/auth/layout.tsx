@@ -1,68 +1,54 @@
-import React from 'react';
+import { Outlet } from "react-router"
 
-import {VerifiedCheck} from "@solar-icons/react/ssr";
-import {Outlet} from "react-router";
+const RingsDecoration = () => (
+    <div className="auth-rings">
+        <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style={{ width: "100%", height: "100%", opacity: .22 }}>
+            <circle cx="300" cy="620" r="120" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="200" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="280" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="360" fill="none" stroke="rgba(255,255,255,.4)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="440" fill="none" stroke="rgba(255,255,255,.32)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="520" fill="none" stroke="rgba(255,255,255,.24)" strokeWidth="1.5" />
+            <circle cx="300" cy="620" r="600" fill="none" stroke="rgba(255,255,255,.16)" strokeWidth="1.5" />
+        </svg>
+    </div>
+)
 
-const AuthLayout = () => {
-    const year = new Date().getFullYear();
-    return (
-        <div className="grid min-h-svh lg:grid-cols-2 w-full">
-            <Outlet/>
-            <div className="bg-white relative hidden lg:block p-4">
-                <div
-                    className="relative bg-[#390909] h-full w-full rounded-[50px] overflow-hidden shadow-2xl shadow-black/50 p-12 flex flex-col justify-end"
-                >
-                    <img
-                        src="/group.png"
-                        alt="Mountain landscape"
-                        className="absolute inset-0 h-full w-full object-cover opacity-10"
-                        style={{
-                            maskImage:
-                                "linear-gradient(to bottom, transparent 0%, white 100%, white 80%, transparent 100%)",
-                            WebkitMaskImage:
-                                "linear-gradient(to bottom, transparent 0%, white 40%, white 0%, transparent 100%)",
-                        }}
-                    />
-                    <div
-                        className="relative bg-white/0 backdrop-blur-lg/5  border border-white/50 shadow-white/50 rounded-4xl p-6 shadow-xs before:absolute before:inset-0 before:rounded-4xl before:bg-gradient-to-br before:from-white/20 before:to-transparent before:pointer-events-none">
-                        <div className="relative z-10 space-y-4 text-white">
-                            <h2 className="font-semibold drop-shadow-sm">
-                                Welcome to IET Engineer Portal
-                            </h2>
-                            <p className={"font-light text-sm"}>
-                                IET is a Tanzania’s leading community of engineers dedicated to excellence, innovation,
-                                and professional growth.
-                            </p>
-                            <div className={"space-y-2"}>
-                                <p className={"font-light text-sm"}>
-                                    THROUGH IET PORTAL YOU CAN :
-                                </p>
-                                <ul className={"font-light text-sm space-y-1"}>
-                                    <li className={"flex items-center gap-2"}>
-                                        <VerifiedCheck weight={"BoldDuotone"} size={20}/>
-                                        <span>Register and Manage Your Membership</span>
-                                    </li>
-                                    <li className={"flex items-center gap-2"}>
-                                        <VerifiedCheck weight={"BoldDuotone"} size={20}/>
-                                        <span>Access CPD Courses</span>
-                                    </li>
-                                    <li className={"flex items-center gap-2"}>
-                                        <VerifiedCheck weight={"BoldDuotone"} size={20}/>
-                                        <span>Read the Tanzania Engineer Journal</span>
-                                    </li>
-                                    <li className={"flex items-center gap-2"}>
-                                        <VerifiedCheck weight={"BoldDuotone"} size={20}/>
-                                        <span>Track Events and Conferences </span>
-                                    </li>
-                                </ul>
-                            </div>
+const AuthLayout = () => (
+    <div className="auth-wrap">
+        <div className="auth-left">
+            <Outlet />
+        </div>
 
+        <div className="auth-right">
+            <RingsDecoration />
+            <div className="auth-welcome-card">
+                <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 8 }}>Welcome To IET Engineer Portal</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.72)", lineHeight: 1.65, marginBottom: 14 }}>
+                    IET is Tanzania&apos;s leading community of engineers dedicated to excellence, innovation, and professional growth.
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.3, color: "rgba(255,255,255,.45)", marginBottom: 10 }}>
+                    Through IET Portal You Can:
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                    {[
+                        "Register and Manage Your Membership",
+                        "Access CPD Courses",
+                        "Read the Tanzania Engineer Journal",
+                        "Track Events and Conferences",
+                    ].map((text) => (
+                        <div key={text} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: "rgba(255,255,255,.85)" }}>
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)" strokeWidth="2.5">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="9 12 11 14 15 10" />
+                            </svg>
+                            {text}
                         </div>
-                    </div>
+                    ))}
                 </div>
             </div>
         </div>
-    );
-};
+    </div>
+)
 
-export default AuthLayout;
+export default AuthLayout

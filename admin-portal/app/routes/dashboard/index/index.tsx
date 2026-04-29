@@ -1,206 +1,268 @@
-import { BadgeCheck, CalendarDays, ChevronRight, WalletCards, Users } from "lucide-react";
+import { Link } from "react-router";
+import {
+  activityLog,
+  applications,
+  recentPayments,
+} from "~/data/admin-prototype";
+import { Avatar, Button, StatusBadge } from "~/components/prototype-ui";
 
-type MetricIconName = "members" | "subscriptions" | "events" | "revenue";
-type CertStatus = "Reviewing" | "Approved" | "Expired";
-
-const metricCards: Array<{ label: string; value: string; icon: MetricIconName; trend?: string }> = [
-  { label: "Total Members", value: "1,240", icon: "members", trend: "12%" },
-  { label: "Active Subscriptions", value: "850", icon: "subscriptions" },
-  { label: "Upcoming Events", value: "12", icon: "events" },
-  { label: "Total Revenue", value: "TZS 45M", icon: "revenue" },
-];
-
-const renewalsChart = [
-  { month: "Jan", renewals: 60, joins: 25 },
-  { month: "Feb", renewals: 65, joins: 30 },
-  { month: "Mar", renewals: 55, joins: 35 },
-  { month: "Apr", renewals: 70, joins: 20 },
-  { month: "May", renewals: 60, joins: 25 },
-  { month: "Jun", renewals: 80, joins: 40 },
-  { month: "Jul", renewals: 75, joins: 35 },
-  { month: "Aug", renewals: 50, joins: 45 },
-  { month: "Sep", renewals: 85, joins: 50 },
-  { month: "Oct", renewals: 90, joins: 60 },
-];
-
-const topTrainings = [
-  { title: "Project Management", participants: 120, percent: 85 },
-  { title: "Structural Analysis", participants: 98, percent: 72 },
-  { title: "Sustainable Energy", participants: 82, percent: 64 },
-  { title: "Ethics in Engineering", participants: 56, percent: 45 },
-];
-
-const upcomingSessions = [
-  { day: "26", month: "OCT", title: "Advanced Structural Analysis", detail: "Dar es Salaam • 9:00 AM", enrolled: "24/50", tone: "rose" },
-  { day: "02", month: "NOV", title: "Environmental Impact Assessment", detail: "Online Zoom • 2:00 PM", enrolled: "88/100", tone: "blue" },
-  { day: "15", month: "NOV", title: "Digital Engineering Tools", detail: "IET Hall • 11:30 AM", enrolled: "42/60", tone: "green" },
-] as const;
-
-const certifications: Array<{ name: string; role: string; status: CertStatus }> = [
-  { name: "Sarah M. Kibu", role: "Professional Engineer (PE)", status: "Reviewing" },
-  { name: "David L. Johnson", role: "Consulting Engineer", status: "Approved" },
-  { name: "Emmanuel P. Mwangi", role: "Graduate Engineer", status: "Expired" },
-];
-
-function metricIcon(name: MetricIconName) {
-  if (name === "members") {
-    return <Users aria-hidden="true" />;
-  }
-
-  if (name === "subscriptions") {
-    return <BadgeCheck aria-hidden="true" />;
-  }
-
-  if (name === "events") {
-    return <CalendarDays aria-hidden="true" />;
-  }
-
-  return <WalletCards aria-hidden="true" />;
+function MembersKpiIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
 }
 
-function certStatusClass(status: CertStatus) {
-  if (status === "Approved") return "is-approved";
-  if (status === "Expired") return "is-expired";
-  return "is-reviewing";
+function ApplicationsKpiIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((part) => part.charAt(0).toUpperCase()).join("") || "NA";
+function RevenueKpiIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+    </svg>
+  );
 }
 
-export default function DashboardOverviewPage() {
-  const maxChartValue = 100;
+function EventsKpiIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+function DashboardCard({
+  title,
+  action,
+  children,
+  bodyClassName,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  bodyClassName?: string;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-[18px] py-[15px]">
+        <span className="text-[12.5px] font-bold text-[var(--red-dark)]">{title}</span>
+        {action ? <div className="text-[11px] font-semibold text-[var(--red)] hover:underline">{action}</div> : null}
+      </div>
+      <div className={bodyClassName}>{children}</div>
+    </section>
+  );
+}
+
+function DashboardMetricCard({
+  icon,
+  value,
+  label,
+  note,
+  noteTone = "success",
+  compactValue = false,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+  note: string;
+  noteTone?: "success" | "warn" | "neutral";
+  compactValue?: boolean;
+}) {
+  const noteClass =
+    noteTone === "warn"
+      ? "text-[var(--warn)]"
+      : noteTone === "neutral"
+        ? "text-[var(--muted)]"
+        : "text-[var(--success)]";
 
   return (
-    <section className="admin-dashboard-page">
-      <h1 className="admin-dashboard-title">Dashboard</h1>
+    <article className="cursor-default rounded-[11px] border border-[var(--border)] bg-white px-4 pb-[13px] pt-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-[2px] hover:shadow-[0_4px_18px_rgba(226,12,10,0.08)]">
+      <div className="mb-[10px] flex h-[34px] w-[34px] items-center justify-center rounded-[8px] bg-[var(--red-pale)] text-[var(--red)]">
+        {icon}
+      </div>
+      <div className={`font-serif-display font-bold leading-none tracking-[-1px] text-[var(--red-dark)] ${compactValue ? "text-[18px]" : "text-[24px]"}`}>
+        {value}
+      </div>
+      <div className="mt-1 text-[11px] font-medium text-[var(--muted)]">{label}</div>
+      <div className={`mt-[6px] text-[10px] font-semibold ${noteClass}`}>{note}</div>
+    </article>
+  );
+}
 
-      <section className="admin-metrics-grid" aria-label="Top statistics">
-        {metricCards.map((card) => (
-          <article className="admin-metric-card" key={card.label}>
-            <div className="admin-metric-top">
-              <span className={`admin-metric-icon metric-${card.icon}`}>{metricIcon(card.icon)}</span>
-              {card.trend ? (
-                <span className="admin-metric-trend">
-                  <span aria-hidden="true">↑</span> {card.trend}
-                </span>
-              ) : null}
-            </div>
-            <p className="admin-metric-label">{card.label}</p>
-            <p className="admin-metric-value">{card.value}</p>
-          </article>
-        ))}
-      </section>
+function DashboardAvatar({
+  initials,
+  bgClassName,
+  small = false,
+}: {
+  initials: string;
+  bgClassName: string;
+  small?: boolean;
+}) {
+  return (
+    <div
+      className={`${bgClassName} flex items-center justify-center rounded-full font-bold text-white ${small ? "h-6 w-6 text-[9px]" : "h-[30px] w-[30px] text-[10px]"}`}
+      aria-hidden="true"
+    >
+      {initials}
+    </div>
+  );
+}
 
-      <section className="admin-main-grid">
-        <article className="admin-card admin-chart-card">
-          <div className="admin-card-heading">
-            <h2>Renewals vs. New Joins</h2>
-            <div className="admin-legend" aria-label="Chart legend">
-              <span><i className="legend-dot renewals" />Renewals</span>
-              <span><i className="legend-dot joins" />New Joins</span>
-            </div>
-          </div>
+const avatarColors: Record<string, string> = {
+  red: "bg-[var(--red)]",
+  blue: "bg-[#1565C0]",
+  green: "bg-[#2E7D32]",
+  pink: "bg-[#880E4F]",
+};
 
-          <div className="admin-chart-body">
-            <div className="admin-chart-y-axis">
-              {[100, 75, 50, 25, 0].map((value) => (
-                <span key={value}>{value}</span>
-              ))}
-            </div>
-            <div className="admin-chart-area">
-              <div className="admin-chart-bars">
-                {renewalsChart.map((item) => (
-                  <div className="admin-chart-group" key={item.month}>
-                    <div className="admin-chart-columns">
-                      <span
-                        className="admin-chart-bar renewals"
-                        style={{ height: `${(item.renewals / maxChartValue) * 100}%` }}
-                      />
-                      <span
-                        className="admin-chart-bar joins"
-                        style={{ height: `${(item.joins / maxChartValue) * 100}%` }}
-                      />
-                    </div>
-                    <span className="admin-chart-month">{item.month}</span>
-                  </div>
+export default function DashboardOverviewPage() {
+  return (
+    <section>
+      <div className="mb-[18px] flex items-center justify-between">
+        <div>
+          <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Dashboard Overview</h1>
+          <p className="mt-[2px] text-[11px] text-[var(--muted)]">Real-time snapshot of IET Tanzania operations</p>
+        </div>
+        <Button>⬇ Export Report</Button>
+      </div>
+
+      <div className="mb-5 grid gap-[14px] md:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetricCard
+          icon={<MembersKpiIcon />}
+          value="4,872"
+          label="Total Members"
+          note="↑ 48 this month"
+        />
+        <DashboardMetricCard
+          icon={<ApplicationsKpiIcon />}
+          value="12"
+          label="Pending Applications"
+          note="⚠ Needs review"
+          noteTone="warn"
+        />
+        <DashboardMetricCard
+          icon={<RevenueKpiIcon />}
+          value="TZS 28.4M"
+          label="Revenue (2025)"
+          note="↑ 12% vs last year"
+          compactValue
+        />
+        <DashboardMetricCard
+          icon={<EventsKpiIcon />}
+          value="6"
+          label="Upcoming Events"
+          note="Next: Feb 22"
+          noteTone="neutral"
+        />
+      </div>
+
+      <div className="mb-[18px] grid gap-[18px] xl:grid-cols-[1.4fr_1fr]">
+        <DashboardCard title="Recent Applications" action={<Link to="/dashboard/applications">View all</Link>} bodyClassName="p-0">
+          <div className="overflow-x-auto">
+            <table className="table-proto min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th>Applicant</th>
+                  <th>Grade</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {applications.slice(0, 4).map((application) => (
+                  <tr key={application.email}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <DashboardAvatar initials={application.initials} bgClassName={avatarColors[application.tone]} />
+                        <div>
+                          <div className="text-[12px] font-semibold">{application.name}</div>
+                          <div className="text-[10px] text-[var(--muted)]">{application.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-[11.5px]">{application.grade.replace(" Member", "")}</td>
+                    <td className="text-[11.5px]">{application.submitted.replace(", 2025", "")}</td>
+                    <td>
+                      <StatusBadge tone={application.badge}>{application.status}</StatusBadge>
+                    </td>
+                    <td>
+                      <Button tone={application.badge === "pending" ? "dark" : "outline"}>
+                        {application.badge === "pending" ? "Review" : "View"}
+                      </Button>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        </article>
+        </DashboardCard>
 
-        <article className="admin-card admin-training-card">
-          <h2>Top Performing Training</h2>
-          <div className="admin-training-list">
-            {topTrainings.map((training) => (
-              <div className="admin-training-item" key={training.title}>
-                <div className="admin-training-title-row">
-                  <h3>{training.title}</h3>
-                  <span>{training.percent}%</span>
-                </div>
-                <div className="admin-progress-track">
-                  <span className="admin-progress-fill" style={{ width: `${training.percent}%` }} />
-                </div>
-                <p>{training.participants} Participants</p>
-              </div>
-            ))}
-          </div>
-          <div className="admin-training-footer">View All Courses</div>
-        </article>
-      </section>
-
-      <section className="admin-bottom-grid">
-        <article className="admin-card">
-          <div className="admin-card-heading">
-            <h2>Upcoming Training Sessions</h2>
-            <button type="button" className="admin-link-accent admin-link-button">View Calendar</button>
-          </div>
-
-          <div className="admin-session-list">
-            {upcomingSessions.map((session) => (
-              <article className="admin-session-item" key={`${session.day}-${session.title}`}>
-                <div className={`admin-date-badge ${session.tone}`}>
-                  <strong>{session.day}</strong>
-                  <span>{session.month}</span>
-                </div>
+        <DashboardCard title="Recent Payments" action={<Link to="/dashboard/payments">View all</Link>} bodyClassName="p-0">
+          <div className="flex flex-col">
+            {recentPayments.map((payment, index) => (
+              <div
+                key={`${payment.title}-${payment.detail}`}
+                className={`flex items-center justify-between px-4 py-[11px] ${index < recentPayments.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+              >
                 <div>
-                  <h3>{session.title}</h3>
-                  <p>{session.detail}</p>
+                  <div className="text-[12px] font-semibold">{payment.title}</div>
+                  <div className="text-[10px] text-[var(--muted)]">{payment.detail}</div>
                 </div>
-                <div className="admin-enrollment">
-                  <strong>{session.enrolled}</strong>
-                  <span>Registered</span>
+                <div className="text-right">
+                  <div className="text-[12px] font-bold text-[var(--red-dark)]">{payment.amount}</div>
+                  <StatusBadge tone={payment.badge} className="mt-1 text-[9.5px]">
+                    {payment.status}
+                  </StatusBadge>
                 </div>
-              </article>
+              </div>
             ))}
           </div>
-        </article>
+        </DashboardCard>
+      </div>
 
-        <article className="admin-card">
-          <div className="admin-card-heading">
-            <h2>Member Certifications</h2>
-            <button type="button" className="admin-link-accent admin-link-button">Manage All</button>
-          </div>
-
-          <div className="admin-cert-list">
-            {certifications.map((certification) => (
-              <article className="admin-cert-item" key={certification.name}>
-                <div className="admin-cert-avatar" aria-hidden="true">{initials(certification.name)}</div>
-                <div>
-                  <h3>{certification.name}</h3>
-                  <p>{certification.role}</p>
-                </div>
-                <span className={`admin-status-pill ${certStatusClass(certification.status)}`}>{certification.status}</span>
-                <span className="admin-cert-chevron" aria-hidden="true">
-                  <ChevronRight size={16} strokeWidth={2.2} />
-                </span>
-              </article>
-            ))}
-          </div>
-        </article>
-      </section>
+      <DashboardCard title="Recent Admin Activity Log" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="table-proto min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th>Admin</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activityLog.map((item) => (
+                <tr key={`${item.admin}-${item.action}-${item.time}`}>
+                  <td>
+                    <div className="flex items-center gap-[7px]">
+                      <DashboardAvatar initials={item.initials} bgClassName={avatarColors[item.tone]} small />
+                      <span className="text-[11.5px]">{item.admin}</span>
+                    </div>
+                  </td>
+                  <td className="text-[11.5px]">{item.action}</td>
+                  <td className="text-[11.5px]">{item.target}</td>
+                  <td className="text-[11.5px]">{item.time}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </DashboardCard>
     </section>
   );
 }

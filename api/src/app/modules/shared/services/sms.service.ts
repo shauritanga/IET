@@ -34,7 +34,7 @@ export class SmsService {
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
-    this.defaultSenderId = configService.get('SMS_SENDER_ID', 'IET');
+    this.defaultSenderId = configService.get('BEEM_SENDER_ID', 'IET');
   }
 
   /**
@@ -52,13 +52,13 @@ export class SmsService {
       };
     }
 
-    // In development, mock the SMS
-    if (this.isDevelopment) {
-      return this.mockSend(to, message, senderId);
+    const apiKey = this.configService.get<string>('BEEM_API_KEY');
+    const secretKey = this.configService.get<string>('BEEM_SECRET_KEY');
+
+    if (apiKey && secretKey) {
+      return this.sendViaBeem(to, message, senderId);
     }
 
-    // Production: Use actual SMS provider
-    // TODO: Replace with actual provider integration
     return this.mockSend(to, message, senderId);
   }
 
@@ -70,6 +70,14 @@ export class SmsService {
     code: string,
   ): Promise<SmsResult> {
     const message = `Your IET verification code is: ${code}. Valid for 10 minutes.`;
+    return this.send({ to: phoneNumber, message });
+  }
+
+  /**
+   * Send login OTP for 2FA
+   */
+  async sendLoginOtp(phoneNumber: string, code: string): Promise<SmsResult> {
+    const message = `Your IET admin login code is: ${code}. Valid for 5 minutes. Do not share this code.`;
     return this.send({ to: phoneNumber, message });
   }
 
@@ -167,6 +175,64 @@ export class SmsService {
       failed,
       results,
     };
+  }
+
+  // ============================================
+  // BEEM AFRICA INTEGRATION
+  // ============================================
+
+  private async sendViaBeem(
+    to: string,
+    message: string,
+    senderId: string,
+  ): Promise<SmsResult> {
+    const apiKey = this.configService.get<string>('BEEM_API_KEY');
+    const secretKey = this.configService.get<string>('BEEM_SECRET_KEY');
+    const credentials = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
+    // Beem requires 255XXXXXXXXX format (no leading +)
+    const normalizedPhone = this.formatPhoneNumber(to).replace(/^\+/, '');
+
+    const body = {
+      source_addr: senderId,
+      encoding: 0,
+      schedule_time: '',
+      message,
+      recipients: [{ recipient_id: 1, dest_addr: normalizedPhone }],
+    };
+
+    try {
+      const res = await fetch('https://apisms.beem.africa/v1/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = (await res.json()) as any;
+
+      if (!res.ok || !data.successful) {
+        this.logger.error(`Beem SMS failed: ${JSON.stringify(data)}`);
+        return {
+          success: false,
+          error: data.message || 'Beem API error',
+          provider: 'beem',
+        };
+      }
+
+      this.logger.log(
+        `[BEEM] SMS sent to +${normalizedPhone}, requestId: ${data.request_id}`,
+      );
+      return {
+        success: true,
+        messageId: String(data.request_id),
+        provider: 'beem',
+      };
+    } catch (error: any) {
+      this.logger.error(`Beem SMS exception: ${error.message}`);
+      return { success: false, error: error.message, provider: 'beem' };
+    }
   }
 
   // ============================================

@@ -7,6 +7,7 @@ import {
     deleteFromCookie,
     getFromCookie
 } from "~/utils/storage";
+import { createAuthSession, clearAuthSession, writeAuthSession } from "~/utils/otp-session";
 import {TOKEN_KEY, USER_KEY} from "~/utils/http";
 import type {User} from "~/routes/auth/types";
 
@@ -50,12 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(token);
         setUser(user);
         setRefreshToken(refreshToken ?? null);
+        writeAuthSession(createAuthSession({
+            email: user.email,
+            name: user.fullName ?? user.email,
+            membershipStatus: user.membershipStatus,
+        }));
     };
 
     const logout = () => {
         deleteFromCookie(TOKEN_KEY);
         deleteFromCookie("global-rt");
+        deleteFromCookie("global-ms");
         deleteFromStorage(USER_KEY);
+        clearAuthSession();
         setUser(null);
         setToken(null);
         setRefreshToken(null);

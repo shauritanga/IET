@@ -1,8 +1,9 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as speakeasy from 'speakeasy';
 import { UserEntity } from '../modules/user/entities/user.entity';
 import {
   EngineeringDiscipline,
@@ -11,6 +12,7 @@ import {
   Title,
   UserRole,
 } from '../common/enums';
+import { EncryptionService } from '../common/services/encryption.service';
 
 @Injectable()
 export class SeedService implements OnApplicationBootstrap {
@@ -20,36 +22,58 @@ export class SeedService implements OnApplicationBootstrap {
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
     private configService: ConfigService,
+    private encryptionService: EncryptionService,
   ) {}
 
   async onApplicationBootstrap() {
     await this.seedAdmin();
+    await this.provisionAdminTwoFactor();
     await this.seedEngineerPortalUser();
   }
 
   private async seedAdmin() {
     const email = this.configService.get<string>(
       'ADMIN_EMAIL',
-      'admin@iet.or.tz',
+      'shauritangaathanas@gmail.com',
     );
     const password = this.configService.get<string>(
       'ADMIN_PASSWORD',
-      'Admin@123!',
+      'Athanas@2015',
+    );
+    const firstName = this.configService.get<string>('ADMIN_FIRST_NAME', 'Athanas');
+    const lastName = this.configService.get<string>('ADMIN_LAST_NAME', 'Shauritanga');
+    const phoneNumber = this.configService.get<string>(
+      'ADMIN_PHONE_NUMBER',
+      '255655591660',
     );
 
+    const hashed = await bcrypt.hash(password, 10);
     const existing = await this.userRepository.findOneBy({ email });
+
     if (existing) {
-      this.logger.log(`Admin user already exists: ${email}`);
+      await this.userRepository.save(
+        this.userRepository.merge(existing, {
+          email,
+          password: hashed,
+          firstName,
+          lastName,
+          phoneNumber,
+          role: UserRole.ADMIN,
+          membershipStatus: MembershipStatus.ACTIVE,
+          emailVerified: true,
+          isActive: true,
+        }),
+      );
+      this.logger.log(`Admin user updated from seed: ${email}`);
       return;
     }
-
-    const hashed = await bcrypt.hash(password, 10);
 
     const admin = this.userRepository.create({
       email,
       password: hashed,
-      firstName: 'System',
-      lastName: 'Admin',
+      firstName,
+      lastName,
+      phoneNumber,
       role: UserRole.ADMIN,
       membershipStatus: MembershipStatus.ACTIVE,
       emailVerified: true,
@@ -58,6 +82,36 @@ export class SeedService implements OnApplicationBootstrap {
 
     await this.userRepository.save(admin);
     this.logger.log(`Admin user seeded: ${email}`);
+  }
+
+  private async provisionAdminTwoFactor() {
+    const adminUsers = await this.userRepository.find({
+      where: {
+        role: In([UserRole.ADMIN, UserRole.SUPER_ADMIN]),
+      },
+    });
+
+    for (const user of adminUsers) {
+      if (user.enable2FA && user.twoFASecret) {
+        continue;
+      }
+
+      const secret = speakeasy.generateSecret({
+        name: `IET Admin Portal (${user.email})`,
+        issuer: 'Institution of Engineers Tanzania',
+      });
+
+      user.enable2FA = true;
+      user.twoFASecret = this.encryptionService.encrypt(secret.base32);
+      await this.userRepository.save(user);
+
+      this.logger.log(`Admin 2FA provisioned for: ${user.email}`);
+      if (this.configService.get<string>('NODE_ENV') !== 'production') {
+        this.logger.warn(
+          `Admin 2FA secret for ${user.email}: ${secret.base32}`,
+        );
+      }
+    }
   }
 
   private async seedEngineerPortalUser() {

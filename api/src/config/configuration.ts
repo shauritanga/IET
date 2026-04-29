@@ -60,6 +60,11 @@ export default () => ({
   CLICKPESA_USE_CHECKSUM: process.env.CLICKPESA_USE_CHECKSUM === 'true',
   CLICKPESA_CALLBACK_URL: process.env.CLICKPESA_CALLBACK_URL || '',
 
+  // Beem Africa SMS settings
+  BEEM_API_KEY: process.env.BEEM_API_KEY || '',
+  BEEM_SECRET_KEY: process.env.BEEM_SECRET_KEY || '',
+  BEEM_SENDER_ID: process.env.BEEM_SOURCE_ADDR || 'IET',
+
   // Application fee configuration
   APPLICATION_FEE_GRADUATE:
     parseInt(process.env.APPLICATION_FEE_GRADUATE, 10) || 5000,

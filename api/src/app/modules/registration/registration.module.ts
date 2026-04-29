@@ -4,6 +4,7 @@ import { RegistrationController } from './controllers/registration.controller';
 import { RegistrationService } from './services/registration.service';
 import {
   RegistrationEntity,
+  ApplicationStageHistoryEntity,
   EducationEntity,
   ProfessionalExperienceEntity,
   DocumentEntity,
@@ -17,6 +18,7 @@ import { PaymentsModule } from '../payments/payments.module';
   imports: [
     TypeOrmModule.forFeature([
       RegistrationEntity,
+      ApplicationStageHistoryEntity,
       EducationEntity,
       ProfessionalExperienceEntity,
       DocumentEntity,

@@ -32,6 +32,20 @@ export type LoginResponse = {
   user: LoginUser;
 };
 
+export type TwoFactorChallengeResponse = {
+  validate2FA: string;
+  message: string;
+};
+
+export type AuthResponse = LoginResponse | TwoFactorChallengeResponse;
+
+export type TwoFactorValidationResponse = {
+  verified: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  user?: LoginUser;
+};
+
 export type AdminStats = {
   members: {
     total: number;
@@ -80,4 +94,54 @@ export type ApplicationSummary = {
   status?: string;
   submittedAt?: string | null;
   createdAt?: string | null;
+};
+
+export type EventCategory =
+  | "CPD_COURSE"
+  | "CONFERENCE"
+  | "WORKSHOP"
+  | "SEMINAR"
+  | "ONLINE_SEMINAR"
+  | "AGM"
+  | "NETWORKING";
+
+export type AdminEvent = {
+  id: string;
+  title: string;
+  category: EventCategory;
+  description?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  startTime: string;
+  endTime: string;
+  location?: string | null;
+  isOnline: boolean;
+  guestOfHonor?: string | null;
+  registrationDeadline?: string | null;
+  registrationFee: number;
+  cpdPoints: number;
+  maxParticipants?: number | null;
+  registeredCount: number;
+  isPublished: boolean;
+  registrationOpen: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AdminEventPayload = {
+  title: string;
+  description?: string;
+  category: EventCategory;
+  startDate: string;
+  endDate?: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  isOnline: boolean;
+  registrationDeadline?: string;
+  registrationFee?: number;
+  cpdPoints?: number;
+  maxParticipants?: number;
+  requirements?: string[];
+  isPublished?: boolean;
 };

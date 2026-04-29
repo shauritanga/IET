@@ -1,118 +1,505 @@
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Plus, X } from "lucide-react";
+import type { AxiosError } from "axios";
+import { useEffect, useState } from "react";
+import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
+import http from "~/utils/http";
+import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventCategory } from "~/types";
 
-const weekDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+type EventFormState = {
+  title: string;
+  category: EventCategory;
+  mode: "In-person" | "Online" | "Hybrid";
+  startDateTime: string;
+  endDateTime: string;
+  location: string;
+  capacity: string;
+  fee: string;
+  cpdHours: string;
+  description: string;
+};
 
-const calendarDays = [
-  [24, 25, 26, 27, 28, 29, 30],
-  [1, 2, 3, 4, 5, 6, 7],
-  [8, 9, 10, 11, 12, 13, 14],
-  [15, 16, 17, 18, 19, 20, 21],
-  [22, 23, 24, 25, 26, 27, 28],
-  [29, 30, 31, 1, 2, 3, 4],
+const MODE_OPTIONS = ["In-person", "Online", "Hybrid"] as const;
+
+const CATEGORY_OPTIONS: Array<{ value: EventCategory; label: string }> = [
+  { value: "CONFERENCE", label: "Conference" },
+  { value: "WORKSHOP", label: "Workshop" },
+  { value: "SEMINAR", label: "Seminar" },
+  { value: "CPD_COURSE", label: "CPD Course" },
+  { value: "ONLINE_SEMINAR", label: "Online Seminar" },
+  { value: "AGM", label: "AGM" },
+  { value: "NETWORKING", label: "Networking" },
 ];
 
-export default function EventsAndTrainingPage() {
+const CATEGORY_LABELS: Record<EventCategory, string> = CATEGORY_OPTIONS.reduce(
+  (acc, option) => {
+    acc[option.value] = option.label;
+    return acc;
+  },
+  {} as Record<EventCategory, string>,
+);
+
+function FormLabel({ children }: { children: string }) {
   return (
-    <section className="admin-events-page">
-      <div className="admin-members-header">
-        <h1 className="admin-dashboard-title">Event &amp; Training</h1>
-        <button type="button" className="admin-members-add-btn">
-          <Plus size={14} aria-hidden="true" />
-          <span>Add Event</span>
-        </button>
+    <label className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+      {children}
+    </label>
+  );
+}
+
+function FormInput({
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+}: {
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+    />
+  );
+}
+
+function FormSelect({
+  options,
+  value,
+  onChange,
+}: {
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function emptyFormState(): EventFormState {
+  return {
+    title: "",
+    category: "CONFERENCE",
+    mode: "In-person",
+    startDateTime: "",
+    endDateTime: "",
+    location: "",
+    capacity: "",
+    fee: "",
+    cpdHours: "",
+    description: "",
+  };
+}
+
+function splitDateTimeLocal(value: string) {
+  const [date = "", time = ""] = value.split("T");
+  return { date, time };
+}
+
+function combineDateTimeLocal(dateValue?: string | null, timeValue?: string | null) {
+  if (!dateValue || !timeValue) return "";
+  return `${String(dateValue).split("T")[0]}T${timeValue.slice(0, 5)}`;
+}
+
+function formatDateForTable(value: string) {
+  if (!value) return "—";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function formatMoney(value: number) {
+  if (!value) return "Free";
+  return `TZS ${new Intl.NumberFormat("en-US").format(value)}`;
+}
+
+function modeForEvent(event: AdminEvent): EventFormState["mode"] {
+  if (!event.isOnline) return "In-person";
+  return event.location ? "Hybrid" : "Online";
+}
+
+function toFormState(event: AdminEvent): EventFormState {
+  return {
+    title: event.title,
+    category: event.category,
+    mode: modeForEvent(event),
+    startDateTime: combineDateTimeLocal(event.startDate, event.startTime),
+    endDateTime: combineDateTimeLocal(event.endDate ?? event.startDate, event.endTime),
+    location: event.location ?? "",
+    capacity: event.maxParticipants?.toString() ?? "",
+    fee: event.registrationFee.toString(),
+    cpdHours: event.cpdPoints.toString(),
+    description: event.description ?? "",
+  };
+}
+
+function validateForm(formState: EventFormState) {
+  if (!formState.title.trim()) return "Event title is required.";
+  if (!formState.category) return "Event category is required.";
+  if (!formState.startDateTime) return "Start date and time are required.";
+  if (!formState.location.trim()) return "Venue / location is required.";
+  if (!formState.capacity.trim()) return "Capacity is required.";
+
+  const capacity = Number(formState.capacity);
+  const fee = formState.fee.trim() ? Number(formState.fee) : 0;
+  const cpdHours = formState.cpdHours.trim() ? Number(formState.cpdHours) : 0;
+
+  if (Number.isNaN(capacity) || capacity < 1) return "Capacity must be a valid number.";
+  if (Number.isNaN(fee) || fee < 0) return "Fee must be zero or a valid positive number.";
+  if (Number.isNaN(cpdHours) || cpdHours < 0) return "CPD hours must be zero or a valid positive number.";
+
+  return null;
+}
+
+function toPayload(formState: EventFormState, publish: boolean): AdminEventPayload {
+  const start = splitDateTimeLocal(formState.startDateTime);
+  const end = splitDateTimeLocal(formState.endDateTime || formState.startDateTime);
+
+  return {
+    title: formState.title.trim(),
+    description: formState.description.trim() || undefined,
+    category: formState.category,
+    startDate: start.date,
+    startTime: start.time,
+    endDate: end.date,
+    endTime: end.time,
+    location: formState.location.trim(),
+    isOnline: formState.mode !== "In-person",
+    registrationFee: formState.fee.trim() ? Number(formState.fee) : 0,
+    cpdPoints: formState.cpdHours.trim() ? Number(formState.cpdHours) : 0,
+    maxParticipants: Number(formState.capacity),
+    isPublished: publish,
+  };
+}
+
+function eventLocationLabel(event: AdminEvent) {
+  if (!event.isOnline) return event.location || "—";
+  if (!event.location) return "Online";
+  return `${event.location} · Online`;
+}
+
+function eventStatusLabel(event: AdminEvent) {
+  return event.isPublished ? "Open" : "Draft";
+}
+
+function eventRegistrationsLabel(event: AdminEvent) {
+  const capacity = event.maxParticipants ? event.maxParticipants.toString() : "Unlimited";
+  return `${event.registeredCount} / ${capacity}`;
+}
+
+export default function EventsAndTrainingPage() {
+  const [eventRows, setEventRows] = useState<AdminEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [formState, setFormState] = useState<EventFormState>(emptyFormState());
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isEditing = editingEventId !== null;
+  const editingEvent = eventRows.find((event) => event.id === editingEventId) ?? null;
+
+  async function loadEvents() {
+    setLoading(true);
+    setPageError(null);
+
+    try {
+      const { data } = await http.get<ApiEnvelope<AdminEvent[]>>("/admin/events");
+      setEventRows(data.data ?? []);
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setPageError(apiError.response?.data?.message ?? "Failed to load events.");
+      setEventRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadEvents();
+  }, []);
+
+  function updateField<K extends keyof EventFormState>(key: K, value: EventFormState[K]) {
+    setFormState((current) => ({ ...current, [key]: value }));
+  }
+
+  function openCreateModal() {
+    setEditingEventId(null);
+    setFormState(emptyFormState());
+    setFormError(null);
+    setIsEventModalOpen(true);
+  }
+
+  function openEditModal(event: AdminEvent) {
+    setEditingEventId(event.id);
+    setFormState(toFormState(event));
+    setFormError(null);
+    setIsEventModalOpen(true);
+  }
+
+  function closeModal() {
+    if (isSubmitting) return;
+    setIsEventModalOpen(false);
+    setFormError(null);
+  }
+
+  async function saveEvent(publish: boolean) {
+    const validationError = validateForm(formState);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError(null);
+
+    const payload = toPayload(formState, publish);
+
+    try {
+      if (isEditing && editingEvent) {
+        await http.patch<ApiEnvelope<AdminEvent>>(`/admin/events/${editingEvent.id}`, payload);
+      } else {
+        await http.post<ApiEnvelope<AdminEvent>>("/admin/events", payload);
+      }
+
+      await loadEvents();
+      setIsEventModalOpen(false);
+      setEditingEventId(null);
+      setFormState(emptyFormState());
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setFormError(apiError.response?.data?.message ?? "Failed to save event.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section>
+      <div className="mb-[18px] flex items-center justify-between">
+        <div>
+          <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Events Management</h1>
+          <p className="mt-[2px] text-[11px] text-[var(--muted)]">
+            Create and manage IET Tanzania events, trainings and conferences
+          </p>
+        </div>
+        <Button tone="red" onClick={openCreateModal}>
+          + Create Event
+        </Button>
       </div>
 
-      <section className="admin-events-card">
-        <div className="admin-events-topbar">
-          <div className="admin-events-month-nav">
-            <h2>October 2023</h2>
-            <div className="admin-events-month-nav-buttons">
-              <button type="button" aria-label="Previous month">
-                <ChevronLeft size={14} aria-hidden="true" />
-              </button>
-              <button type="button" aria-label="Next month">
-                <ChevronRight size={14} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-
-          <div className="admin-events-view-switcher" aria-label="Calendar view">
-            <button type="button" className="is-active">Month</button>
-            <button type="button">Week</button>
-            <button type="button">Day</button>
+      {pageError ? (
+        <div className="mb-[14px] rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-4 py-3 text-[11.5px] font-semibold text-[var(--red)]">
+          <div className="flex items-center justify-between gap-3">
+            <span>{pageError}</span>
+            <Button tone="outline" onClick={() => void loadEvents()}>
+              Retry
+            </Button>
           </div>
         </div>
+      ) : null}
 
-        <div className="admin-events-calendar">
-          <div className="admin-events-weekdays">
-            {weekDays.map((day) => (
-              <div key={day}>{day}</div>
-            ))}
-          </div>
-
-          <div className="admin-events-grid">
-            {calendarDays.flat().map((day, index) => {
-              const isMuted = index < 7 || index >= 35;
-              const isHighlighted = day === 19 && index >= 21 && index < 28;
-
-              return (
-                <div className={`admin-events-cell${isMuted ? " is-muted" : ""}`} key={`${index}-${day}`}>
-                  <span className={`admin-events-day-number${isHighlighted ? " is-highlighted" : ""}`}>{day}</span>
-
-                  {day === 2 && index >= 7 && index < 14 ? (
-                    <div className="admin-events-chip is-red">
-                      <strong>Civil Eng Workshop</strong>
-                      <span>09:00 AM</span>
-                    </div>
-                  ) : null}
-
-                  {day === 10 && index >= 14 && index < 21 ? (
-                    <div className="admin-events-chip is-blue">
-                      <strong>BIM Training</strong>
-                    </div>
-                  ) : null}
-
-                  {day === 19 && index >= 21 && index < 28 ? (
-                    <div className="admin-events-chip is-green">
-                      <strong>Annual General Mtg</strong>
-                    </div>
-                  ) : null}
-
-                  {day === 23 && index >= 28 && index < 35 ? (
-                    <div className="admin-events-chip is-orange">
-                      <strong>Safety Standards</strong>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-
-            <article className="admin-events-detail-card">
-              <div className="admin-events-detail-head">
-                <span className="admin-events-detail-badge">Conference</span>
-                <button type="button" aria-label="Close event details">
-                  <X size={14} aria-hidden="true" />
-                </button>
-              </div>
-
-              <h3>Annual General Meeting 2023</h3>
-
-              <div className="admin-events-detail-meta">
-                <p>
-                  <CalendarDays size={14} aria-hidden="true" />
-                  <span>Oct 19, 2023 | 08:30 AM</span>
-                </p>
-                <p>
-                  <MapPin size={14} aria-hidden="true" />
-                  <span>JNICC, Dar es Salaam</span>
-                </p>
-              </div>
-
-              <button type="button" className="admin-events-detail-btn">View Full Details</button>
-            </article>
-          </div>
+      <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading events...</div>
+          ) : (
+            <table className="table-proto min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Date</th>
+                  <th>Location</th>
+                  <th>Registrations</th>
+                  <th>Revenue</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventRows.map((event) => (
+                  <tr key={event.id}>
+                    <td className="text-[12px] font-semibold">{event.title}</td>
+                    <td className="text-[11.5px]">{CATEGORY_LABELS[event.category] ?? event.category}</td>
+                    <td className="text-[11.5px]">
+                      <div>{formatDateForTable(event.startDate)}</div>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        {event.startTime} - {event.endTime}
+                      </div>
+                    </td>
+                    <td className="text-[11.5px]">{eventLocationLabel(event)}</td>
+                    <td className="text-[11.5px]">{eventRegistrationsLabel(event)}</td>
+                    <td className="text-[11.5px]">{formatMoney(event.registrationFee)}</td>
+                    <td>
+                      <StatusBadge tone={event.isPublished ? "approved" : "pending"}>
+                        {eventStatusLabel(event)}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <Button onClick={() => openEditModal(event)}>Edit</Button>
+                    </td>
+                  </tr>
+                ))}
+                {!eventRows.length ? (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-[12px] text-[var(--muted)]" colSpan={8}>
+                      No events found yet. Create the first event to get started.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
+
+      <Modal
+        title={isEditing ? "Edit Event" : "Create New Event"}
+        open={isEventModalOpen}
+        onClose={closeModal}
+        bodyClassName="space-y-[14px]"
+        footer={
+          <div className="flex justify-end gap-[9px]">
+            <Button tone="outline" onClick={closeModal} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button tone="dark" onClick={() => void saveEvent(false)} disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save as Draft"}
+            </Button>
+            <Button tone="red" onClick={() => void saveEvent(true)} disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Create & Publish"}
+            </Button>
+          </div>
+        }
+      >
+        {formError ? (
+          <div className="rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
+            {formError}
+          </div>
+        ) : null}
+
+        <div>
+          <FormLabel>Event Title *</FormLabel>
+          <FormInput
+            placeholder="e.g. IET Annual Engineering Conference 2025"
+            value={formState.title}
+            onChange={(value) => updateField("title", value)}
+          />
+        </div>
+
+        <div className="grid gap-[14px] md:grid-cols-2">
+          <div>
+            <FormLabel>Event Category *</FormLabel>
+            <FormSelect
+              options={CATEGORY_OPTIONS}
+              value={formState.category}
+              onChange={(value) => updateField("category", value as EventCategory)}
+            />
+          </div>
+          <div>
+            <FormLabel>Mode *</FormLabel>
+            <FormSelect
+              options={MODE_OPTIONS.map((value) => ({ value, label: value }))}
+              value={formState.mode}
+              onChange={(value) => updateField("mode", value as EventFormState["mode"])}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-[14px] md:grid-cols-2">
+          <div>
+            <FormLabel>Start Date &amp; Time *</FormLabel>
+            <FormInput
+              type="datetime-local"
+              value={formState.startDateTime}
+              onChange={(value) => updateField("startDateTime", value)}
+            />
+          </div>
+          <div>
+            <FormLabel>End Date &amp; Time</FormLabel>
+            <FormInput
+              type="datetime-local"
+              value={formState.endDateTime}
+              onChange={(value) => updateField("endDateTime", value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-[14px] md:grid-cols-2">
+          <div>
+            <FormLabel>Venue / Location *</FormLabel>
+            <FormInput
+              placeholder="Venue name or Online"
+              value={formState.location}
+              onChange={(value) => updateField("location", value)}
+            />
+          </div>
+          <div>
+            <FormLabel>Capacity *</FormLabel>
+            <FormInput
+              type="number"
+              placeholder="e.g. 200"
+              value={formState.capacity}
+              onChange={(value) => updateField("capacity", value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-[14px] md:grid-cols-2">
+          <div>
+            <FormLabel>Fee (TZS)</FormLabel>
+            <FormInput
+              type="number"
+              placeholder="0 for free"
+              value={formState.fee}
+              onChange={(value) => updateField("fee", value)}
+            />
+          </div>
+          <div>
+            <FormLabel>CPD Hours</FormLabel>
+            <FormInput
+              type="number"
+              placeholder="e.g. 6"
+              value={formState.cpdHours}
+              onChange={(value) => updateField("cpdHours", value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <FormLabel>Description</FormLabel>
+          <textarea
+            rows={3}
+            placeholder="Event description…"
+            value={formState.description}
+            onChange={(event) => updateField("description", event.target.value)}
+            className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+          />
+        </div>
+      </Modal>
     </section>
   );
 }

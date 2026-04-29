@@ -1,13 +1,21 @@
-export type LoginResponse = {
+export type AuthenticatedAuthResponse = {
     accessToken: string;
-    refreshToken:string
+    refreshToken: string;
     user: User;
 };
+
+export type TwoFactorChallengeResponse = {
+    validate2FA: string;
+    message: string;
+};
+
+export type LoginResponse = AuthenticatedAuthResponse | TwoFactorChallengeResponse;
 
 export type User = {
     id: string;
     fullName: string;
     email: string;
+    phoneNumber?: string;
     membershipId: string;
     membershipStatus:string;
     registrationStatus:string;
@@ -47,11 +55,18 @@ export type RegisterResponse = {
 export type VerificationResponse = {
     verified: boolean;
     accessToken: string;
-    refreshToken:string;
+    refreshToken: string;
     user: User;
-}
+};
+
+export type TwoFactorValidationResponse = {
+    verified: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    user?: User;
+};
 
 export type ResendOtpResponse = {
-    success:boolean;
+    success?: boolean;
     message: string;
-}
+};

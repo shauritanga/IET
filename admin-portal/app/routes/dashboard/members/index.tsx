@@ -1,182 +1,110 @@
-import { ChevronDown, EllipsisVertical, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { members } from "~/data/admin-prototype";
+import { Button, StatusBadge } from "~/components/prototype-ui";
 
-type MemberStatus = "Active" | "Inactive" | "Suspended";
-type MembershipLevel = "Professional" | "Graduate" | "Technician" | "Fellow";
+const avatarColors: Record<string, string> = {
+  red: "bg-[var(--red)]",
+  blue: "bg-[#1565C0]",
+  green: "bg-[#2E7D32]",
+  pink: "bg-[#880E4F]",
+  orange: "bg-[#B45309]",
+};
 
-const memberRows: Array<{
-  memberName: string;
-  email: string;
-  memberId: string;
-  category: string;
-  membershipLevel: MembershipLevel;
-  status: MemberStatus;
-  initials?: string;
-  avatarTone?: "teal" | "indigo" | "amber";
-}> = [
-  {
-    memberName: "Sarah M. Kessy",
-    email: "sarah.k@iet.co.tz",
-    memberId: "IET-2023-042",
-    category: "Civil Engineering",
-    membershipLevel: "Professional",
-    status: "Active",
-    avatarTone: "teal",
-  },
-  {
-    memberName: "David J. Mwangi",
-    email: "d.mwangi@gmail.com",
-    memberId: "IET-2023-115",
-    category: "Mechanical Engineering",
-    membershipLevel: "Graduate",
-    status: "Active",
-    initials: "DM",
-    avatarTone: "indigo",
-  },
-  {
-    memberName: "John A. Petro",
-    email: "j.petro@engineers.org",
-    memberId: "IET-2022-889",
-    category: "Electrical Engineering",
-    membershipLevel: "Professional",
-    status: "Inactive",
-    avatarTone: "teal",
-  },
-  {
-    memberName: "Elizabeth Lucas",
-    email: "iz.lucas@tech.co.tz",
-    memberId: "IET-2023-005",
-    category: "Telecommunications",
-    membershipLevel: "Technician",
-    status: "Active",
-    initials: "EL",
-    avatarTone: "amber",
-  },
-  {
-    memberName: "Frank M. Swai",
-    email: "frank.swai@iet.co.tz",
-    memberId: "IET-2021-330",
-    category: "Structural Engineering",
-    membershipLevel: "Fellow",
-    status: "Suspended",
-    avatarTone: "teal",
-  },
-];
-
-function avatarClass(tone?: "teal" | "indigo" | "amber") {
-  if (tone === "indigo") return "is-indigo";
-  if (tone === "amber") return "is-amber";
-  return "is-teal";
+function SearchIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
 }
 
-function levelClass(level: MembershipLevel) {
-  if (level === "Graduate") return "is-graduate";
-  if (level === "Technician") return "is-technician";
-  if (level === "Fellow") return "is-fellow";
-  return "is-professional";
-}
-
-function statusClass(status: MemberStatus) {
-  if (status === "Inactive") return "is-inactive";
-  if (status === "Suspended") return "is-suspended";
-  return "is-active";
+function MembersAvatar({
+  initials,
+  tone,
+}: {
+  initials: string;
+  tone: keyof typeof avatarColors;
+}) {
+  return (
+    <div
+      className={`${avatarColors[tone]} flex h-[30px] w-[30px] items-center justify-center rounded-full text-[10px] font-bold text-white`}
+      aria-hidden="true"
+    >
+      {initials}
+    </div>
+  );
 }
 
 export default function MembersPage() {
   return (
-    <section className="admin-members-page">
-      <div className="admin-members-header">
-        <h1 className="admin-dashboard-title">Members</h1>
-        <button type="button" className="admin-members-add-btn">
-          <Plus size={14} aria-hidden="true" />
-          <span>Add Member</span>
-        </button>
+    <section>
+      <div className="mb-[18px] flex items-center justify-between">
+        <div>
+          <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Members Directory</h1>
+          <p className="mt-[2px] text-[11px] text-[var(--muted)]">
+            Manage all IET Tanzania registered members
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-[7px] rounded-[7px] border border-[var(--border)] bg-white px-[10px] py-[6px]">
+            <SearchIcon />
+            <input
+              type="text"
+              placeholder="Search members…"
+              className="w-[160px] border-none bg-transparent text-[12px] text-[var(--text)] outline-none"
+            />
+          </div>
+          <Button tone="red">+ Add Member</Button>
+        </div>
       </div>
 
-      <section className="admin-payments-card">
-        <div className="admin-payments-toolbar">
-          <label className="admin-payments-search">
-            <Search size={15} aria-hidden="true" />
-            <input type="text" placeholder="Search members by name, ID or email..." />
-          </label>
-
-          <div className="admin-payments-actions">
-            <button type="button" className="admin-payments-filter-btn">
-              <SlidersHorizontal size={14} aria-hidden="true" />
-              <span>Filter Type</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-
-            <button type="button" className="admin-payments-filter-btn">
-              <SlidersHorizontal size={14} aria-hidden="true" />
-              <span>Status</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-
-            <button type="button" className="admin-payments-icon-btn" aria-label="Member actions">
-              <Plus size={15} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        <div className="admin-payments-table-wrap">
-          <table className="admin-payments-table">
+      <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+        <div className="overflow-x-auto">
+          <table className="table-proto min-w-full border-separate border-spacing-0">
             <thead>
               <tr>
-                <th>Member Name</th>
-                <th>Member ID</th>
-                <th>Category</th>
-                <th>Membership Level</th>
+                <th>Member</th>
+                <th>Membership No.</th>
+                <th>Grade</th>
+                <th>Discipline</th>
                 <th>Status</th>
+                <th>Expires</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {memberRows.map((row) => (
-                <tr key={row.memberId}>
+              {members.map((member) => (
+                <tr key={member.id}>
                   <td>
-                    <div className="admin-payment-member">
-                      <div className={`admin-payment-avatar ${avatarClass(row.avatarTone)}`} aria-hidden="true">
-                        {row.initials ? <span>{row.initials}</span> : null}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <MembersAvatar initials={member.initials} tone={member.tone} />
                       <div>
-                        <p className="admin-payment-member-name">{row.memberName}</p>
-                        <p className="admin-payment-member-email">{row.email}</p>
+                        <div className="text-[12px] font-semibold">{member.name}</div>
+                        <div className="text-[10px] text-[var(--muted)]">{member.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="admin-payment-id-cell">{row.memberId}</td>
-                  <td className="admin-payment-category-cell">{row.category}</td>
+                  <td className="font-mono text-[11px]">{member.id}</td>
+                  <td className="text-[11.5px]">{member.grade}</td>
+                  <td className="text-[11.5px]">{member.discipline}</td>
                   <td>
-                    <span className={`admin-payment-pill level ${levelClass(row.membershipLevel)}`}>{row.membershipLevel}</span>
+                    <StatusBadge tone={member.badge}>{member.status}</StatusBadge>
                   </td>
+                  <td className="text-[11.5px]">{member.expires}</td>
                   <td>
-                    <span className={`admin-payment-pill status ${statusClass(row.status)}`}>{row.status}</span>
-                  </td>
-                  <td>
-                    <div className="admin-payment-actions-cell">
-                      <button type="button" className="admin-payment-details-btn">View Details</button>
-                      <button type="button" className="admin-payment-more-btn" aria-label={`More actions for ${row.memberName}`}>
-                        <EllipsisVertical size={15} aria-hidden="true" />
-                      </button>
+                    <div className="flex gap-[5px]">
+                      <Button>Edit</Button>
+                      {member.status === "Expired" ? (
+                        <Button tone="green">Renew</Button>
+                      ) : member.status === "Pending Payment" ? null : (
+                        <Button className="border-[var(--red-light)] text-[var(--red)]">Suspend</Button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-
-        <div className="admin-payments-footer">
-          <p>Showing 1 to 5 of 1,240 results</p>
-          <div className="admin-payments-pagination" aria-label="Pagination">
-            <button type="button" className="admin-payments-page-btn">‹</button>
-            <button type="button" className="admin-payments-page-btn is-active">1</button>
-            <button type="button" className="admin-payments-page-btn">2</button>
-            <button type="button" className="admin-payments-page-btn">3</button>
-            <button type="button" className="admin-payments-page-btn is-ellipsis">...</button>
-            <button type="button" className="admin-payments-page-btn">12</button>
-            <button type="button" className="admin-payments-page-btn">›</button>
-          </div>
         </div>
       </section>
     </section>

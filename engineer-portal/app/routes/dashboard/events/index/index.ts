@@ -1,5 +1,6 @@
-import { redirect } from "react-router"
+import { createElement } from "react"
+import { DashboardEventsPage } from "~/components/portal/dashboard-pages"
 
-export const loader = () => {
-    return redirect ("event-list")
-}
+const Events = () => createElement(DashboardEventsPage)
+
+export default Events

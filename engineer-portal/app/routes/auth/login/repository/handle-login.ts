@@ -7,15 +7,27 @@ import { setToCookie } from "~/utils/storage";
 import { TOKEN_KEY, USER_KEY } from "~/utils/http";
 import type { LoginResponse } from "~/routes/auth/types";
 import { loginUser } from "~/routes/auth/login/requests/login-user";
+import { createAuthSession, writeAuthSession } from "~/utils/otp-session";
 
 export function useLoginUser(onSuccess?: TSuccess<LoginResponse>) {
     return useMutation<LoginResponse, TErrorMessage, LoginFormType>({
         mutationFn: loginUser,
         onSuccess: (data) => {
+            if (!("accessToken" in data)) {
+                toast.success(data.message);
+                onSuccess?.(data);
+                return;
+            }
+
             setToCookie(TOKEN_KEY, data.accessToken);
             setToCookie("global-rt", data.refreshToken ?? "");
             setToCookie("global-ms", data.user.registrationStatus);
             setToStorage(USER_KEY, data.user);
+            writeAuthSession(createAuthSession({
+                email: data.user.email,
+                name: data.user.fullName ?? data.user.email,
+                membershipStatus: data.user.membershipStatus,
+            }));
             toast.success("Logged in successfully!");
             onSuccess?.(data);
         },

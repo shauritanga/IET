@@ -1,157 +1,267 @@
-import { ArrowDownToLine, ChevronDown, EllipsisVertical, Search, SlidersHorizontal } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  applications as initialApplications,
+  type ApplicationWorkflowStage,
+  type AvatarTone,
+  type StatusTone,
+} from "~/data/admin-prototype";
+import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 
-type PaymentStatus = "Active" | "Inactive" | "Suspended";
-type MembershipLevel = "Professional" | "Graduate" | "Technician" | "Fellow";
-
-const paymentRows: Array<{
-  memberName: string;
+type ApplicationRecord = {
+  id: string;
+  name: string;
   email: string;
-  transactionId: string;
-  category: string;
-  membershipLevel: MembershipLevel;
-  status: PaymentStatus;
-  initials?: string;
-  avatarTone?: "teal" | "indigo" | "amber";
-}> = [
-  {
-    memberName: "Sarah M. Kessy",
-    email: "sarah.k@iet.co.tz",
-    transactionId: "IET-2023-042",
-    category: "Civil Engineering",
-    membershipLevel: "Professional",
-    status: "Active",
-    avatarTone: "teal",
-  },
-  {
-    memberName: "David J. Mwangi",
-    email: "d.mwangi@gmail.com",
-    transactionId: "IET-2023-115",
-    category: "Mechanical Engineering",
-    membershipLevel: "Graduate",
-    status: "Active",
-    initials: "DM",
-    avatarTone: "indigo",
-  },
-  {
-    memberName: "John A. Petro",
-    email: "j.petro@engineers.org",
-    transactionId: "IET-2022-889",
-    category: "Electrical Engineering",
-    membershipLevel: "Professional",
-    status: "Inactive",
-    avatarTone: "teal",
-  },
-  {
-    memberName: "Elizabeth Lucas",
-    email: "iz.lucas@tech.co.tz",
-    transactionId: "IET-2023-005",
-    category: "Telecommunications",
-    membershipLevel: "Technician",
-    status: "Active",
-    initials: "EL",
-    avatarTone: "amber",
-  },
-  {
-    memberName: "Frank M. Swai",
-    email: "frank.swai@iet.co.tz",
-    transactionId: "IET-2021-330",
-    category: "Structural Engineering",
-    membershipLevel: "Fellow",
-    status: "Suspended",
-    avatarTone: "teal",
-  },
-];
+  initials: string;
+  tone: AvatarTone;
+  grade: string;
+  discipline: string;
+  submitted: string;
+  status: "Pending" | "Approved" | "Rejected";
+  badge: StatusTone;
+  stage: ApplicationWorkflowStage;
+  queueOwner: string;
+  assignedEvaluator: string;
+};
 
-function avatarClass(tone?: "teal" | "indigo" | "amber") {
-  if (tone === "indigo") return "is-indigo";
-  if (tone === "amber") return "is-amber";
-  return "is-teal";
-}
+const avatarColors: Record<ApplicationRecord["tone"], string> = {
+  red: "bg-[var(--red)]",
+  blue: "bg-[#1565C0]",
+  purple: "bg-[#4527A0]",
+  green: "bg-[#2E7D32]",
+  pink: "bg-[#880E4F]",
+  orange: "bg-[#F97316]",
+};
 
-function levelClass(level: MembershipLevel) {
-  if (level === "Graduate") return "is-graduate";
-  if (level === "Technician") return "is-technician";
-  if (level === "Fellow") return "is-fellow";
-  return "is-professional";
-}
+const stageTone: Record<ApplicationWorkflowStage, "pending" | "blue" | "warning" | "approved"> = {
+  "Secretariat Review": "warning",
+  "Evaluator Review": "blue",
+  "MPDC Review": "pending",
+  "Council Review": "pending",
+  "Approval Note Sent": "approved",
+};
 
-function statusClass(status: PaymentStatus) {
-  if (status === "Inactive") return "is-inactive";
-  if (status === "Suspended") return "is-suspended";
-  return "is-active";
-}
+const stageOptions = [
+  "All Stages",
+  "Secretariat Review",
+  "Evaluator Review",
+  "MPDC Review",
+  "Council Review",
+  "Approval Note Sent",
+] as const;
 
-export default function PaymentsPage() {
+const evaluatorOptions = [
+  "Eng. Joseph Mushi",
+  "Eng. Neema Kweka",
+  "Eng. Dora Nyerere",
+  "Eng. Lucas Mrema",
+  "Eng. Miriam Kileo",
+] as const;
+
+function FilterSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+}) {
   return (
-    <section className="admin-payments-page">
-      <h1 className="admin-dashboard-title">Payments</h1>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+    >
+      {options.map((option) => (
+        <option key={option}>{option}</option>
+      ))}
+    </select>
+  );
+}
 
-      <section className="admin-payments-card">
-        <div className="admin-payments-toolbar">
-          <label className="admin-payments-search">
-            <Search size={15} aria-hidden="true" />
-            <input type="text" placeholder="Search members by name, ID or email..." />
-          </label>
+function ApplicationsAvatar({
+  initials,
+  tone,
+}: {
+  initials: string;
+  tone: ApplicationRecord["tone"];
+}) {
+  return (
+    <div
+      className={`${avatarColors[tone]} flex h-[30px] w-[30px] items-center justify-center rounded-full text-[10px] font-bold text-white`}
+      aria-hidden="true"
+    >
+      {initials}
+    </div>
+  );
+}
 
-          <div className="admin-payments-actions">
-            <button type="button" className="admin-payments-filter-btn">
-              <SlidersHorizontal size={14} aria-hidden="true" />
-              <span>Filter Type</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
+function ApplicationsCard({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+      {children}
+    </section>
+  );
+}
 
-            <button type="button" className="admin-payments-filter-btn">
-              <SlidersHorizontal size={14} aria-hidden="true" />
-              <span>Status</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
+export default function ApplicationsPage() {
+  const [applicationRows, setApplicationRows] =
+    useState<Array<ApplicationRecord>>(initialApplications.map((row) => ({ ...row })));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [stageFilter, setStageFilter] = useState("All Stages");
+  const [selectedEvaluator, setSelectedEvaluator] = useState<string>(evaluatorOptions[0]);
+  const [adminNotes, setAdminNotes] = useState("");
 
-            <button type="button" className="admin-payments-icon-btn" aria-label="Export payments">
-              <ArrowDownToLine size={15} aria-hidden="true" />
-            </button>
-          </div>
+  const selectedApplicant = applicationRows.find((application) => application.id === selectedId) ?? null;
+
+  const visibleApplications = useMemo(
+    () =>
+      applicationRows.filter((application) => {
+        const matchesStatus =
+          statusFilter === "All Status" || application.status === statusFilter;
+        const matchesStage =
+          stageFilter === "All Stages" || application.stage === stageFilter;
+        return matchesStatus && matchesStage;
+      }),
+    [applicationRows, stageFilter, statusFilter],
+  );
+
+  const openApplication = (application: ApplicationRecord) => {
+    setSelectedId(application.id);
+    setSelectedEvaluator(application.assignedEvaluator === "—" ? evaluatorOptions[0] : application.assignedEvaluator);
+    setAdminNotes("");
+  };
+
+  const closeModal = () => {
+    setSelectedId(null);
+    setAdminNotes("");
+  };
+
+  const updateApplication = (next: ApplicationRecord) => {
+    setApplicationRows((current) =>
+      current.map((application) => (application.id === next.id ? next : application)),
+    );
+    closeModal();
+  };
+
+  const handleAdvance = () => {
+    if (!selectedApplicant) return;
+
+    switch (selectedApplicant.stage) {
+      case "Secretariat Review":
+        updateApplication({
+          ...selectedApplicant,
+          stage: "Evaluator Review",
+          queueOwner: "Evaluator",
+          assignedEvaluator: selectedEvaluator,
+        });
+        break;
+      case "Evaluator Review":
+        updateApplication({
+          ...selectedApplicant,
+          stage: "MPDC Review",
+          queueOwner: "MPDC",
+        });
+        break;
+      case "MPDC Review":
+        updateApplication({
+          ...selectedApplicant,
+          stage: "Council Review",
+          queueOwner: "Council",
+        });
+        break;
+      case "Council Review":
+        updateApplication({
+          ...selectedApplicant,
+          stage: "Approval Note Sent",
+          status: "Approved",
+          badge: "approved",
+          queueOwner: "Council",
+        });
+        break;
+      default:
+        closeModal();
+    }
+  };
+
+  const handleReject = () => {
+    if (!selectedApplicant) return;
+    updateApplication({
+      ...selectedApplicant,
+      status: "Rejected",
+      badge: "rejected",
+    });
+  };
+
+  const handleReturnForChanges = () => {
+    if (!selectedApplicant) return;
+    updateApplication({
+      ...selectedApplicant,
+      status: "Pending",
+      badge: "warning",
+      stage: "Secretariat Review",
+      queueOwner: "Secretariat",
+      assignedEvaluator: "—",
+    });
+  };
+
+  return (
+    <section>
+      <div className="mb-[18px] flex items-center justify-between">
+        <div>
+          <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Membership Applications</h1>
+          <p className="mt-[2px] text-[11px] text-[var(--muted)]">
+            Review and move each application through the approval workflow
+          </p>
         </div>
+        <div className="flex gap-2">
+          <FilterSelect value={statusFilter} onChange={setStatusFilter} options={["All Status", "Pending", "Approved", "Rejected"]} />
+          <FilterSelect value={stageFilter} onChange={setStageFilter} options={stageOptions} />
+        </div>
+      </div>
 
-        <div className="admin-payments-table-wrap">
-          <table className="admin-payments-table">
+      <ApplicationsCard>
+        <div className="overflow-x-auto">
+          <table className="table-proto min-w-full border-separate border-spacing-0">
             <thead>
               <tr>
-                <th>Member Name</th>
-                <th>Transaction ID</th>
-                <th>Category</th>
-                <th>Membership Level</th>
+                <th>Applicant</th>
+                <th>Grade Applied</th>
+                <th>Stage</th>
+                <th>Assigned To</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {paymentRows.map((row) => (
-                <tr key={row.transactionId}>
+              {visibleApplications.map((application) => (
+                <tr key={application.id}>
                   <td>
-                    <div className="admin-payment-member">
-                      <div className={`admin-payment-avatar ${avatarClass(row.avatarTone)}`} aria-hidden="true">
-                        {row.initials ? <span>{row.initials}</span> : null}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <ApplicationsAvatar initials={application.initials} tone={application.tone} />
                       <div>
-                        <p className="admin-payment-member-name">{row.memberName}</p>
-                        <p className="admin-payment-member-email">{row.email}</p>
+                        <div className="text-[12px] font-semibold">{application.name}</div>
+                        <div className="text-[10px] text-[var(--muted)]">{application.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="admin-payment-id-cell">{row.transactionId}</td>
-                  <td className="admin-payment-category-cell">{row.category}</td>
+                  <td className="text-[11.5px]">{application.grade}</td>
                   <td>
-                    <span className={`admin-payment-pill level ${levelClass(row.membershipLevel)}`}>{row.membershipLevel}</span>
+                    <StatusBadge tone={stageTone[application.stage]}>{application.stage}</StatusBadge>
+                  </td>
+                  <td className="text-[11.5px]">{application.assignedEvaluator}</td>
+                  <td>
+                    <StatusBadge tone={application.badge}>{application.status}</StatusBadge>
                   </td>
                   <td>
-                    <span className={`admin-payment-pill status ${statusClass(row.status)}`}>{row.status}</span>
-                  </td>
-                  <td>
-                    <div className="admin-payment-actions-cell">
-                      <button type="button" className="admin-payment-details-btn">View Details</button>
-                      <button type="button" className="admin-payment-more-btn" aria-label={`More actions for ${row.memberName}`}>
-                        <EllipsisVertical size={15} aria-hidden="true" />
-                      </button>
+                    <div className="flex gap-[6px]">
+                      <Button
+                        tone={application.badge === "pending" ? "dark" : "outline"}
+                        onClick={() => openApplication(application)}
+                      >
+                        {application.badge === "pending" ? "Review" : "View"}
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -159,20 +269,77 @@ export default function PaymentsPage() {
             </tbody>
           </table>
         </div>
+      </ApplicationsCard>
 
-        <div className="admin-payments-footer">
-          <p>Showing 1 to 5 of 1,240 results</p>
-          <div className="admin-payments-pagination" aria-label="Pagination">
-            <button type="button" className="admin-payments-page-btn">‹</button>
-            <button type="button" className="admin-payments-page-btn is-active">1</button>
-            <button type="button" className="admin-payments-page-btn">2</button>
-            <button type="button" className="admin-payments-page-btn">3</button>
-            <button type="button" className="admin-payments-page-btn is-ellipsis">...</button>
-            <button type="button" className="admin-payments-page-btn">12</button>
-            <button type="button" className="admin-payments-page-btn">›</button>
-          </div>
-        </div>
-      </section>
+      <Modal
+        title={selectedApplicant ? `Workflow: ${selectedApplicant.name}` : "Application Workflow"}
+        open={Boolean(selectedApplicant)}
+        onClose={closeModal}
+      >
+        {selectedApplicant ? (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-x-5 gap-y-[10px] rounded-[10px] border border-[var(--border)] bg-[var(--red-pale)] p-4">
+              <div>
+                <div className="text-[9.5px] uppercase tracking-[0.6px] text-[var(--muted)]">Applicant</div>
+                <div className="mt-[2px] text-[13px] font-bold text-[var(--text)]">{selectedApplicant.name}</div>
+              </div>
+              <div>
+                <div className="text-[9.5px] uppercase tracking-[0.6px] text-[var(--muted)]">Grade Applied</div>
+                <div className="mt-[2px] text-[13px] font-bold text-[var(--text)]">{selectedApplicant.grade}</div>
+              </div>
+              <div>
+                <div className="text-[9.5px] uppercase tracking-[0.6px] text-[var(--muted)]">Current Stage</div>
+                <div className="mt-[2px] text-[12px] font-semibold text-[var(--text)]">{selectedApplicant.stage}</div>
+              </div>
+              <div>
+                <div className="text-[9.5px] uppercase tracking-[0.6px] text-[var(--muted)]">Submitted</div>
+                <div className="mt-[2px] text-[12px] font-semibold text-[var(--text)]">{selectedApplicant.submitted}</div>
+              </div>
+            </div>
+
+            {selectedApplicant.stage === "Secretariat Review" ? (
+              <div className="mb-4">
+                <label className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+                  Assign Evaluator
+                </label>
+                <FilterSelect value={selectedEvaluator} onChange={setSelectedEvaluator} options={evaluatorOptions} />
+              </div>
+            ) : null}
+
+            <div>
+              <label className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+                Admin Notes / Reason
+              </label>
+              <textarea
+                rows={3}
+                value={adminNotes}
+                onChange={(event) => setAdminNotes(event.target.value)}
+                placeholder="Add notes about this workflow decision…"
+                className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+              />
+            </div>
+
+            <div className="mt-[14px] flex justify-end gap-[9px] border-t border-[var(--border)] pt-[14px]">
+              <Button tone="outline" onClick={closeModal}>
+                Cancel
+              </Button>
+              {selectedApplicant.status === "Pending" ? (
+                <>
+                  <Button tone="outline" className="border-[var(--red-light)] text-[var(--red)]" onClick={handleReturnForChanges}>
+                    Return for Changes
+                  </Button>
+                  <Button tone="outline" className="border-[var(--red-light)] text-[var(--red)]" onClick={handleReject}>
+                    Reject
+                  </Button>
+                  <Button tone="green" onClick={handleAdvance}>
+                    {selectedApplicant.stage === "Council Review" ? "Approve & Notify" : "Advance Stage"}
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </Modal>
     </section>
   );
 }

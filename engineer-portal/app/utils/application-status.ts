@@ -8,6 +8,16 @@ export type RegistrationStatus =
     | null
     | undefined;
 
+export type ReviewStage =
+    | "SECRETARIAT_REVIEW"
+    | "EVALUATOR_REVIEW"
+    | "MPDC_REVIEW"
+    | "COUNCIL_REVIEW"
+    | "APPROVAL_NOTICE_SENT"
+    | string
+    | null
+    | undefined;
+
 export const getRegistrationStatusLabel = (status: RegistrationStatus) => {
     switch (status) {
         case "DRAFT":
@@ -22,6 +32,23 @@ export const getRegistrationStatusLabel = (status: RegistrationStatus) => {
             return "Rejected Application";
         default:
             return "No Application";
+    }
+};
+
+export const getReviewStageLabel = (stage: ReviewStage) => {
+    switch (stage) {
+        case "SECRETARIAT_REVIEW":
+            return "Reviewed by Secretariat";
+        case "EVALUATOR_REVIEW":
+            return "Assigned to Evaluator";
+        case "MPDC_REVIEW":
+            return "Reviewed by MPDC";
+        case "COUNCIL_REVIEW":
+            return "Awaiting Council Approval";
+        case "APPROVAL_NOTICE_SENT":
+            return "Approval Note Sent";
+        default:
+            return "Awaiting Review";
     }
 };
 

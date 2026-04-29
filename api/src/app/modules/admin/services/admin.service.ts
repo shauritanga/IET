@@ -7,21 +7,26 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { UserEntity } from '../../user/entities/user.entity';
-import { RegistrationEntity } from '../../registration/entities/registration.entity';
+import {
+  RegistrationEntity,
+  ApplicationStageHistoryEntity,
+} from '../../registration/entities';
 import { MembershipFeeEntity } from '../../membership/entities/membership-fee.entity';
 import { EventEntity, EventRegistrationEntity } from '../../events/entities';
 import { PaymentEntity } from '../../payments/entities/payment.entity';
 import { UserService } from '../../user/services/user.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
-  ReviewApplicationDto,
+  UpdateApplicationStageDto,
   UpdateMemberStatusDto,
   AnalyticsQueryDto,
 } from '../dto';
 import {
   MembershipStatus,
   ApplicationStatus,
+  ApplicationReviewStage,
   PaymentStatus,
   FeeStatus,
 } from '../../../common/enums';
@@ -35,6 +40,8 @@ export class AdminService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
+    @InjectRepository(ApplicationStageHistoryEntity)
+    private stageHistoryRepository: Repository<ApplicationStageHistoryEntity>,
     @InjectRepository(MembershipFeeEntity)
     private feeRepository: Repository<MembershipFeeEntity>,
     @InjectRepository(EventEntity)
@@ -44,6 +51,7 @@ export class AdminService {
     @InjectRepository(PaymentEntity)
     private paymentRepository: Repository<PaymentEntity>,
     private userService: UserService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -94,9 +102,7 @@ export class AdminService {
     // Application stats
     const pendingApplications = await this.registrationRepository.count({
       where: {
-        status: In([
-          ApplicationStatus.IN_REVIEW,
-        ]),
+        status: In([ApplicationStatus.IN_REVIEW]),
       },
     });
     const approvedApplications = await this.registrationRepository.count({
@@ -360,7 +366,7 @@ export class AdminService {
     pageSize: number;
     totalPages: number;
   }> {
-    const { page = 1, limit = 20, status } = query;
+    const { page = 1, limit = 20, status, reviewStage } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.registrationRepository
@@ -377,6 +383,9 @@ export class AdminService {
         ],
       });
     }
+    if (reviewStage) {
+      queryBuilder.andWhere('reg.reviewStage = :reviewStage', { reviewStage });
+    }
 
     const [registrations, total] = await queryBuilder
       .orderBy('reg.submittedAt', 'ASC')
@@ -392,6 +401,10 @@ export class AdminService {
       appliedMembershipClass: reg.appliedMembershipClass,
       engineeringDiscipline: reg.engineeringDiscipline,
       status: reg.status,
+      reviewStage: reg.reviewStage,
+      queueOwnerRole: this.getQueueOwnerRole(reg.reviewStage),
+      assignedEvaluatorId: reg.assignedEvaluatorId,
+      stageUpdatedAt: reg.stageUpdatedAt,
       submittedAt: reg.submittedAt,
       createdAt: reg.createdAt,
     }));
@@ -408,15 +421,61 @@ export class AdminService {
   /**
    * Review an application
    */
-  async reviewApplication(
+  async getApplicationDetails(applicationId: string): Promise<any> {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: applicationId },
+      relations: ['user', 'educations', 'experiences', 'documents', 'references', 'stageHistory'],
+      order: {
+        stageHistory: {
+          createdAt: 'ASC',
+        },
+      },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Application not found');
+    }
+
+    return {
+      id: registration.id,
+      referenceNumber: registration.referenceNumber,
+      status: registration.status,
+      reviewStage: registration.reviewStage,
+      queueOwnerRole: this.getQueueOwnerRole(registration.reviewStage),
+      assignedEvaluatorId: registration.assignedEvaluatorId,
+      assignedAt: registration.assignedAt,
+      submittedAt: registration.submittedAt,
+      stageUpdatedAt: registration.stageUpdatedAt,
+      councilApprovedAt: registration.councilApprovedAt,
+      approvalNoticeSentAt: registration.approvalNoticeSentAt,
+      applicant: {
+        id: registration.user.id,
+        fullName: registration.user.fullName,
+        email: registration.user.email,
+        phoneNumber: registration.user.phoneNumber,
+      },
+      appliedMembershipClass: registration.appliedMembershipClass,
+      engineeringDiscipline: registration.engineeringDiscipline,
+      reviewComments: registration.reviewComments,
+      rejectionReason: registration.rejectionReason,
+      educations: registration.educations,
+      experiences: registration.experiences,
+      documents: registration.documents,
+      references: registration.references,
+      stageHistory: registration.stageHistory,
+    };
+  }
+
+  async updateApplicationStage(
     applicationId: string,
     adminId: string,
-    dto: ReviewApplicationDto,
+    dto: UpdateApplicationStageDto,
   ): Promise<{
     applicationId: string;
     status: ApplicationStatus;
-    reviewedBy: string;
-    reviewedAt: Date;
+    reviewStage?: ApplicationReviewStage;
+    reviewedBy?: string;
+    reviewedAt?: Date;
     membershipId?: string;
   }> {
     const registration = await this.registrationRepository.findOne({
@@ -430,14 +489,81 @@ export class AdminService {
 
     if (registration.status !== ApplicationStatus.IN_REVIEW) {
       throw new BadRequestException(
-        'Application cannot be reviewed in its current state',
+        'Application cannot be updated in its current state',
       );
     }
 
-    let newStatus: ApplicationStatus;
+    const currentStage = registration.reviewStage;
+    if (!currentStage) {
+      throw new BadRequestException('Application is missing a review stage');
+    }
+
+    this.assertAllowedStageAction(currentStage, dto.action);
+
+    let newStatus: ApplicationStatus = registration.status;
+    let newStage: ApplicationReviewStage = currentStage;
     let membershipId: string | undefined;
+    const now = new Date();
 
     switch (dto.action) {
+      case 'ASSIGN_EVALUATOR':
+        if (currentStage !== ApplicationReviewStage.SECRETARIAT_REVIEW) {
+          throw new BadRequestException(
+            'Evaluators can only be assigned during secretariat review',
+          );
+        }
+        if (!dto.evaluatorId) {
+          throw new BadRequestException(
+            'Evaluator ID is required when assigning an evaluator',
+          );
+        }
+        newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
+        registration.reviewStage = newStage;
+        registration.assignedEvaluatorId = dto.evaluatorId;
+        registration.assignedAt = now;
+        registration.reviewComments = dto.comments;
+        registration.stageUpdatedAt = now;
+        registration.updatedBy = adminId;
+        await this.registrationRepository.save(registration);
+        await this.recordStageHistory(registration, {
+          fromStage: currentStage,
+          toStage: newStage,
+          action: 'ASSIGNED',
+          actedByUserId: adminId,
+          comments: dto.comments,
+          assignedEvaluatorId: dto.evaluatorId,
+        });
+        break;
+      case 'ADVANCE_TO_MPDC':
+        newStage = ApplicationReviewStage.MPDC_REVIEW;
+        registration.reviewComments = dto.comments;
+        registration.stageUpdatedAt = now;
+        registration.reviewStage = newStage;
+        registration.updatedBy = adminId;
+        await this.registrationRepository.save(registration);
+        await this.recordStageHistory(registration, {
+          fromStage: currentStage,
+          toStage: newStage,
+          action: 'ADVANCED',
+          actedByUserId: adminId,
+          comments: dto.comments,
+        });
+        break;
+      case 'ADVANCE_TO_COUNCIL':
+        newStage = ApplicationReviewStage.COUNCIL_REVIEW;
+        registration.reviewComments = dto.comments;
+        registration.stageUpdatedAt = now;
+        registration.reviewStage = newStage;
+        registration.updatedBy = adminId;
+        await this.registrationRepository.save(registration);
+        await this.recordStageHistory(registration, {
+          fromStage: currentStage,
+          toStage: newStage,
+          action: 'ADVANCED',
+          actedByUserId: adminId,
+          comments: dto.comments,
+        });
+        break;
       case 'APPROVE':
         if (!dto.membershipClass) {
           throw new BadRequestException(
@@ -445,6 +571,7 @@ export class AdminService {
           );
         }
         newStatus = ApplicationStatus.APPROVED;
+        newStage = ApplicationReviewStage.APPROVAL_NOTICE_SENT;
 
         // Generate and assign membership ID
         membershipId = await this.userService.assignMembershipId(
@@ -463,6 +590,11 @@ export class AdminService {
             ),
           },
         );
+        registration.councilApprovedAt = now;
+        registration.approvalNoticeSentAt = now;
+        registration.reviewComments = dto.comments;
+        registration.reviewStage = newStage;
+        registration.stageUpdatedAt = now;
         break;
 
       case 'REJECT':
@@ -470,7 +602,7 @@ export class AdminService {
         registration.rejectionReason = dto.comments;
         break;
 
-      case 'REQUEST_CHANGES':
+      case 'RETURN_FOR_CHANGES':
         newStatus = ApplicationStatus.CHANGES_REQUESTED;
         break;
 
@@ -479,22 +611,78 @@ export class AdminService {
     }
 
     registration.status = newStatus;
+    registration.reviewStage = newStage;
     registration.reviewedBy = adminId;
-    registration.reviewedAt = new Date();
+    registration.reviewedAt = now;
     registration.reviewComments = dto.comments;
     registration.updatedBy = adminId;
+    registration.stageUpdatedAt = now;
 
     await this.registrationRepository.save(registration);
 
     this.logger.log(
-      `Application ${applicationId} ${dto.action}ed by admin ${adminId}`,
+      `Application ${applicationId} action ${dto.action} processed by admin ${adminId}`,
     );
 
-    // TODO: Send notification to applicant
+    if (dto.action === 'APPROVE') {
+      await this.recordStageHistory(registration, {
+        fromStage: currentStage,
+        toStage: ApplicationReviewStage.COUNCIL_REVIEW,
+        action: 'APPROVED_BY_COUNCIL',
+        actedByUserId: adminId,
+        comments: dto.comments,
+      });
+      await this.recordStageHistory(registration, {
+        fromStage: ApplicationReviewStage.COUNCIL_REVIEW,
+        toStage: ApplicationReviewStage.APPROVAL_NOTICE_SENT,
+        action: 'NOTICE_SENT',
+        actedByUserId: adminId,
+        comments: dto.comments,
+      });
+      await this.notificationsService.sendApplicationStatusNotification(
+        registration.userId,
+        'APPROVED',
+        {
+          membershipId,
+          membershipClass: dto.membershipClass,
+        },
+      );
+    } else if (dto.action === 'REJECT') {
+      await this.recordStageHistory(registration, {
+        fromStage: currentStage,
+        toStage: currentStage,
+        action: 'REJECTED',
+        actedByUserId: adminId,
+        comments: dto.comments,
+      });
+      await this.notificationsService.sendApplicationStatusNotification(
+        registration.userId,
+        'REJECTED',
+        {
+          reason: dto.comments,
+        },
+      );
+    } else if (dto.action === 'RETURN_FOR_CHANGES') {
+      await this.recordStageHistory(registration, {
+        fromStage: currentStage,
+        toStage: currentStage,
+        action: 'RETURNED_FOR_CHANGES',
+        actedByUserId: adminId,
+        comments: dto.comments,
+      });
+      await this.notificationsService.sendApplicationStatusNotification(
+        registration.userId,
+        'CHANGES_REQUESTED',
+        {
+          reason: dto.comments,
+        },
+      );
+    }
 
     return {
       applicationId: registration.id,
       status: newStatus,
+      reviewStage: registration.reviewStage,
       reviewedBy: adminId,
       reviewedAt: registration.reviewedAt,
       membershipId,
@@ -613,5 +801,79 @@ export class AdminService {
     ].join('\n');
 
     return csvContent;
+  }
+
+  private getQueueOwnerRole(stage?: ApplicationReviewStage | null): string | null {
+    switch (stage) {
+      case ApplicationReviewStage.SECRETARIAT_REVIEW:
+        return 'SECRETARIAT';
+      case ApplicationReviewStage.EVALUATOR_REVIEW:
+        return 'EVALUATOR';
+      case ApplicationReviewStage.MPDC_REVIEW:
+        return 'MPDC';
+      case ApplicationReviewStage.COUNCIL_REVIEW:
+      case ApplicationReviewStage.APPROVAL_NOTICE_SENT:
+        return 'COUNCIL';
+      default:
+        return null;
+    }
+  }
+
+  private assertAllowedStageAction(
+    stage: ApplicationReviewStage,
+    action: UpdateApplicationStageDto['action'],
+  ): void {
+    const allowedActions: Record<ApplicationReviewStage, UpdateApplicationStageDto['action'][]> = {
+      [ApplicationReviewStage.SECRETARIAT_REVIEW]: [
+        'ASSIGN_EVALUATOR',
+        'RETURN_FOR_CHANGES',
+        'REJECT',
+      ],
+      [ApplicationReviewStage.EVALUATOR_REVIEW]: [
+        'ADVANCE_TO_MPDC',
+        'RETURN_FOR_CHANGES',
+        'REJECT',
+      ],
+      [ApplicationReviewStage.MPDC_REVIEW]: [
+        'ADVANCE_TO_COUNCIL',
+        'RETURN_FOR_CHANGES',
+        'REJECT',
+      ],
+      [ApplicationReviewStage.COUNCIL_REVIEW]: [
+        'APPROVE',
+        'RETURN_FOR_CHANGES',
+        'REJECT',
+      ],
+      [ApplicationReviewStage.APPROVAL_NOTICE_SENT]: [],
+    };
+
+    if (!allowedActions[stage].includes(action)) {
+      throw new BadRequestException(
+        `Action ${action} is not allowed while the application is in ${stage}`,
+      );
+    }
+  }
+
+  private async recordStageHistory(
+    registration: RegistrationEntity,
+    params: {
+      fromStage?: ApplicationReviewStage;
+      toStage: ApplicationReviewStage;
+      action: ApplicationStageHistoryEntity['action'];
+      actedByUserId: string;
+      comments?: string;
+      assignedEvaluatorId?: string;
+    },
+  ): Promise<void> {
+    const history = new ApplicationStageHistoryEntity();
+    history.registrationId = registration.id;
+    history.fromStage = params.fromStage;
+    history.toStage = params.toStage;
+    history.action = params.action;
+    history.comments = params.comments;
+    history.assignedEvaluatorId = params.assignedEvaluatorId;
+    history.createdBy = params.actedByUserId;
+    history.updatedBy = params.actedByUserId;
+    await this.stageHistoryRepository.save(history);
   }
 }

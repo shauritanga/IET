@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IET Tanzania – Admin Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --red:       #E20C0A;
+  --red-dark:  #390909;
+  --red-light: #FADCDC;
+  --red-pale:  #FEF5F5;
+  --red-mid:   #c10a08;
+  --white:     #FFFFFF;
+  --bg:        #F7F3F3;
+  --text:      #1C1010;
+  --muted:     #7A6060;
+  --border:    #E8D5D5;
+  --sidebar-w: 260px;
+  --success:   #1a6b3c;
+  --warn:      #B45309;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Montserrat',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;font-size:13.5px;}
+
+/* ── AUTH ─────────────────────────────── */
+.auth-wrap{position:fixed;inset:0;z-index:9000;display:flex;background:var(--white);}
+.auth-wrap.hidden{display:none;}
+.auth-left{width:50%;min-width:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 56px;overflow-y:auto;}
+.auth-left-inner{width:100%;max-width:360px;}
+.auth-right{flex:1;background:linear-gradient(160deg,#390909 0%,#5C1010 45%,#390909 100%);position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:32px;border-radius:16px 0 0 16px;margin:16px 16px 16px 0;}
+.auth-rings{position:absolute;inset:0;pointer-events:none;}
+.auth-welcome-card{background:rgba(255,255,255,.08);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:22px;position:relative;z-index:1;}
+.auth-logo-block{text-align:center;margin-bottom:24px;}
+.auth-logo-img-big{width:76px;height:76px;margin:0 auto 10px;}
+.auth-logo-img-big img{width:100%;height:100%;object-fit:contain;}
+.auth-logo-org{font-size:13px;font-weight:800;color:var(--red-dark);line-height:1.35;font-family:'Source Serif 4',serif;}
+.auth-logo-sub{font-size:10px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-top:3px;}
+.auth-h{font-family:'Source Serif 4',serif;font-size:24px;font-weight:700;color:var(--text);margin-bottom:5px;text-align:center;}
+.auth-sub{font-size:12px;color:var(--muted);margin-bottom:22px;line-height:1.6;text-align:center;}
+.auth-group{margin-bottom:14px;}
+.auth-lbl{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.auth-inp{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-size:13px;color:var(--text);background:var(--white);outline:none;transition:border-color .15s;}
+.auth-inp::placeholder{color:#C4ADAD;}
+.auth-inp:focus{border-color:var(--red-dark);}
+.auth-inp.err{border-color:var(--red);animation:shake .3s ease;}
+.auth-err{font-size:11px;color:var(--red);font-weight:600;margin-top:3px;min-height:14px;display:none;}
+.auth-btn-main{width:100%;padding:13px;border:none;border-radius:8px;background:var(--red-dark);color:white;font-family:'Montserrat',sans-serif;font-size:13.5px;font-weight:700;cursor:pointer;margin-top:6px;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.auth-btn-main:hover:not(:disabled){background:var(--red);}
+.auth-btn-main:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+.auth-footer{font-size:11px;color:var(--muted);text-align:center;margin-top:24px;}
+.otp-row{display:flex;gap:10px;justify-content:center;margin:18px 0 8px;}
+.otp-b{width:48px;height:54px;border:1.5px solid var(--border);border-radius:10px;text-align:center;font-size:22px;font-weight:800;color:var(--red-dark);background:var(--white);outline:none;font-family:'Source Serif 4',serif;transition:border-color .15s,box-shadow .15s;caret-color:var(--red);}
+.otp-b:focus{border-color:var(--red-dark);box-shadow:0 0 0 3px rgba(226,12,10,.1);}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+@media(max-width:768px){.auth-right{display:none;}.auth-left{width:100%;padding:32px 24px;}}
+
+/* ── SIDEBAR ───────────────────────────── */
+.sidebar{width:var(--sidebar-w);background:var(--white);min-height:100vh;position:fixed;top:0;left:0;bottom:0;display:none;flex-direction:column;z-index:200;box-shadow:1px 0 12px rgba(0,0,0,.06);border-right:1px solid var(--border);transition:transform .24s cubic-bezier(.4,0,.2,1);}
+.sidebar.collapsed{transform:translateX(-100%);}
+.sidebar-logo{padding:18px 18px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-img{width:40px;height:40px;border-radius:8px;background:var(--red-pale);padding:3px;flex-shrink:0;}
+.logo-img img{width:100%;height:100%;object-fit:contain;border-radius:6px;}
+.logo-text .org-name{display:block;color:var(--red-dark);font-size:11.5px;font-weight:700;line-height:1.3;}
+.logo-text .org-sub{display:block;color:var(--muted);font-size:9px;font-weight:600;letter-spacing:.9px;text-transform:uppercase;margin-top:2px;}
+.sidebar-nav{flex:1;padding:12px 0 8px;overflow-y:auto;}
+.nav-section-label{font-size:8.5px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);padding:10px 18px 4px;opacity:.6;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:500;border-left:3px solid transparent;transition:all .16s ease;user-select:none;}
+.nav-item:hover{background:var(--red-light);color:var(--red);border-left-color:transparent;}
+.nav-item:hover .nav-icon{stroke:var(--red);}
+.nav-item.active{background:var(--red-light);border-left-color:var(--red);color:var(--red);font-weight:700;}
+.nav-item.active .nav-icon{stroke:var(--red);}
+.nav-icon{width:15px;height:15px;flex-shrink:0;stroke:currentColor;fill:none;}
+.nav-badge{margin-left:auto;background:var(--red);color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;}
+.sidebar-bottom{padding:12px 16px;border-top:1px solid var(--border);}
+.sidebar-user{display:flex;align-items:center;gap:9px;}
+.user-ava-sb{width:32px;height:32px;border-radius:50%;background:var(--red);border:2px solid var(--red-light);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;}
+.user-info strong{display:block;font-size:11px;color:var(--red-dark);font-weight:700;}
+.user-info span{font-size:9.5px;color:var(--muted);}
+.btn-logout{margin-left:auto;color:var(--muted);cursor:pointer;transition:color .15s;}
+.btn-logout:hover{color:var(--red);}
+
+/* ── MAIN ──────────────────────────────── */
+.main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:none;flex-direction:column;transition:margin-left .24s cubic-bezier(.4,0,.2,1);}
+.main.expanded{margin-left:0;}
+.topbar{height:50px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.04);}
+.topbar-left{display:flex;align-items:center;gap:11px;}
+.sidebar-toggle{width:26px;height:26px;border-radius:5px;border:1.5px solid transparent;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);transition:all .15s;flex-shrink:0;}
+.sidebar-toggle:hover{border-color:var(--border);color:var(--red);background:var(--red-pale);}
+.topbar-crumb{font-size:11px;color:var(--muted);}
+.topbar-crumb span{color:var(--red);font-weight:700;font-size:11.5px;}
+.topbar-right{display:flex;align-items:center;gap:11px;}
+.top-date{font-size:10.5px;color:var(--muted);background:var(--red-pale);border:1px solid var(--border);padding:4px 11px;border-radius:20px;font-weight:500;}
+.topbar-bell{width:30px;height:30px;border-radius:50%;border:1.5px solid transparent;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);transition:all .15s;position:relative;}
+.topbar-bell:hover{border-color:var(--border);color:var(--red);}
+.notif-pip{position:absolute;top:2px;right:2px;width:7px;height:7px;background:var(--red);border-radius:50%;border:1.5px solid white;}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:40px;padding:3px 12px 3px 3px;cursor:pointer;transition:border-color .18s,box-shadow .18s;}
+.user-pill:hover{border-color:var(--red);box-shadow:0 2px 8px rgba(226,12,10,.1);}
+.user-pill-avatar{width:26px;height:26px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;border:1.5px solid white;}
+.user-pill-name{font-size:12px;font-weight:700;color:var(--red-dark);white-space:nowrap;}
+.admin-badge{background:var(--red);color:white;font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:.4px;text-transform:uppercase;margin-left:4px;}
+
+/* ── CONTENT ───────────────────────────── */
+.content{padding:24px 30px;flex:1;}
+.page{display:none;}
+.page.active{display:block;animation:rise .26s ease;}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── REUSABLE ──────────────────────────── */
+.card{background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;}
+.card-head{padding:15px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.card-title{font-size:12.5px;font-weight:700;color:var(--red-dark);}
+.card-action{font-size:11px;color:var(--red);font-weight:600;cursor:pointer;}
+.card-action:hover{text-decoration:underline;}
+.card-body{padding:16px 18px;}
+.btn{padding:7px 16px;border-radius:7px;border:none;font-family:'Montserrat',sans-serif;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .16s;display:inline-flex;align-items:center;gap:5px;}
+.btn-red{background:var(--red);color:white;}
+.btn-red:hover{background:var(--red-mid);}
+.btn-dark{background:var(--red-dark);color:white;}
+.btn-dark:hover{background:#5C1010;}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text);}
+.btn-outline:hover{border-color:var(--red);color:var(--red);}
+.btn-sm{padding:5px 11px;font-size:10.5px;}
+.btn-green{background:var(--success);color:white;}
+.btn-green:hover{background:#145530;}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;}
+.b-green{background:rgba(26,107,60,.12);color:var(--success);}
+.b-red{background:var(--red-light);color:var(--red);}
+.b-orange{background:rgba(180,83,9,.12);color:var(--warn);}
+.b-grey{background:rgba(122,96,96,.1);color:var(--muted);}
+.b-blue{background:rgba(21,101,192,.1);color:#1565C0;}
+
+/* ── KPI GRID ──────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.kpi{background:var(--white);border-radius:11px;border:1px solid var(--border);padding:16px 16px 13px;transition:box-shadow .2s,transform .2s;cursor:default;}
+.kpi:hover{box-shadow:0 4px 18px rgba(226,12,10,.08);transform:translateY(-2px);}
+.kpi-icon{width:34px;height:34px;border-radius:8px;background:var(--red-pale);color:var(--red);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+.kpi-val{font-family:'Source Serif 4',serif;font-size:24px;font-weight:700;color:var(--red-dark);line-height:1;letter-spacing:-1px;}
+.kpi-lbl{font-size:11px;color:var(--muted);margin-top:4px;font-weight:500;}
+.kpi-note{font-size:10px;margin-top:6px;color:var(--success);font-weight:600;}
+.kpi-note.warn{color:var(--warn);}
+.kpi-note.neutral{color:var(--muted);}
+
+/* ── TABLES ────────────────────────────── */
+table{width:100%;border-collapse:collapse;}
+thead th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);background:var(--red-pale);padding:9px 14px;border-bottom:1px solid var(--border);}
+tbody td{padding:11px 14px;font-size:12px;border-bottom:1px solid var(--border);color:var(--text);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:var(--red-pale);}
+.table-avatar{width:28px;height:28px;border-radius:50%;background:var(--red);color:white;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;}
+
+/* ── FORMS ─────────────────────────────── */
+.form-group{margin-bottom:13px;}
+.form-label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:5px;}
+.form-input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:'Montserrat',sans-serif;font-size:12.5px;color:var(--text);background:var(--bg);outline:none;transition:border-color .15s,background .15s;}
+.form-input:focus{border-color:var(--red);background:var(--white);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* ── MODAL ─────────────────────────────── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(57,9,9,.4);z-index:800;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.modal-box{background:var(--white);border-radius:16px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(57,9,9,.2);margin:20px;animation:rise .25s ease;}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--white);z-index:1;}
+.modal-title{font-size:14px;font-weight:800;color:var(--red-dark);}
+.modal-close{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);transition:all .15s;}
+.modal-close:hover{border-color:var(--red);color:var(--red);}
+.modal-body{padding:20px 22px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<!-- ══ ADMIN LOGIN ══════════════════════════════════════ -->
+<div class="auth-wrap" id="screen-login">
+  <div class="auth-left">
+    <div class="auth-left-inner">
+      <div class="auth-logo-block">
+        <div class="auth-logo-img-big"><img src="data:image/png;base64,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" alt="IET Tanzania"/></div>
+        <div class="auth-logo-org">Institution of Engineers<br/>Tanzania</div>
+        <div class="auth-logo-sub">Admin Portal</div>
+      </div>
+
+      <div class="auth-h">Admin Sign In</div>
+      <div class="auth-sub">Access restricted to authorised IET Tanzania administrators only.</div>
+
+      <div class="auth-group">
+        <label class="auth-lbl">Admin Email</label>
+        <input class="auth-inp" id="login-email" type="email" placeholder="admin@iet.or.tz" autocomplete="email"/>
+        <div class="auth-err" id="login-email-err"></div>
+      </div>
+      <div class="auth-group">
+        <label class="auth-lbl">Password</label>
+        <div style="position:relative;">
+          <input class="auth-inp" id="login-pwd" type="password" placeholder="Password" style="padding-right:40px;"/>
+          <div onclick="togglePwd('login-pwd')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+        </div>
+        <div class="auth-err" id="login-pwd-err"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;"><input type="checkbox" style="accent-color:var(--red-dark);width:13px;height:13px;"/> Remember me</label>
+        <a style="font-size:12px;color:var(--red);font-weight:600;cursor:pointer;">Forgot Password?</a>
+      </div>
+      <button class="auth-btn-main" onclick="doLogin()" id="login-btn">Sign In to Admin Portal</button>
+      <div class="auth-footer">© 2025 Institution of Engineers Tanzania &nbsp;·&nbsp; Admin Access Only</div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="auth-right">
+    <div class="auth-rings">
+      <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:.22;">
+        <circle cx="300" cy="620" r="120" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="200" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="280" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="360" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="440" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="520" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
+        <circle cx="300" cy="620" r="600" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="auth-welcome-card">
+      <div style="font-size:15px;font-weight:700;color:white;margin-bottom:8px;">IET Tanzania Admin Portal</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.72);line-height:1.65;margin-bottom:14px;">Manage members, applications, events, payments and all IET Tanzania operations from one central platform.</div>
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.3px;color:rgba(255,255,255,.45);margin-bottom:10px;">Admin Capabilities:</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:rgba(255,255,255,.85);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>Review &amp; Approve Membership Applications</div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:rgba(255,255,255,.85);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>Manage Members, Events &amp; Payments</div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:rgba(255,255,255,.85);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>Generate Reports &amp; Analytics</div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:rgba(255,255,255,.85);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>Configure System Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ OTP SCREEN ════════════════════════════════════════ -->
+<div class="auth-wrap hidden" id="screen-otp">
+  <div class="auth-left">
+    <div class="auth-left-inner" style="text-align:center;">
+      <div class="auth-logo-block">
+        <div class="auth-logo-img-big"><img src="data:image/png;base64,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" alt="IET Tanzania"/></div>
+        <div class="auth-logo-org">Institution of Engineers<br/>Tanzania</div>
+        <div class="auth-logo-sub">Admin Portal</div>
+      </div>
+      <div style="width:52px;height:52px;border-radius:50%;background:var(--red-pale);border:2px solid rgba(226,12,10,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+        <svg width="22" height="22" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <div class="auth-h">Two-Factor Authentication</div>
+      <div class="auth-sub">A 6-digit security code was sent to<br/><strong id="otp-target" style="color:var(--red-dark);">your admin email</strong>.</div>
+      <div class="otp-row">
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,0)" onkeydown="otpBack(this,event,0)"/>
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpBack(this,event,1)"/>
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,2)" onkeydown="otpBack(this,event,2)"/>
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,3)" onkeydown="otpBack(this,event,3)"/>
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,4)" onkeydown="otpBack(this,event,4)"/>
+        <input class="otp-b" maxlength="1" inputmode="numeric" oninput="otpInput(this,5)" onkeydown="otpBack(this,event,5)"/>
+      </div>
+      <div class="auth-err" id="otp-err" style="text-align:center;margin-bottom:10px;display:none;"></div>
+      <button class="auth-btn-main" onclick="doVerifyOTP()" id="otp-btn" style="max-width:280px;margin:0 auto;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        Verify &amp; Enter Admin Portal
+      </button>
+      <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:14px;">Didn't receive it? <a onclick="resendOTP()" id="otp-resend-link" style="color:var(--red);font-weight:700;cursor:pointer;">Resend code</a> <span id="otp-timer" style="color:var(--muted);font-size:11px;"></span></div>
+      <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;"><a onclick="showScreen('login')" style="color:var(--red);font-weight:700;cursor:pointer;">← Back to login</a></div>
+      <div class="auth-footer">© 2025 Institution of Engineers Tanzania</div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="auth-rings"><svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;opacity:.22;"><circle cx="300" cy="620" r="120" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.5"/><circle cx="300" cy="620" r="200" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1.5"/><circle cx="300" cy="620" r="280" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.5"/><circle cx="300" cy="620" r="360" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/><circle cx="300" cy="620" r="440" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/><circle cx="300" cy="620" r="520" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/></svg></div>
+    <div class="auth-welcome-card"><div style="font-size:14px;font-weight:700;color:white;margin-bottom:8px;">🔐 Secure Admin Access</div><div style="font-size:12px;color:rgba(255,255,255,.72);line-height:1.65;">Two-factor authentication protects IET Tanzania admin access. All admin actions are logged and audited.</div></div>
+  </div>
+</div>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════ -->
+<aside class="sidebar" id="admin-sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-img"><img src="data:image/png;base64,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" alt="IET"/></div>
+    <div class="logo-text"><span class="org-name">IET Tanzania</span><span class="org-sub">Admin Portal</span></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Overview</div>
+    <div class="nav-item active" onclick="go('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-section-label">Membership</div>
+    <div class="nav-item" onclick="go('applications',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Applications
+      <span class="nav-badge">12</span>
+    </div>
+    <div class="nav-item" onclick="go('members',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Members
+    </div>
+    <div class="nav-section-label">Operations</div>
+    <div class="nav-item" onclick="go('events',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Events
+    </div>
+    <div class="nav-item" onclick="go('payments',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      Payments
+    </div>
+    <div class="nav-section-label">System</div>
+    <div class="nav-item" onclick="go('reports',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Reports
+    </div>
+    <div class="nav-item" onclick="go('settings',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="sidebar-user">
+      <div class="user-ava-sb" id="sb-initials">SA</div>
+      <div class="user-info"><strong id="sb-name">Super Admin</strong><span>Administrator</span></div>
+      <div class="btn-logout" onclick="doLogout()" title="Logout"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ═════════════════════════════════════════════ -->
+<div class="main" id="admin-main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </div>
+      <div class="topbar-crumb">IET Tanzania Admin &rsaquo; <span id="page-label">Dashboard</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="top-date" id="today-date"></div>
+      <div class="topbar-bell">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div class="notif-pip"></div>
+      </div>
+      <div class="user-pill">
+        <div class="user-pill-avatar" id="topbar-initials">SA</div>
+        <span class="user-pill-name" id="topbar-name">Super Admin</span>
+        <span class="admin-badge">Admin</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══ DASHBOARD ══════════════════════════════════ -->
+    <div class="page active" id="page-dashboard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Dashboard Overview</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Real-time snapshot of IET Tanzania operations</p></div>
+        <button class="btn btn-outline btn-sm">⬇ Export Report</button>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="kpi-val">4,872</div><div class="kpi-lbl">Total Members</div><div class="kpi-note">↑ 48 this month</div></div>
+        <div class="kpi"><div class="kpi-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="kpi-val">12</div><div class="kpi-lbl">Pending Applications</div><div class="kpi-note warn">⚠ Needs review</div></div>
+        <div class="kpi"><div class="kpi-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div class="kpi-val" style="font-size:18px">TZS 28.4M</div><div class="kpi-lbl">Revenue (2025)</div><div class="kpi-note">↑ 12% vs last year</div></div>
+        <div class="kpi"><div class="kpi-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="kpi-val">6</div><div class="kpi-lbl">Upcoming Events</div><div class="kpi-note neutral">Next: Feb 22</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px;">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Recent Applications</span><span class="card-action" onclick="go('applications',document.querySelectorAll('.nav-item')[1])">View all</span></div>
+          <table>
+            <thead><tr><th>Applicant</th><th>Grade</th><th>Date</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar">JM</div><div><div style="font-weight:600;">James Mbeki</div><div style="font-size:10px;color:var(--muted);">j.mbeki@email.co.tz</div></div></div></td><td>Corporate</td><td>Jan 28</td><td><span class="badge b-orange">Pending</span></td><td><button class="btn btn-dark btn-sm" onclick="openApplicationModal('James Mbeki','Corporate Member','Civil Engineering','Jan 28, 2025')">Review</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#1565C0;">AL</div><div><div style="font-weight:600;">Amina Laila</div><div style="font-size:10px;color:var(--muted);">a.laila@email.co.tz</div></div></div></td><td>Associate</td><td>Jan 26</td><td><span class="badge b-orange">Pending</span></td><td><button class="btn btn-dark btn-sm" onclick="openApplicationModal('Amina Laila','Associate Member','Electrical Engineering','Jan 26, 2025')">Review</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#2E7D32;">KT</div><div><div style="font-weight:600;">Kelvin Tarimo</div><div style="font-size:10px;color:var(--muted);">k.tarimo@email.co.tz</div></div></div></td><td>Graduate</td><td>Jan 24</td><td><span class="badge b-green">Approved</span></td><td><button class="btn btn-outline btn-sm">View</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#880E4F;">GM</div><div><div style="font-weight:600;">Grace Mwasumbi</div><div style="font-size:10px;color:var(--muted);">g.mwasumbi@email.co.tz</div></div></div></td><td>Corporate</td><td>Jan 22</td><td><span class="badge b-red">Rejected</span></td><td><button class="btn btn-outline btn-sm">View</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Recent Payments</span><span class="card-action" onclick="go('payments',document.querySelectorAll('.nav-item')[4])">View all</span></div>
+          <div class="card-body" style="padding:0;">
+            <div style="display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);"><div><div style="font-size:12px;font-weight:600;">Annual Subscription</div><div style="font-size:10px;color:var(--muted);">Joram Jackson · M-Pesa</div></div><div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--red-dark);">TZS 150,000</div><span class="badge b-green" style="font-size:9.5px;">Confirmed</span></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);"><div><div style="font-size:12px;font-weight:600;">Event Registration</div><div style="font-size:10px;color:var(--muted);">Sarah Kimaro · Card</div></div><div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--red-dark);">TZS 80,000</div><span class="badge b-green" style="font-size:9.5px;">Confirmed</span></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);"><div><div style="font-size:12px;font-weight:600;">Annual Subscription</div><div style="font-size:10px;color:var(--muted);">Peter Ndaki · Bank</div></div><div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--red-dark);">TZS 130,000</div><span class="badge b-orange" style="font-size:9.5px;">Pending</span></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;"><div><div style="font-size:12px;font-weight:600;">Annual Subscription</div><div style="font-size:10px;color:var(--muted);">Martha Swai · M-Pesa</div></div><div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:var(--red-dark);">TZS 150,000</div><span class="badge b-green" style="font-size:9.5px;">Confirmed</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity log -->
+      <div class="card">
+        <div class="card-head"><span class="card-title">Recent Admin Activity Log</span></div>
+        <table>
+          <thead><tr><th>Admin</th><th>Action</th><th>Target</th><th>Time</th></tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="table-avatar" style="width:24px;height:24px;font-size:9px;">SA</div> Super Admin</div></td><td>Approved application</td><td>Kelvin Tarimo (Graduate)</td><td>10 mins ago</td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="table-avatar" style="width:24px;height:24px;font-size:9px;background:#1565C0;">AA</div> Admin Ally</div></td><td>Created event</td><td>BIM Training – Mar 2025</td><td>2 hrs ago</td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="table-avatar" style="width:24px;height:24px;font-size:9px;">SA</div> Super Admin</div></td><td>Rejected application</td><td>Grace Mwasumbi (Corporate)</td><td>5 hrs ago</td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="table-avatar" style="width:24px;height:24px;font-size:9px;background:#2E7D32;">FM</div> Finance Mgr</div></td><td>Confirmed payment</td><td>TZS 150,000 – Joram Jackson</td><td>Yesterday</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ APPLICATIONS ════════════════════════════════ -->
+    <div class="page" id="page-applications">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Membership Applications</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Review and process pending membership applications</p></div>
+        <div style="display:flex;gap:8px;">
+          <select class="form-input" style="width:auto;font-size:11.5px;padding:6px 28px 6px 10px;"><option>All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select>
+          <select class="form-input" style="width:auto;font-size:11.5px;padding:6px 28px 6px 10px;"><option>All Grades</option><option>Student</option><option>Graduate</option><option>Associate</option><option>Corporate</option><option>Fellow</option></select>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Applicant</th><th>Grade Applied</th><th>Discipline</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar">JM</div><div><div style="font-weight:600;font-size:12px;">James Mbeki</div><div style="font-size:10px;color:var(--muted);">j.mbeki@email.co.tz</div></div></div></td><td>Corporate Member</td><td>Civil Engineering</td><td>Jan 28, 2025</td><td><span class="badge b-orange">Pending</span></td><td><div style="display:flex;gap:6px;"><button class="btn btn-dark btn-sm" onclick="openApplicationModal('James Mbeki','Corporate Member','Civil Engineering','Jan 28, 2025')">Review</button></div></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#1565C0;">AL</div><div><div style="font-weight:600;font-size:12px;">Amina Laila</div><div style="font-size:10px;color:var(--muted);">a.laila@email.co.tz</div></div></div></td><td>Associate Member</td><td>Electrical Engineering</td><td>Jan 26, 2025</td><td><span class="badge b-orange">Pending</span></td><td><button class="btn btn-dark btn-sm" onclick="openApplicationModal('Amina Laila','Associate Member','Electrical Engineering','Jan 26, 2025')">Review</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#4527A0;">BN</div><div><div style="font-weight:600;font-size:12px;">Baraka Njau</div><div style="font-size:10px;color:var(--muted);">b.njau@email.co.tz</div></div></div></td><td>Student Member</td><td>Mechanical Engineering</td><td>Jan 25, 2025</td><td><span class="badge b-orange">Pending</span></td><td><button class="btn btn-dark btn-sm" onclick="openApplicationModal('Baraka Njau','Student Member','Mechanical Engineering','Jan 25, 2025')">Review</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#2E7D32;">KT</div><div><div style="font-weight:600;font-size:12px;">Kelvin Tarimo</div><div style="font-size:10px;color:var(--muted);">k.tarimo@email.co.tz</div></div></div></td><td>Graduate Member</td><td>Environmental Engineering</td><td>Jan 24, 2025</td><td><span class="badge b-green">Approved</span></td><td><button class="btn btn-outline btn-sm">View</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#880E4F;">GM</div><div><div style="font-weight:600;font-size:12px;">Grace Mwasumbi</div><div style="font-size:10px;color:var(--muted);">g.mwasumbi@email.co.tz</div></div></div></td><td>Corporate Member</td><td>Structural Engineering</td><td>Jan 22, 2025</td><td><span class="badge b-red">Rejected</span></td><td><button class="btn btn-outline btn-sm">View</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#F97316;">PN</div><div><div style="font-weight:600;font-size:12px;">Peter Ndaki</div><div style="font-size:10px;color:var(--muted);">p.ndaki@email.co.tz</div></div></div></td><td>Associate Member</td><td>Mining Engineering</td><td>Jan 20, 2025</td><td><span class="badge b-orange">Pending</span></td><td><button class="btn btn-dark btn-sm" onclick="openApplicationModal('Peter Ndaki','Associate Member','Mining Engineering','Jan 20, 2025')">Review</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ MEMBERS ═════════════════════════════════════ -->
+    <div class="page" id="page-members">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Members Directory</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Manage all IET Tanzania registered members</p></div>
+        <div style="display:flex;gap:8px;">
+          <div style="display:flex;align-items:center;gap:7px;background:var(--white);border:1px solid var(--border);border-radius:7px;padding:6px 10px;"><svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search members…" style="border:none;background:transparent;outline:none;font-family:'Montserrat',sans-serif;font-size:12px;color:var(--text);width:160px;"/></div>
+          <button class="btn btn-red btn-sm">+ Add Member</button>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Member</th><th>Membership No.</th><th>Grade</th><th>Discipline</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar">JJ</div><div><div style="font-weight:600;font-size:12px;">Joram Jackson</div><div style="font-size:10px;color:var(--muted);">j.jackson@email.co.tz</div></div></div></td><td style="font-family:monospace;font-size:11px;">IET/2019/4872</td><td>Corporate</td><td>Civil Engineering</td><td><span class="badge b-green">Active</span></td><td>Dec 2025</td><td><div style="display:flex;gap:5px;"><button class="btn btn-outline btn-sm">Edit</button><button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-light);">Suspend</button></div></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#1565C0;">SK</div><div><div style="font-weight:600;font-size:12px;">Sarah Kimaro</div><div style="font-size:10px;color:var(--muted);">s.kimaro@email.co.tz</div></div></div></td><td style="font-family:monospace;font-size:11px;">IET/2020/5103</td><td>Associate</td><td>Mechanical Engineering</td><td><span class="badge b-green">Active</span></td><td>Dec 2025</td><td><div style="display:flex;gap:5px;"><button class="btn btn-outline btn-sm">Edit</button><button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-light);">Suspend</button></div></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#2E7D32;">KT</div><div><div style="font-weight:600;font-size:12px;">Kelvin Tarimo</div><div style="font-size:10px;color:var(--muted);">k.tarimo@email.co.tz</div></div></div></td><td style="font-family:monospace;font-size:11px;">IET/2025/6241</td><td>Graduate</td><td>Environmental Engineering</td><td><span class="badge b-blue">Pending Payment</span></td><td>—</td><td><div style="display:flex;gap:5px;"><button class="btn btn-outline btn-sm">Edit</button></div></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#880E4F;">FM</div><div><div style="font-weight:600;font-size:12px;">Fatuma Msangi</div><div style="font-size:10px;color:var(--muted);">f.msangi@email.co.tz</div></div></div></td><td style="font-family:monospace;font-size:11px;">IET/2018/3812</td><td>Fellow</td><td>Structural Engineering</td><td><span class="badge b-green">Active</span></td><td>Dec 2025</td><td><div style="display:flex;gap:5px;"><button class="btn btn-outline btn-sm">Edit</button><button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-light);">Suspend</button></div></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="table-avatar" style="background:#B45309;">PN</div><div><div style="font-weight:600;font-size:12px;">Paul Njoroge</div><div style="font-size:10px;color:var(--muted);">p.njoroge@email.co.tz</div></div></div></td><td style="font-family:monospace;font-size:11px;">IET/2017/2990</td><td>Corporate</td><td>Mining Engineering</td><td><span class="badge b-red">Expired</span></td><td>Dec 2024</td><td><div style="display:flex;gap:5px;"><button class="btn btn-outline btn-sm">Edit</button><button class="btn btn-green btn-sm">Renew</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ EVENTS ══════════════════════════════════════ -->
+    <div class="page" id="page-events">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Events Management</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Create and manage IET Tanzania events, trainings and conferences</p></div>
+        <button class="btn btn-red btn-sm" onclick="openEventModal()">+ Create Event</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Event</th><th>Type</th><th>Date</th><th>Location</th><th>Registrations</th><th>Revenue</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600;font-size:12px;">IET Annual Engineering Conference 2025</td><td>Conference</td><td>Feb 22, 2025</td><td>Dar es Salaam</td><td>143 / 300</td><td>TZS 11.4M</td><td><span class="badge b-green">Open</span></td><td><button class="btn btn-outline btn-sm">Edit</button></td></tr>
+            <tr><td style="font-weight:600;font-size:12px;">BIM &amp; Digital Engineering Training</td><td>Training</td><td>Mar 8, 2025</td><td>Online</td><td>67 / 150</td><td>TZS 3.4M</td><td><span class="badge b-green">Open</span></td><td><button class="btn btn-outline btn-sm">Edit</button></td></tr>
+            <tr><td style="font-weight:600;font-size:12px;">Structural Engineering Seminar</td><td>Seminar</td><td>Mar 15, 2025</td><td>Arusha</td><td>38 / 100</td><td>TZS 2.3M</td><td><span class="badge b-green">Open</span></td><td><button class="btn btn-outline btn-sm">Edit</button></td></tr>
+            <tr><td style="font-weight:600;font-size:12px;">Road Infrastructure Workshop</td><td>Workshop</td><td>Apr 5, 2025</td><td>Dodoma</td><td>12 / 80</td><td>TZS 840K</td><td><span class="badge b-green">Open</span></td><td><button class="btn btn-outline btn-sm">Edit</button></td></tr>
+            <tr><td style="font-weight:600;font-size:12px;">Professional Ethics CPD</td><td>CPD</td><td>Apr 20, 2025</td><td>Online</td><td>201 / 500</td><td>Free</td><td><span class="badge b-green">Open</span></td><td><button class="btn btn-outline btn-sm">Edit</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ PAYMENTS ════════════════════════════════════ -->
+    <div class="page" id="page-payments">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Payments</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Track all member payments and subscriptions</p></div>
+        <div style="display:flex;gap:8px;"><button class="btn btn-outline btn-sm">⬇ Export CSV</button><select class="form-input" style="width:auto;font-size:11.5px;padding:6px 28px 6px 10px;"><option>All Methods</option><option>M-Pesa</option><option>Bank Transfer</option><option>Card</option></select></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;">
+        <div class="kpi"><div class="kpi-icon"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div class="kpi-val" style="font-size:18px;">TZS 28.4M</div><div class="kpi-lbl">Total Revenue 2025</div><div class="kpi-note">↑ 12% vs 2024</div></div>
+        <div class="kpi"><div class="kpi-icon" style="background:#E8F5E9;color:#1a6b3c"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="kpi-val" style="color:var(--success);">4,612</div><div class="kpi-lbl">Confirmed Payments</div><div class="kpi-note">This year</div></div>
+        <div class="kpi"><div class="kpi-icon" style="background:#FFF8E1;color:var(--warn)"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="kpi-val" style="color:var(--warn);">23</div><div class="kpi-lbl">Pending Verification</div><div class="kpi-note warn">Needs action</div></div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Ref</th><th>Member</th><th>Description</th><th>Amount (TZS)</th><th>Method</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td style="font-family:monospace;font-size:11px;">SEL-84729103</td><td>Joram Jackson</td><td>Annual Subscription</td><td>150,000</td><td>M-Pesa</td><td>Jan 28, 2025</td><td><span class="badge b-green">Confirmed</span></td><td><button class="btn btn-outline btn-sm">Receipt</button></td></tr>
+            <tr><td style="font-family:monospace;font-size:11px;">SEL-84701822</td><td>Sarah Kimaro</td><td>Conference Registration</td><td>80,000</td><td>Card</td><td>Jan 27, 2025</td><td><span class="badge b-green">Confirmed</span></td><td><button class="btn btn-outline btn-sm">Receipt</button></td></tr>
+            <tr><td style="font-family:monospace;font-size:11px;">BNK-20250127</td><td>Peter Ndaki</td><td>Annual Subscription</td><td>130,000</td><td>Bank Transfer</td><td>Jan 27, 2025</td><td><span class="badge b-orange">Pending</span></td><td><div style="display:flex;gap:5px;"><button class="btn btn-green btn-sm">Confirm</button><button class="btn btn-outline btn-sm">Reject</button></div></td></tr>
+            <tr><td style="font-family:monospace;font-size:11px;">SEL-84688340</td><td>Martha Swai</td><td>Annual Subscription</td><td>150,000</td><td>M-Pesa</td><td>Jan 26, 2025</td><td><span class="badge b-green">Confirmed</span></td><td><button class="btn btn-outline btn-sm">Receipt</button></td></tr>
+            <tr><td style="font-family:monospace;font-size:11px;">BNK-20250124</td><td>David Oloo</td><td>Annual Subscription</td><td>150,000</td><td>Bank Transfer</td><td>Jan 24, 2025</td><td><span class="badge b-orange">Pending</span></td><td><div style="display:flex;gap:5px;"><button class="btn btn-green btn-sm">Confirm</button><button class="btn btn-outline btn-sm">Reject</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ REPORTS ═════════════════════════════════════ -->
+    <div class="page" id="page-reports">
+      <div style="margin-bottom:18px;"><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">Reports &amp; Analytics</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Generate and export IET Tanzania operational reports</p></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">Membership Report</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Member statistics by grade, discipline and region</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">Financial Report</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Revenue breakdown by payment method and period</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">Events Report</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Event attendance, registrations and CPD tracking</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">Applications Report</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Application throughput, approval rates and timelines</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">CPD Report</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Member CPD hours, compliance and activity logs</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+        <div class="card" style="cursor:pointer;transition:box-shadow .2s,transform .2s;" onmouseover="this.style.boxShadow='0 4px 18px rgba(226,12,10,.1)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''"><div class="card-body" style="text-align:center;padding:24px;"><div style="width:44px;height:44px;border-radius:10px;background:var(--red-pale);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><svg width="20" height="20" fill="none" stroke="var(--red)" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:5px;">Analytics Dashboard</div><div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Growth trends, retention metrics and forecasting</div><button class="btn btn-dark btn-sm">Generate Report</button></div></div>
+      </div>
+    </div>
+
+    <!-- ══ SETTINGS ════════════════════════════════════ -->
+    <div class="page" id="page-settings">
+      <div style="margin-bottom:18px;"><h3 style="font-size:15px;font-weight:800;color:var(--red-dark)">System Settings</h3><p style="font-size:11px;color:var(--muted);margin-top:2px;">Configure IET Tanzania portal system settings</p></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+        <div class="card"><div class="card-head"><span class="card-title">Organisation Details</span></div><div class="card-body">
+          <div class="form-group"><label class="form-label">Organisation Name</label><input class="form-input" value="Institution of Engineers Tanzania"/></div>
+          <div class="form-group"><label class="form-label">Website</label><input class="form-input" value="https://iet.or.tz"/></div>
+          <div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" value="info@iet.or.tz"/></div>
+          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" value="+255 22 XXX XXXX"/></div>
+          <button class="btn btn-dark btn-sm">Save Changes</button>
+        </div></div>
+        <div class="card"><div class="card-head"><span class="card-title">Membership Fees (TZS)</span></div><div class="card-body">
+          <div class="form-group"><label class="form-label">Student Member</label><input class="form-input" value="30,000"/></div>
+          <div class="form-group"><label class="form-label">Graduate Member</label><input class="form-input" value="60,000"/></div>
+          <div class="form-group"><label class="form-label">Associate Member</label><input class="form-input" value="80,000"/></div>
+          <div class="form-group"><label class="form-label">Corporate Member</label><input class="form-input" value="150,000"/></div>
+          <div class="form-group"><label class="form-label">Fellow</label><input class="form-input" value="200,000"/></div>
+          <button class="btn btn-dark btn-sm">Update Fees</button>
+        </div></div>
+        <div class="card"><div class="card-head"><span class="card-title">Admin Users</span></div><div class="card-body">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);"><div class="table-avatar" style="font-size:10px;">SA</div><div style="flex:1;"><div style="font-size:12px;font-weight:600;">Super Admin</div><div style="font-size:10px;color:var(--muted);">admin@iet.or.tz</div></div><span class="badge b-red" style="font-size:9px;">Super Admin</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);"><div class="table-avatar" style="font-size:10px;background:#1565C0;">AA</div><div style="flex:1;"><div style="font-size:12px;font-weight:600;">Admin Ally</div><div style="font-size:10px;color:var(--muted);">ally@iet.or.tz</div></div><span class="badge b-orange" style="font-size:9px;">Admin</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;"><div class="table-avatar" style="font-size:10px;background:#2E7D32;">FM</div><div style="flex:1;"><div style="font-size:12px;font-weight:600;">Finance Mgr</div><div style="font-size:10px;color:var(--muted);">finance@iet.or.tz</div></div><span class="badge b-blue" style="font-size:9px;">Finance</span></div>
+          </div>
+          <button class="btn btn-dark btn-sm" style="margin-top:14px;">+ Add Admin User</button>
+        </div></div>
+        <div class="card"><div class="card-head"><span class="card-title">Selcom Payment Config</span></div><div class="card-body">
+          <div class="form-group"><label class="form-label">Selcom Merchant ID</label><input class="form-input" value="IET-TZ-2025-XXXX" type="password"/></div>
+          <div class="form-group"><label class="form-label">API Key</label><input class="form-input" value="sk_live_XXXXXXXXXXXXXXXX" type="password"/></div>
+          <div class="form-group"><label class="form-label">Webhook URL</label><input class="form-input" value="https://portal.iet.or.tz/api/selcom/webhook"/></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--success);"></div><span style="font-size:11.5px;color:var(--success);font-weight:600;">Selcom integration active</span></div>
+          <button class="btn btn-dark btn-sm">Update Config</button>
+        </div></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ══ APPLICATION REVIEW MODAL ════════════════════════ -->
+<div class="modal-backdrop" id="app-modal" style="display:none;align-items:center;justify-content:center;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="app-modal-title">Review Application</span>
+      <div class="modal-close" onclick="closeModal('app-modal')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--red-pale);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;">
+        <div><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Applicant</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-top:2px;" id="app-name">—</div></div>
+        <div><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Grade Applied</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-top:2px;" id="app-grade">—</div></div>
+        <div><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Discipline</div><div style="font-size:12px;font-weight:600;color:var(--text);margin-top:2px;" id="app-discipline">—</div></div>
+        <div><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Submitted</div><div style="font-size:12px;font-weight:600;color:var(--text);margin-top:2px;" id="app-date">—</div></div>
+      </div>
+      <div class="form-group"><label class="form-label">Admin Notes / Reason</label><textarea class="form-input" rows="3" placeholder="Add notes about this application decision…" style="resize:vertical;"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('app-modal')">Cancel</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-light);" onclick="handleApplication('reject')">Reject Application</button>
+      <button class="btn btn-green btn-sm" onclick="handleApplication('approve')">✓ Approve Application</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CREATE EVENT MODAL ══════════════════════════════ -->
+<div class="modal-backdrop" id="event-modal" style="display:none;align-items:center;justify-content:center;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">Create New Event</span>
+      <div class="modal-close" onclick="closeModal('event-modal')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Event Title *</label><input class="form-input" placeholder="e.g. IET Annual Engineering Conference 2025"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Event Type *</label><select class="form-input"><option>Conference</option><option>Training</option><option>Seminar</option><option>Workshop</option><option>CPD</option><option>Forum</option></select></div>
+        <div class="form-group"><label class="form-label">Mode *</label><select class="form-input"><option>In-person</option><option>Online</option><option>Hybrid</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Start Date *</label><input class="form-input" type="datetime-local"/></div>
+        <div class="form-group"><label class="form-label">End Date</label><input class="form-input" type="datetime-local"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Venue / Location *</label><input class="form-input" placeholder="Venue name or Online"/></div>
+        <div class="form-group"><label class="form-label">Capacity *</label><input class="form-input" type="number" placeholder="e.g. 200"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fee (TZS)</label><input class="form-input" type="number" placeholder="0 for free"/></div>
+        <div class="form-group"><label class="form-label">CPD Hours</label><input class="form-input" type="number" placeholder="e.g. 6"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" rows="3" placeholder="Event description…" style="resize:vertical;"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-sm" onclick="closeModal('event-modal')">Cancel</button>
+      <button class="btn btn-dark btn-sm">Save as Draft</button>
+      <button class="btn btn-red btn-sm" onclick="closeModal('event-modal')">Create &amp; Publish</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── AUTH ──────────────────────────────────────────
+  let adminUser = null;
+  let otpResendTimer = null;
+  const DEMO_OTP = '123456';
+  let sidebarOpen = true;
+
+  function showScreen(name) {
+    ['login','otp'].forEach(s => {
+      const el = document.getElementById('screen-' + s);
+      if (el) el.classList.toggle('hidden', s !== name);
+    });
+  }
+
+  function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const pwd   = document.getElementById('login-pwd').value;
+    let valid = true;
+    clearErr('login-email-err'); clearErr('login-pwd-err');
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr('login-email-err','Valid email required.'); shake('login-email'); valid=false; }
+    if (!pwd || pwd.length < 6) { setErr('login-pwd-err','Password required.'); shake('login-pwd'); valid=false; }
+    if (!valid) return;
+    const btn = document.getElementById('login-btn');
+    btn.disabled=true; btn.innerHTML=spinnerHTML()+' Verifying…';
+    setTimeout(() => {
+      btn.disabled=false; btn.innerHTML='Sign In to Admin Portal';
+      adminUser = { email, name: email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g,c=>c.toUpperCase()) };
+      document.getElementById('otp-target').textContent = email;
+      document.querySelectorAll('.otp-b').forEach(b=>b.value='');
+      clearErr('otp-err');
+      showScreen('otp'); startOTPTimer();
+      document.querySelector('.otp-b')?.focus();
+    }, 900);
+  }
+
+  function otpInput(el, idx) {
+    el.value = el.value.replace(/\D/g,'').slice(-1);
+    clearErr('otp-err');
+    const boxes = document.querySelectorAll('.otp-b');
+    if (el.value && idx < 5) boxes[idx+1].focus();
+    if ([...boxes].every(b=>b.value)) setTimeout(doVerifyOTP, 100);
+  }
+  function otpBack(el, e, idx) {
+    if (e.key==='Backspace' && !el.value && idx>0) document.querySelectorAll('.otp-b')[idx-1].focus();
+  }
+
+  function doVerifyOTP() {
+    const code = [...document.querySelectorAll('.otp-b')].map(b=>b.value).join('');
+    if (code.length<6) { setErr('otp-err','Enter all 6 digits.'); return; }
+    const btn = document.getElementById('otp-btn');
+    btn.disabled=true; btn.innerHTML=spinnerHTML()+' Verifying…';
+    setTimeout(() => {
+      btn.disabled=false;
+      btn.innerHTML='<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Verify & Enter Admin Portal';
+      if (code === DEMO_OTP) {
+        clearOTPTimer();
+        enterDashboard();
+      } else {
+        setErr('otp-err','Invalid code. (Demo: use 123456)');
+        document.querySelectorAll('.otp-b').forEach(b=>{b.style.borderColor='var(--red)';b.value='';});
+        document.querySelector('.otp-b')?.focus();
+      }
+    }, 700);
+  }
+
+  function enterDashboard() {
+    ['login','otp'].forEach(s => {
+      const el = document.getElementById('screen-' + s);
+      if (el) el.classList.add('hidden');
+    });
+    const sidebar = document.getElementById('admin-sidebar');
+    const main    = document.getElementById('admin-main');
+    if (sidebar) sidebar.style.display = 'flex';
+    if (main)    main.style.display    = 'flex';
+    // Update user display
+    const name = adminUser?.name || 'Admin';
+    const initials = name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    document.getElementById('topbar-name').textContent = name;
+    document.getElementById('topbar-initials').textContent = initials;
+    document.getElementById('sb-name').textContent = name;
+    document.getElementById('sb-initials').textContent = initials;
+  }
+
+  function doLogout() {
+    const sidebar = document.getElementById('admin-sidebar');
+    const main    = document.getElementById('admin-main');
+    if (sidebar) sidebar.style.display = 'none';
+    if (main)    main.style.display    = 'none';
+    document.getElementById('screen-login').classList.remove('hidden');
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-pwd').value = '';
+    adminUser = null;
+  }
+
+  function startOTPTimer() {
+    let secs=60;
+    const timerEl=document.getElementById('otp-timer');
+    const resendEl=document.getElementById('otp-resend-link');
+    if(resendEl){resendEl.style.opacity='.35';resendEl.style.pointerEvents='none';}
+    clearOTPTimer();
+    otpResendTimer=setInterval(()=>{
+      secs--;
+      if(timerEl) timerEl.textContent='('+secs+'s)';
+      if(secs<=0){
+        clearOTPTimer();
+        if(timerEl) timerEl.textContent='';
+        if(resendEl){resendEl.style.opacity='1';resendEl.style.pointerEvents='auto';}
+      }
+    },1000);
+  }
+  function clearOTPTimer(){if(otpResendTimer){clearInterval(otpResendTimer);otpResendTimer=null;}}
+  function resendOTP(){document.querySelectorAll('.otp-b').forEach(b=>{b.value='';b.style.borderColor='';});clearErr('otp-err');startOTPTimer();document.querySelector('.otp-b')?.focus();}
+
+  // ── NAVIGATION ────────────────────────────────────
+  const PAGE_MAP = {
+    dashboard:    { id:'page-dashboard',    label:'Dashboard' },
+    applications: { id:'page-applications', label:'Applications' },
+    members:      { id:'page-members',      label:'Members' },
+    events:       { id:'page-events',       label:'Events' },
+    payments:     { id:'page-payments',     label:'Payments' },
+    reports:      { id:'page-reports',      label:'Reports' },
+    settings:     { id:'page-settings',     label:'Settings' },
+  };
+
+  function go(key, el) {
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(PAGE_MAP[key].id).classList.add('active');
+    document.getElementById('page-label').textContent = PAGE_MAP[key].label;
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    if(el) el.classList.add('active');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  // ── SIDEBAR TOGGLE ────────────────────────────────
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+    const sidebar = document.getElementById('admin-sidebar');
+    const main    = document.getElementById('admin-main');
+    if(sidebarOpen){ sidebar.classList.remove('collapsed'); main.classList.remove('expanded'); }
+    else { sidebar.classList.add('collapsed'); main.classList.add('expanded'); }
+  }
+
+  // ── MODALS ────────────────────────────────────────
+  function openApplicationModal(name, grade, discipline, date) {
+    document.getElementById('app-name').textContent = name;
+    document.getElementById('app-grade').textContent = grade;
+    document.getElementById('app-discipline').textContent = discipline;
+    document.getElementById('app-date').textContent = date;
+    document.getElementById('app-modal-title').textContent = 'Review: ' + name;
+    const m = document.getElementById('app-modal');
+    m.style.display = 'flex';
+  }
+  function openEventModal() {
+    document.getElementById('event-modal').style.display = 'flex';
+  }
+  function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+  function handleApplication(action) {
+    closeModal('app-modal');
+    // In production: POST to /api/admin/applications/:id/decision
+  }
+
+  // ── HELPERS ───────────────────────────────────────
+  function setErr(id,msg){const e=document.getElementById(id);if(e){e.textContent=msg;e.style.display='block';}}
+  function clearErr(id){const e=document.getElementById(id);if(e){e.textContent='';e.style.display='none';}}
+  function shake(id){const e=document.getElementById(id);if(!e)return;e.classList.add('err');setTimeout(()=>e.classList.remove('err'),400);}
+  function togglePwd(id){const i=document.getElementById(id);if(i)i.type=i.type==='password'?'text':'password';}
+  function spinnerHTML(){return '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="animation:spin .8s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';}
+
+  // Date
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+
+  // Init: hide dashboard
+  document.getElementById('admin-sidebar').style.display = 'none';
+  document.getElementById('admin-main').style.display    = 'none';
+
+  document.addEventListener('keydown', e => { if(e.key==='Escape'){closeModal('app-modal');closeModal('event-modal');}});
+
+  // spin keyframe
+  const s=document.createElement('style');
+  s.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(s);
+</script>
+</body>
+</html>

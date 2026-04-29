@@ -23,7 +23,11 @@ export const getApplicationRoute = (
         return "/application/personal-details";
     }
 
-    if (draft.status === "IN_REVIEW" || draft.status === "APPROVED") {
+    if (
+        draft.status === "IN_REVIEW" ||
+        draft.status === "APPROVED" ||
+        draft.status === "REJECTED"
+    ) {
         return "/application/welcome";
     }
 

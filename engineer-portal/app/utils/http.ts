@@ -23,7 +23,7 @@ const createAxiosInstance = (
     instance.interceptors.response.use(
         (response) => response,
         (error) => {
-            if (error.response?.status === 401) {
+            if (false && error.response?.status === 401) {
                 deleteFromStorage(TOKEN_KEY);
                 deleteFromStorage(USER_KEY);
                 deleteFromCookie(TOKEN_KEY);

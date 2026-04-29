@@ -12,6 +12,7 @@ import { Type } from 'class-transformer';
 import {
   MembershipStatus,
   ApplicationStatus,
+  ApplicationReviewStage,
   MembershipClass,
   EngineeringDiscipline,
 } from '../../../common/enums';
@@ -67,26 +68,55 @@ export class ApplicationQueryDto {
   @IsOptional()
   @IsEnum(ApplicationStatus)
   status?: ApplicationStatus;
+
+  @ApiPropertyOptional({
+    example: 'SECRETARIAT_REVIEW',
+    enum: ApplicationReviewStage,
+  })
+  @IsOptional()
+  @IsEnum(ApplicationReviewStage)
+  reviewStage?: ApplicationReviewStage;
 }
 
-export class ReviewApplicationDto {
+export class UpdateApplicationStageDto {
   @ApiProperty({
-    example: 'APPROVE',
-    description: 'Review action',
-    enum: ['APPROVE', 'REJECT', 'REQUEST_CHANGES'],
+    example: 'ASSIGN_EVALUATOR',
+    description: 'Workflow action',
+    enum: [
+      'ASSIGN_EVALUATOR',
+      'ADVANCE_TO_MPDC',
+      'ADVANCE_TO_COUNCIL',
+      'APPROVE',
+      'REJECT',
+      'RETURN_FOR_CHANGES',
+    ],
   })
   @IsNotEmpty()
   @IsString()
-  action: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES';
+  action:
+    | 'ASSIGN_EVALUATOR'
+    | 'ADVANCE_TO_MPDC'
+    | 'ADVANCE_TO_COUNCIL'
+    | 'APPROVE'
+    | 'REJECT'
+    | 'RETURN_FOR_CHANGES';
 
   @ApiPropertyOptional({
-    example: 'All documents verified. Application approved.',
-    description: 'Review comments',
+    example: 'All documents verified and ready for the next stage.',
+    description: 'Workflow comments',
   })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   comments?: string;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440010',
+    description: 'Evaluator to assign during secretariat review',
+  })
+  @IsOptional()
+  @IsString()
+  evaluatorId?: string;
 
   @ApiPropertyOptional({
     example: 'MIET',

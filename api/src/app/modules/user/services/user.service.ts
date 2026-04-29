@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../entities/user.entity';
-import { Repository, UpdateResult } from 'typeorm';
+import { ILike, Repository, UpdateResult } from 'typeorm';
 import { RegistrationEntity } from '../../registration/entities';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -64,7 +64,10 @@ export class UserService {
   /**
    * Create a new user
    */
-  async create(userDto: CreateUserDto): Promise<UserEntity> {
+  async create(
+    userDto: CreateUserDto,
+    options: { enable2FA?: boolean } = {},
+  ): Promise<UserEntity> {
     if (!this.databaseEnabled) {
       throw new BadRequestException('Database functionality is disabled');
     }
@@ -91,7 +94,7 @@ export class UserService {
       }
 
       const user = new UserEntity();
-      user.email = userDto.email;
+      user.email = userDto.email.toLowerCase().trim();
       user.title = userDto.title;
       user.firstName = userDto.firstName;
       user.middleName = userDto.middleName;
@@ -110,6 +113,7 @@ export class UserService {
       user.role = UserRole.MEMBER;
       user.isActive = true;
       user.emailVerified = false;
+      user.enable2FA = options.enable2FA ?? false;
       user.failedLoginAttempts = 0;
       user.emailPreferences = {
         eventReminders: true,
@@ -234,7 +238,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email: data.email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(data.email) } });
       if (!user) {
         throw new UnauthorizedException(
           'User not found with the provided email',
@@ -326,7 +330,7 @@ export class UserService {
     const registration = this.registrationRepository
       ? await this.registrationRepository.findOne({
           where: { userId },
-          select: ['status'],
+          select: ['status', 'reviewStage', 'stageUpdatedAt'],
         })
       : null;
 
@@ -351,6 +355,8 @@ export class UserService {
       data: {
         ...safeUser,
         registrationStatus: registration?.status ?? null,
+        registrationReviewStage: registration?.reviewStage ?? null,
+        registrationStageUpdatedAt: registration?.stageUpdatedAt ?? null,
       },
     };
   }
@@ -392,7 +398,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (user) {
         delete user.password;
         delete user.refreshToken;
@@ -607,7 +613,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user) {
         throw new NotFoundException('User not found');
       }
@@ -661,7 +667,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user) {
         throw new NotFoundException('User not found');
       }
@@ -708,7 +714,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user) {
         // Return success even if user not found to prevent email enumeration
         return uuid4();
@@ -846,7 +852,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user) return;
 
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
@@ -901,7 +907,7 @@ export class UserService {
     }
 
     try {
-      const user = await this.userRepository.findOneBy({ email });
+      const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user || !user.lockedUntil) return false;
 
       return new Date() < user.lockedUntil;
@@ -990,6 +996,30 @@ export class UserService {
         `Failed to assign membership ID: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Save a one-time login OTP for SMS 2FA
+   */
+  async saveLoginOtp(userId: string, code: string): Promise<void> {
+    const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    await this.userRepository.update({ id: userId }, { loginOtpCode: code, loginOtpExpiry: expiry });
+  }
+
+  /**
+   * Verify login OTP and clear it on success
+   */
+  async verifyAndClearLoginOtp(userId: string, code: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'loginOtpCode', 'loginOtpExpiry'],
+    });
+    if (!user?.loginOtpCode || !user.loginOtpExpiry) return false;
+    if (new Date() > user.loginOtpExpiry) return false;
+    if (user.loginOtpCode !== code) return false;
+
+    await this.userRepository.update({ id: userId }, { loginOtpCode: null, loginOtpExpiry: null });
+    return true;
   }
 
   /**

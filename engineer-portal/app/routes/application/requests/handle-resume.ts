@@ -14,6 +14,8 @@ function mapRegistrationToDraftData(registration: Registration | null): APIRespo
             completedSteps: registration?.completedSteps ?? [],
             referenceNumber: registration?.referenceNumber ?? null,
             status: registration?.status ?? null,
+            reviewStage: registration?.reviewStage ?? null,
+            stageUpdatedAt: registration?.stageUpdatedAt ?? null,
             registration,
         },
     };

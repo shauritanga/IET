@@ -1,135 +1,73 @@
-import {useState} from "react";
-import {Card} from "~/components/ui/card";
-import {Avatar, AvatarFallback, AvatarImage} from "@radix-ui/react-avatar";
-import {Skeleton} from "~/components/ui/skeleton";
-import type {UserProfile} from "~/routes/dashboard/profile/type";
-import {Copy} from "@solar-icons/react/ssr";
+type ActivityItem = {
+    icon: React.ReactNode
+    iconBg?: string
+    iconColor?: string
+    text: React.ReactNode
+    time: string
+}
 
-type Props = {
-    profile?: UserProfile;
-    isPending: boolean;
-};
+const activities: ActivityItem[] = [
+    {
+        icon: (
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+        ),
+        text: <>Annual subscription paid — <strong>TZS 150,000</strong></>,
+        time: "Jan 10, 2025 · M-Pesa",
+    },
+    {
+        icon: (
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+        ),
+        iconBg: "#E8F5E9", iconColor: "#1a6b3c",
+        text: <>Attended &ldquo;Sustainable Infrastructure&rdquo; Seminar — <strong>6 CPD hrs</strong></>,
+        time: "Dec 14, 2024 · Dar es Salaam",
+    },
+    {
+        icon: (
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+            </svg>
+        ),
+        iconBg: "#FFF8E1", iconColor: "#F57F17",
+        text: <>Uploaded CPD Activity Record for Q4 2024</>,
+        time: "Dec 8, 2024",
+    },
+]
 
-const getBadgeClasses = (status?: string) => {
-    if (status?.toUpperCase() === "ACTIVE") {
-        return "bg-[#DDF7E5] text-[#48A764]";
-    }
-
-    if (status?.toUpperCase() === "EXPIRED") {
-        return "bg-[#FADDD8] text-[#D15548]";
-    }
-
-    return "bg-[#F1ECEB] text-[#725B56]";
-};
-
-const formatDisplayDate = (value?: string) => {
-    if (!value) return "—";
-    return new Date(value).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-    });
-};
-
-const getFullName = (profile?: UserProfile) =>
-    profile ? `${profile.title ? `${profile.title} ` : ""}${profile.firstName} ${profile.lastName}`.trim() : "";
-
-const getInitials = (profile?: UserProfile) =>
-    `${profile?.firstName?.[0] ?? ""}${profile?.lastName?.[0] ?? ""}`.toUpperCase() || "UJ";
-
-const DetailRow = ({label, value, isPending}: { label: string; value: string; isPending: boolean }) => (
-    <div className="flex items-center justify-between border-b border-[#E9DEDB] py-4 last:border-b-0">
-        <span className="text-sm text-[#9A867F]">{label}</span>
-        {isPending ? (
-            <Skeleton className="h-4 w-28 rounded-full" />
-        ) : (
-            <span className="text-sm font-semibold text-[#5A3E39]">{value}</span>
-        )}
-    </div>
-);
-
-const MemberDetailsCard = ({profile, isPending}: Props) => {
-    const fullName = getFullName(profile);
-    const [copied, setCopied] = useState(false);
-
-    const handleCopyId = () => {
-        navigator.clipboard.writeText(profile?.membershipId || "").then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    };
-
-    return (
-        <Card className="gap-4 rounded-[28px] border border-[#EEE4E1] bg-white p-4 shadow-[0_18px_48px_rgba(95,69,60,0.08)] lg:col-span-2">
-            <div className="flex items-center gap-4 p-2">
-                <Avatar className="size-22 overflow-hidden rounded-full ring-4 ring-[#F5ECE9]">
-                    <AvatarImage src={profile?.profilePhotoUrl ?? ""} className="size-22 rounded-full object-cover" />
-                    <AvatarFallback className="flex h-full w-full items-center justify-center rounded-full bg-[#EDE2DE] text-lg font-semibold text-[#6A514D]">
-                        {isPending ? <Skeleton className="size-22 rounded-full" /> : getInitials(profile)}
-                    </AvatarFallback>
-                </Avatar>
-
-                <div className="min-w-0">
-                    {isPending ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-6 w-40 rounded-full" />
-                            <Skeleton className="h-4 w-24 rounded-full" />
-                            <Skeleton className="h-6 w-28 rounded-full" />
-                        </div>
-                    ) : (
-                        <>
-                            <h3 className="truncate text-[26px] font-semibold tracking-[-0.02em] text-[#4A2F2A]">{fullName || "Member Profile"}</h3>
-                            <div className="mt-1 flex items-center gap-1.5">
-                                <span className="text-sm text-[#9B8782]">ID: {profile?.membershipId || "Not assigned"}</span>
-                                <button
-                                    type="button"
-                                    onClick={handleCopyId}
-                                    className="text-[#9B8782] hover:text-[#5A3E39] transition-colors"
-                                    title={copied ? "Copied!" : "Copy ID"}
-                                >
-                                    <Copy className="size-[14px]" weight="BoldDuotone" />
-                                </button>
-                            </div>
-                            <span className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${getBadgeClasses(profile?.membershipStatus)}`}>
-                                {profile?.membershipStatus === "ACTIVE" && (
-                                    <span className="w-2 h-2 rounded-full bg-[#48A764] flex-shrink-0" />
-                                )}
-                                {profile?.membershipStatus === "ACTIVE" ? "Active Member" : (profile?.membershipStatus || "Pending")}
-                            </span>
-                        </>
-                    )}
+const RecentActivity = () => (
+    <div className="bg-white rounded-[14px] border border-[#E8D5D5] overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-[#E8D5D5]">
+            <span className="text-[13px] font-bold text-[#390909]">Recent Activity</span>
+            <span className="text-[11.5px] text-[#E20C0A] font-semibold cursor-pointer hover:underline">View all</span>
+        </div>
+        <div className="px-5 py-1">
+            {activities.map((a, i) => (
+                <div
+                    key={i}
+                    className={`flex items-start gap-[11px] py-[10px] ${i < activities.length - 1 ? "border-b border-[#E8D5D5]" : ""}`}
+                >
+                    <div
+                        className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center shrink-0"
+                        style={{
+                            background: a.iconBg ?? "#FADCDC",
+                            color: a.iconColor ?? "#E20C0A",
+                        }}
+                    >
+                        {a.icon}
+                    </div>
+                    <div>
+                        <div className="text-[12px] text-[#1C1010] leading-[1.45]">{a.text}</div>
+                        <div className="text-[10.5px] text-[#7A6060] mt-[2px]">{a.time}</div>
+                    </div>
                 </div>
-            </div>
+            ))}
+        </div>
+    </div>
+)
 
-            <div className="rounded-[24px] border border-[#F1E8E5] bg-[#FCF8F7] px-4 py-2">
-                <DetailRow
-                    label="Engineering Discipline"
-                    value={profile?.engineeringDiscipline || "Not set"}
-                    isPending={isPending}
-                />
-                <DetailRow
-                    label="Location"
-                    value={profile?.location || "Not set"}
-                    isPending={isPending}
-                />
-                <DetailRow
-                    label="Membership Class"
-                    value={profile?.membershipClass || "Not assigned"}
-                    isPending={isPending}
-                />
-                <DetailRow
-                    label="Annual Membership Fee"
-                    value={profile?.annualMembershipFee ? String(profile.annualMembershipFee) : "Not set"}
-                    isPending={isPending}
-                />
-                <DetailRow
-                    label="Joining Date"
-                    value={formatDisplayDate(profile?.joiningDate)}
-                    isPending={isPending}
-                />
-            </div>
-        </Card>
-    );
-};
-
-export default MemberDetailsCard;
+export default RecentActivity

@@ -1,26 +1,62 @@
-import {Calendar, Card, HomeAngle2, UserRounded} from "@solar-icons/react/ssr";
-import * as React from "react";
+import * as React from "react"
+import { CalendarIcon, GridIcon, PaymentIcon, StarIcon, UserIcon } from "~/components/portal/icons"
 
-export const menuItems = [
-    {
-        title: "Home",
-        url: "/dashboard/home",
-        icon: <HomeAngle2 weight={"BoldDuotone"} size={24}/>
-    },
-    {
-        title: "Membership",
-        url: "/dashboard/memberships",
-        icon: <Card weight={"BoldDuotone"} size={24}/>
-    },
-    {
-        title: "Event & Training",
-        url: "/dashboard/events",
-        icon: <Calendar weight={"BoldDuotone"} size={24}/>
-    },
-    {
-        title: "My Profile",
-        url: "/dashboard/profile",
-        icon: <UserRounded weight={"BoldDuotone"} size={24}/>
+type NavItem = {
+    title: string
+    url: string
+    icon: React.ReactNode
+    badge?: number
+}
 
+type NavSection = {
+    label: string
+    items: NavItem[]
+}
+
+export const navSections: NavSection[] = [
+    {
+        label: "Main Menu",
+        items: [
+            {
+                title: "Overview",
+                url: "/dashboard/home",
+                icon: <GridIcon />,
+            },
+            {
+                title: "Payment",
+                url: "/dashboard/memberships",
+                icon: <PaymentIcon />,
+                badge: 1,
+            },
+            {
+                title: "Membership",
+                url: "/dashboard/membership",
+                icon: <StarIcon />,
+            },
+        ],
+    },
+    {
+        label: "Engagement",
+        items: [
+            {
+                title: "Events & Training",
+                url: "/dashboard/events",
+                icon: <CalendarIcon />,
+                badge: 3,
+            },
+        ],
+    },
+    {
+        label: "Account",
+        items: [
+            {
+                title: "Profile",
+                url: "/dashboard/profile",
+                icon: <UserIcon />,
+            },
+        ],
     },
 ]
+
+// Legacy export kept for compatibility
+export const menuItems = navSections.flatMap((s) => s.items)

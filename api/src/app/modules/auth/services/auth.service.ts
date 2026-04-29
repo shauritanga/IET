@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Logger,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,9 +19,11 @@ import { UpdateResult } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../../../common/services/encryption.service';
 import { EmailService } from '../../shared/services/email.service';
+import { SmsService } from '../../shared/services/sms.service';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
-import { CreateUserDto } from '../../user/dto/create-user.dto';
 import { RegistrationEntity } from '../../registration/entities';
+import { UserRole } from '../../../common/enums';
+import { RegisterDto } from '../dto/register.dto';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +35,7 @@ export class AuthService {
     private configService: ConfigService,
     private encryptionService: EncryptionService,
     private emailService: EmailService,
+    private smsService: SmsService,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
   ) {}
@@ -48,31 +52,44 @@ export class AuthService {
    * Register a new user
    */
   async register(
-    createUserDto: CreateUserDto,
+    registerDto: RegisterDto,
   ): Promise<{ userId: string; email: string; verificationSent: boolean }> {
     try {
-      const user = await this.usersService.create(createUserDto);
+      if (registerDto.password !== registerDto.confirmPassword) {
+        throw new BadRequestException('Passwords do not match');
+      }
 
-      // Send verification email (fire-and-forget, don't block registration)
-      this.emailService
-        .sendVerificationEmail(
-          user.email,
-          user.firstName || user.email,
-          user.emailVerificationCode,
-        )
-        .catch((err) =>
-          this.logger.error(
-            `Failed to send verification email: ${err.message}`,
-          ),
+      const { confirmPassword: _confirmPassword, ...createUserDto } =
+        registerDto;
+      const user = await this.usersService.create(createUserDto, {
+        enable2FA: true,
+      });
+
+      const emailResult = await this.emailService.sendVerificationEmail(
+        user.email,
+        user.firstName || user.email,
+        user.emailVerificationCode,
+      );
+
+      if (!emailResult.success) {
+        this.logger.error(
+          `Verification email failed for ${user.email}: ${emailResult.error}`,
         );
+        throw new InternalServerErrorException(
+          'Registration succeeded but verification email could not be sent. Please verify SMTP configuration and try again.',
+        );
+      }
 
       return {
         userId: user.id,
         email: user.email,
-        verificationSent: true,
+        verificationSent: emailResult.success,
       };
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
       this.logger.error(`Registration failed: ${error.message}`, error.stack);
@@ -108,6 +125,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
         membershipId: user.membershipId,
         membershipStatus: user.membershipStatus,
         role: user.role,
@@ -126,13 +144,20 @@ export class AuthService {
     // Get user info for email
     const user = await this.usersService.findByEmail(email);
     if (user) {
-      this.emailService
-        .sendVerificationEmail(user.email, user.firstName || user.email, code)
-        .catch((err) =>
-          this.logger.error(
-            `Failed to send verification email: ${err.message}`,
-          ),
+      const emailResult = await this.emailService.sendVerificationEmail(
+        user.email,
+        user.firstName || user.email,
+        code,
+      );
+
+      if (!emailResult.success) {
+        this.logger.error(
+          `Failed to resend verification email to ${user.email}: ${emailResult.error}`,
         );
+        throw new InternalServerErrorException(
+          'Verification email could not be sent. Please verify SMTP configuration and try again.',
+        );
+      }
     }
 
     return { sent: true };
@@ -176,11 +201,43 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      // Check if 2FA is enabled
+      // Admin accounts must have 2FA enabled
+      if (
+        [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role) &&
+        !user.enable2FA
+      ) {
+        throw new ForbiddenException(
+          'Admin accounts must have two-factor authentication enabled. Please contact your system administrator to set up 2FA.',
+        );
+      }
+
+      // Check if 2FA is enabled — generate SMS OTP and send it
       if (user.enable2FA) {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        await this.usersService.saveLoginOtp(user.id, otp);
+
+        if (!user.phoneNumber) {
+          throw new BadRequestException(
+            'Two-factor authentication requires a registered phone number.',
+          );
+        }
+
+        const smsResult = await this.smsService.sendLoginOtp(
+          user.phoneNumber,
+          otp,
+        );
+        if (!smsResult.success) {
+          this.logger.error(
+            `Failed to send login OTP to ${user.email}: ${smsResult.error}`,
+          );
+          throw new BadRequestException(
+            'Two-factor authentication code could not be sent. Please verify your phone number and try again.',
+          );
+        }
+
         return {
           validate2FA: user.id,
-          message: 'Please enter your 2FA token to complete login',
+          message: 'A 6-digit code has been sent to your registered phone number',
         };
       }
 
@@ -202,6 +259,7 @@ export class AuthService {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
+          phoneNumber: user.phoneNumber,
           membershipId: user.membershipId,
           membershipStatus: user.membershipStatus,
           role: user.role,
@@ -414,12 +472,7 @@ export class AuthService {
     try {
       const user = await this.usersService.findById(userId);
 
-      // The secret is already decrypted in findById
-      const verified = speakeasy.totp.verify({
-        secret: user.twoFASecret,
-        token: token,
-        encoding: 'base32',
-      });
+      const verified = await this.usersService.verifyAndClearLoginOtp(userId, token);
 
       if (verified) {
         // Reset failed login attempts
@@ -441,6 +494,7 @@ export class AuthService {
             id: user.id,
             email: user.email,
             fullName: user.fullName,
+            phoneNumber: user.phoneNumber,
             membershipId: user.membershipId,
             membershipStatus: user.membershipStatus,
             role: user.role,

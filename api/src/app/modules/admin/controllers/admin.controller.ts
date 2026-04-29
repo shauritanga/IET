@@ -26,15 +26,17 @@ import { AdminGuard } from '../../auth/guards/admin.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { AdminService } from '../services/admin.service';
+import { EventsService } from '../../events/services/events.service';
 import { GuestService } from '../../guest/services/guest.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
-  ReviewApplicationDto,
+  UpdateApplicationStageDto,
   UpdateMemberStatusDto,
   AnalyticsQueryDto,
 } from '../dto';
 import { GuestCheckInDto } from '../../guest/dto';
+import { CreateEventDto, UpdateEventDto } from '../../events/dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -43,6 +45,7 @@ import { GuestCheckInDto } from '../../guest/dto';
 export class AdminController {
   constructor(
     private adminService: AdminService,
+    private eventsService: EventsService,
     private guestService: GuestService,
   ) {}
 
@@ -192,41 +195,58 @@ export class AdminController {
     };
   }
 
-  @Patch('applications/:applicationId/review')
-  @ApiOperation({ summary: 'Review an application' })
+  @Get('applications/:applicationId')
+  @ApiOperation({ summary: 'Get application details' })
   @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Application reviewed',
+    description: 'Application details retrieved',
+  })
+  async getApplicationDetails(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+  ) {
+    const result = await this.adminService.getApplicationDetails(applicationId);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Patch('applications/:applicationId/stage')
+  @ApiOperation({ summary: 'Update application workflow stage' })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Application workflow updated',
     schema: {
       example: {
         success: true,
         data: {
           applicationId: '550e8400-e29b-41d4-a716-446655440000',
           status: 'APPROVED',
+          reviewStage: 'APPROVAL_NOTICE_SENT',
           reviewedBy: 'admin-uuid',
           reviewedAt: '2025-01-27T10:00:00Z',
           membershipId: 'IET/ENG/0234',
         },
-        message: 'Application approved successfully',
+        message: 'Application workflow updated successfully',
       },
     },
   })
-  async reviewApplication(
+  async updateApplicationStage(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
     @GetUser() admin: UserEntity,
-    @Body() dto: ReviewApplicationDto,
+    @Body() dto: UpdateApplicationStageDto,
   ) {
-    const result = await this.adminService.reviewApplication(
+    const result = await this.adminService.updateApplicationStage(
       applicationId,
       admin.id,
       dto,
     );
-    const message = `Application ${dto.action.toLowerCase()}ed successfully`;
     return {
       success: true,
       data: result,
-      message,
+      message: 'Application workflow updated successfully',
     };
   }
 
@@ -284,6 +304,59 @@ export class AdminController {
       success: true,
       data: result,
       message: 'Check-in successful',
+    };
+  }
+
+  // ============================================
+  // EVENT MANAGEMENT
+  // ============================================
+
+  @Get('events')
+  @ApiOperation({ summary: 'List all events for admin' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Admin events retrieved',
+  })
+  async listEvents() {
+    const result = await this.eventsService.listAdminEvents();
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Post('events')
+  @ApiOperation({ summary: 'Create a new event' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Event created',
+  })
+  async createEvent(@GetUser() admin: UserEntity, @Body() dto: CreateEventDto) {
+    const event = await this.eventsService.createEvent(dto, admin.id);
+    return {
+      success: true,
+      data: event,
+      message: 'Event created successfully',
+    };
+  }
+
+  @Patch('events/:eventId')
+  @ApiOperation({ summary: 'Update an event' })
+  @ApiParam({ name: 'eventId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Event updated',
+  })
+  async updateEvent(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: UpdateEventDto,
+  ) {
+    const event = await this.eventsService.updateEvent(eventId, dto, admin.id);
+    return {
+      success: true,
+      data: event,
+      message: 'Event updated successfully',
     };
   }
 }

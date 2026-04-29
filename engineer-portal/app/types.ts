@@ -22,8 +22,19 @@ export enum Gender {
     FEMALE=2
 }
 
+export type APIValidationError = {
+    property?: string;
+    message?: string;
+    constraints?: string[];
+    value?: unknown;
+};
 
-export type TErrorMessage = AxiosError<{ message: string }>;
+export type APIErrorResponse = {
+    message?: string;
+    errors?: APIValidationError[];
+};
+
+export type TErrorMessage = AxiosError<APIErrorResponse>;
 
 export type TSuccess<T> = (data: T) => void;
 export type TError = (error: TErrorMessage) => void;

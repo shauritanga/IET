@@ -100,18 +100,21 @@ export class EventsService {
 
     // Get registration counts and user registration status
     const eventIds = events.map((e) => e.id);
-    const registrationCounts = await this.registrationRepository
-      .createQueryBuilder('reg')
-      .select('reg.eventId', 'eventId')
-      .addSelect('COUNT(reg.id)', 'count')
-      .where('reg.eventId IN (:...eventIds)', {
-        eventIds: eventIds.length > 0 ? eventIds : [''],
-      })
-      .andWhere('reg.status NOT IN (:...excludedStatuses)', {
-        excludedStatuses: [EventRegistrationStatus.CANCELLED],
-      })
-      .groupBy('reg.eventId')
-      .getRawMany();
+    const registrationCounts =
+      eventIds.length > 0
+        ? await this.registrationRepository
+            .createQueryBuilder('reg')
+            .select('reg.eventId', 'eventId')
+            .addSelect('COUNT(reg.id)', 'count')
+            .where('reg.eventId IN (:...eventIds)', {
+              eventIds,
+            })
+            .andWhere('reg.status NOT IN (:...excludedStatuses)', {
+              excludedStatuses: [EventRegistrationStatus.CANCELLED],
+            })
+            .groupBy('reg.eventId')
+            .getRawMany()
+        : [];
 
     const countMap = new Map(
       registrationCounts.map((r) => [r.eventId, parseInt(r.count)]),
@@ -119,11 +122,11 @@ export class EventsService {
 
     // Check if user is registered for each event
     let userRegistrations: Set<string> = new Set();
-    if (userId) {
+    if (userId && eventIds.length > 0) {
       const regs = await this.registrationRepository.find({
         where: {
           userId,
-          eventId: In(eventIds.length > 0 ? eventIds : ['']),
+          eventId: In(eventIds),
           status: In([
             EventRegistrationStatus.PENDING_PAYMENT,
             EventRegistrationStatus.CONFIRMED,
@@ -138,7 +141,9 @@ export class EventsService {
       id: event.id,
       title: event.title,
       category: event.category,
+      description: event.description,
       startDate: event.startDate,
+      endDate: event.endDate ?? null,
       startTime: event.startTime,
       endTime: event.endTime,
       location: event.isOnline ? 'Online' : event.location,
@@ -147,6 +152,8 @@ export class EventsService {
       speaker: event.speakers?.[0]?.name,
       coverImage: event.coverImage,
       registrationDeadline: event.registrationDeadline,
+      registrationFee: event.registrationFee,
+      cpdPoints: event.cpdPoints,
       availableSlots: event.maxParticipants,
       registeredCount: countMap.get(event.id) || 0,
       isFull: event.maxParticipants
@@ -570,8 +577,9 @@ export class EventsService {
       throw new NotFoundException('Event not found');
     }
 
+    const previousTitle = event.title;
     Object.assign(event, dto);
-    if (dto.title && dto.title !== event.title) {
+    if (dto.title && dto.title !== previousTitle) {
       event.slug = this.generateSlug(dto.title);
     }
     if (dto.startDate) event.startDate = new Date(dto.startDate);
@@ -583,6 +591,81 @@ export class EventsService {
     const savedEvent = await this.eventRepository.save(event);
     this.logger.log(`Event ${eventId} updated by admin ${adminId}`);
     return savedEvent;
+  }
+
+  async listAdminEvents(): Promise<
+    Array<{
+      id: string;
+      title: string;
+      category: EventCategory;
+      description?: string | null;
+      startDate: Date;
+      endDate?: Date | null;
+      startTime: string;
+      endTime: string;
+      location?: string | null;
+      isOnline: boolean;
+      guestOfHonor?: string | null;
+      registrationDeadline?: Date | null;
+      registrationFee: number;
+      cpdPoints: number;
+      maxParticipants?: number | null;
+      registeredCount: number;
+      isPublished: boolean;
+      registrationOpen: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  > {
+    const events = await this.eventRepository.find({
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    const eventIds = events.map((event) => event.id);
+    const registrationCounts =
+      eventIds.length > 0
+        ? await this.registrationRepository
+            .createQueryBuilder('reg')
+            .select('reg.eventId', 'eventId')
+            .addSelect('COUNT(reg.id)', 'count')
+            .where('reg.eventId IN (:...eventIds)', {
+              eventIds,
+            })
+            .andWhere('reg.status NOT IN (:...excludedStatuses)', {
+              excludedStatuses: [EventRegistrationStatus.CANCELLED],
+            })
+            .groupBy('reg.eventId')
+            .getRawMany()
+        : [];
+
+    const countMap = new Map(
+      registrationCounts.map((row) => [row.eventId, parseInt(row.count, 10)]),
+    );
+
+    return events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      category: event.category,
+      description: event.description,
+      startDate: event.startDate,
+      endDate: event.endDate ?? null,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      location: event.location,
+      isOnline: event.isOnline,
+      guestOfHonor: event.guestOfHonor,
+      registrationDeadline: event.registrationDeadline ?? null,
+      registrationFee: event.registrationFee,
+      cpdPoints: event.cpdPoints,
+      maxParticipants: event.maxParticipants ?? null,
+      registeredCount: countMap.get(event.id) || 0,
+      isPublished: event.isPublished,
+      registrationOpen: event.registrationOpen,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+    }));
   }
 
   // ============================================

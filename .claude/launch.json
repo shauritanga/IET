@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "engineer-portal"],
       "port": 4000
+    },
+    {
+      "name": "admin-portal",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "admin-portal"],
+      "port": 4100
     }
   ]
 }

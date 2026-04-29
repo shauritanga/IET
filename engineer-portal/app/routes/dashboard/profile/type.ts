@@ -40,4 +40,6 @@ export interface UserProfile {
     isActive: boolean,
 
     registrationStatus: string
+    registrationReviewStage?: string | null
+    registrationStageUpdatedAt?: string | null
 }

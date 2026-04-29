@@ -1,49 +1,55 @@
+import { useMemo } from "react";
 import {
     Calendar,
-    CalendarCurrentDate, CalendarMonthView,
+    CalendarCurrentDate,
+    CalendarMonthView,
     CalendarNextTrigger,
-    CalendarPrevTrigger, 
+    CalendarPrevTrigger,
 } from "~/components/custom/full-calendar";
-import {ChevronLeft, ChevronRight} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEvents } from "~/routes/dashboard/events/repositories/use-events";
+import { mapDashboardEventToCalendar } from "~/routes/dashboard/events/utils";
 
 const CalendarView = () => {
-    return (
-        <Calendar
-            events={[
-                {
-                    id: '1',
-                    start: new Date('2025-11-20T09:30:00Z'),
-                    end: new Date('2025-11-20T14:30:00Z'),
-                    title: 'event A',
-                    color: 'pink',
-                },
-                {
-                    id: '2',
-                    start: new Date('2025-11-20T10:00:00Z'),
-                    end: new Date('2025-11-20T10:30:00Z'),
-                    title: 'event B',
-                    color: 'blue',
-                },
-            ]}
-        >
-            <div className="h-dvh py-6 flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                    <CalendarPrevTrigger>
-                        <ChevronLeft size={20} />
-                        <span className="sr-only">Previous</span>
-                    </CalendarPrevTrigger>
-                    <CalendarNextTrigger>
-                        <ChevronRight size={20} />
-                        <span className="sr-only">Next</span>
-                    </CalendarNextTrigger>
-                    <CalendarCurrentDate />
-                </div>
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, isLoading, isError } = useEvents({ limit: 100, fromDate: today });
+    const events = useMemo(
+        () => (data?.data ?? []).map(mapDashboardEventToCalendar),
+        [data],
+    );
 
-                <div className="flex-1 overflow-auto relative">
-                    <CalendarMonthView />
+    return (
+        <div className="space-y-4">
+            {isLoading ? (
+                <div className="rounded-2xl border border-border bg-white p-6 text-sm text-muted-foreground">
+                    Loading events...
                 </div>
-            </div>
-        </Calendar>
+            ) : isError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                    Unable to load events right now.
+                </div>
+            ) : null}
+
+            <Calendar events={events}>
+                <div className="h-dvh py-6 flex flex-col">
+                    <div className="flex items-center gap-2 mb-6">
+                        <CalendarPrevTrigger>
+                            <ChevronLeft size={20} />
+                            <span className="sr-only">Previous</span>
+                        </CalendarPrevTrigger>
+                        <CalendarNextTrigger>
+                            <ChevronRight size={20} />
+                            <span className="sr-only">Next</span>
+                        </CalendarNextTrigger>
+                        <CalendarCurrentDate />
+                    </div>
+
+                    <div className="flex-1 overflow-auto relative">
+                        <CalendarMonthView />
+                    </div>
+                </div>
+            </Calendar>
+        </div>
     );
 };
 

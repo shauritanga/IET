@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Outlet, redirect, type LoaderFunctionArgs } from "react-router";
-import Sidebar from "~/components/sidebar";
+import { redirect, type LoaderFunctionArgs } from "react-router";
+import AdminShell from "~/components/admin-shell";
 import { getCookieValue } from "~/utils/cookies";
 import { isAdminRole, ROLE_KEY, TOKEN_KEY } from "~/utils/auth";
 
@@ -16,17 +15,5 @@ export const loader = ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function DashboardLayout() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  return (
-    <section className={`dashboard-shell${isSidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
-      <Sidebar
-        isCollapsed={isSidebarCollapsed}
-        onToggle={() => setIsSidebarCollapsed((current) => !current)}
-      />
-      <main className="content">
-        <Outlet />
-      </main>
-    </section>
-  );
+  return <AdminShell />;
 }

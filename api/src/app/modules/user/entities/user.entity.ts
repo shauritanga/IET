@@ -121,6 +121,14 @@ export class UserEntity extends BaseEntity {
   @Exclude()
   lockedUntil?: Date;
 
+  @Column({ nullable: true })
+  @Exclude()
+  loginOtpCode?: string;
+
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  @Exclude()
+  loginOtpExpiry?: Date;
+
   // ============================================
   // PERSONAL DETAILS
   // ============================================

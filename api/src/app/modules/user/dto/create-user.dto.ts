@@ -12,6 +12,11 @@ import {
 } from 'class-validator';
 import { Gender, Title, EngineeringDiscipline } from '../../../common/enums';
 
+const normalizePhoneNumber = (value?: string) =>
+  typeof value === 'string'
+    ? value.replace(/[\s()-]/g, '').trim()
+    : value;
+
 export class CreateUserDto {
   @ApiProperty({
     example: 'joram@gmail.com',
@@ -79,6 +84,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => normalizePhoneNumber(value))
   @Matches(/^\+[1-9]\d{1,14}$/, {
     message:
       'Phone number must be in international format (e.g., +255657000000)',

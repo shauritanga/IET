@@ -22,7 +22,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Source+Serif+4:wght@400;600;700&display=swap",
   },
 ];
 
@@ -47,7 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="page-shell">
+      <div className="min-h-screen">
         <Outlet />
       </div>
     </QueryClientProvider>
@@ -68,12 +68,22 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="content">
-      <section className="panel">
-        <p className="eyebrow">Portal Error</p>
-        <h1 className="panel-title">{message}</h1>
-        <p className="auth-subtitle">{details}</p>
-        {stack ? <pre>{stack}</pre> : null}
+    <main className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-6 py-12 text-[var(--text)]">
+      <section className="w-full max-w-2xl rounded-[22px] border border-[var(--border)] bg-white p-8 shadow-[0_18px_46px_rgba(57,9,9,0.08)]">
+        <p className="font-montserrat text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Portal Error
+        </p>
+        <h1 className="mt-3 font-serif-display text-[34px] font-bold leading-none text-[var(--red-dark)]">
+          {message}
+        </h1>
+        <p className="mt-3 max-w-xl font-montserrat text-[13px] leading-6 text-[var(--muted)]">
+          {details}
+        </p>
+        {stack ? (
+          <pre className="mt-5 overflow-x-auto rounded-2xl bg-[var(--red-pale)] p-4 font-mono text-[11px] text-[var(--red-dark)]">
+            {stack}
+          </pre>
+        ) : null}
       </section>
     </main>
   );

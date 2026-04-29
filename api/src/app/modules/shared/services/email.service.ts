@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
@@ -33,7 +33,7 @@ export interface EmailResult {
  * When SMTP_HOST is not set, a mock implementation logs emails to console.
  */
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private readonly isDevelopment: boolean;
   private readonly fromEmail: string;
@@ -67,6 +67,19 @@ export class EmailService {
       );
     } else {
       this.logger.log('SMTP not configured - using mock email service');
+    }
+  }
+
+  async onModuleInit() {
+    if (!this.smtpEnabled) {
+      return;
+    }
+
+    try {
+      await this.transporter.verify();
+      this.logger.log('SMTP connection verified successfully');
+    } catch (error: any) {
+      this.logger.error(`SMTP verification failed: ${error.message}`);
     }
   }
 

@@ -11,6 +11,7 @@ import { AuditableEntity } from '../../../common/entities/base.entity';
 import { UserEntity } from '../../user/entities/user.entity';
 import {
   ApplicationStatus,
+  ApplicationReviewStage,
   ApplicationType,
   RegistrationCategory,
   RegistrationStep,
@@ -21,6 +22,7 @@ import { ProfessionalExperienceEntity } from './professional-experience.entity';
 import { EducationEntity } from './education.entity';
 import { DocumentEntity } from './document.entity';
 import { ReferenceEntity } from './reference.entity';
+import type { ApplicationStageHistoryEntity } from './application-stage-history.entity';
 
 @Entity('registrations')
 @Index(['userId'])
@@ -220,6 +222,54 @@ export class RegistrationEntity extends AuditableEntity {
   submittedAt?: Date;
 
   @ApiProperty({
+    example: 'SECRETARIAT_REVIEW',
+    description: 'Current review workflow stage',
+    enum: ApplicationReviewStage,
+    required: false,
+  })
+  @Column({
+    type: 'enum',
+    enum: ApplicationReviewStage,
+    nullable: true,
+  })
+  reviewStage?: ApplicationReviewStage;
+
+  @ApiProperty({
+    description: 'Assigned evaluator user ID',
+    required: false,
+  })
+  @Column({ type: 'uuid', nullable: true })
+  assignedEvaluatorId?: string;
+
+  @ApiProperty({
+    description: 'Date when the evaluator was assigned',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  assignedAt?: Date;
+
+  @ApiProperty({
+    description: 'Date when the current review stage was last updated',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  stageUpdatedAt?: Date;
+
+  @ApiProperty({
+    description: 'Date when the council approved the application',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  councilApprovedAt?: Date;
+
+  @ApiProperty({
+    description: 'Date when the approval notice was sent to the applicant',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  approvalNoticeSentAt?: Date;
+
+  @ApiProperty({
     description: 'ID of admin who reviewed the application',
   })
   @Column({ type: 'uuid', nullable: true })
@@ -268,4 +318,12 @@ export class RegistrationEntity extends AuditableEntity {
     cascade: true,
   })
   references: ReferenceEntity[];
+
+  @OneToMany(
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    () => require('./application-stage-history.entity').ApplicationStageHistoryEntity,
+    (history: ApplicationStageHistoryEntity) => history.registration,
+    { cascade: true },
+  )
+  stageHistory: ApplicationStageHistoryEntity[];
 }

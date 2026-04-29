@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   RegistrationEntity,
+  ApplicationStageHistoryEntity,
   EducationEntity,
   ProfessionalExperienceEntity,
   DocumentEntity,
@@ -30,6 +31,7 @@ import {
 } from '../dto/registration-steps.dto';
 import {
   ApplicationStatus,
+  ApplicationReviewStage,
   RegistrationStep,
   ReferenceType,
   DocumentStatus,
@@ -42,6 +44,8 @@ export class RegistrationService {
   constructor(
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
+    @InjectRepository(ApplicationStageHistoryEntity)
+    private stageHistoryRepository: Repository<ApplicationStageHistoryEntity>,
     @InjectRepository(EducationEntity)
     private educationRepository: Repository<EducationEntity>,
     @InjectRepository(ProfessionalExperienceEntity)
@@ -671,22 +675,38 @@ export class RegistrationService {
       );
     }
 
-    // Generate reference number
-    const referenceNumber = await this.generateReferenceNumber();
+    const wasChangesRequested =
+      registration.status === ApplicationStatus.CHANGES_REQUESTED;
+    const previousStage = registration.reviewStage;
+
+    // Generate reference number once and preserve it on resubmission
+    const referenceNumber =
+      registration.referenceNumber ?? (await this.generateReferenceNumber());
 
     // Update registration
     registration.declarationAgreed = dto.declarationAgreed;
     registration.declarationDate = new Date(dto.declarationDate);
     registration.status = ApplicationStatus.IN_REVIEW;
+    registration.reviewStage = ApplicationReviewStage.SECRETARIAT_REVIEW;
+    registration.assignedEvaluatorId = null;
+    registration.assignedAt = null;
     registration.submittedAt = new Date();
+    registration.stageUpdatedAt = registration.submittedAt;
     registration.referenceNumber = referenceNumber;
     registration.currentStep = RegistrationStep.DECLARATION;
+    registration.updatedBy = userId;
 
     if (!registration.completedSteps.includes(RegistrationStep.DECLARATION)) {
       registration.completedSteps.push(RegistrationStep.DECLARATION);
     }
 
     await this.registrationRepository.save(registration);
+    await this.recordStageHistory(registration, {
+      fromStage: wasChangesRequested ? previousStage : undefined,
+      toStage: ApplicationReviewStage.SECRETARIAT_REVIEW,
+      action: wasChangesRequested ? 'RESUBMITTED' : 'SUBMITTED',
+      actedByUserId: userId,
+    });
 
     // Send submission confirmation email (fire-and-forget)
     const submittedUser = await this.userRepository.findOneBy({ id: userId });
@@ -729,7 +749,13 @@ export class RegistrationService {
         'experiences',
         'documents',
         'references',
+        'stageHistory',
       ],
+      order: {
+        stageHistory: {
+          createdAt: 'ASC',
+        },
+      },
     });
 
     if (!registration) {
@@ -745,6 +771,7 @@ export class RegistrationService {
   async getUserRegistrations(userId: string): Promise<RegistrationEntity[]> {
     return this.registrationRepository.find({
       where: { userId },
+      relations: ['stageHistory'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -924,5 +951,28 @@ export class RegistrationService {
 
     const nextNumber = (result?.maxNum || 0) + 1;
     return `IET/APP/${year}/${nextNumber.toString().padStart(4, '0')}`;
+  }
+
+  private async recordStageHistory(
+    registration: RegistrationEntity,
+    params: {
+      fromStage?: ApplicationReviewStage;
+      toStage: ApplicationReviewStage;
+      action: ApplicationStageHistoryEntity['action'];
+      actedByUserId: string;
+      comments?: string;
+      assignedEvaluatorId?: string | null;
+    },
+  ): Promise<void> {
+    const history = new ApplicationStageHistoryEntity();
+    history.registrationId = registration.id;
+    history.fromStage = params.fromStage;
+    history.toStage = params.toStage;
+    history.action = params.action;
+    history.comments = params.comments;
+    history.assignedEvaluatorId = params.assignedEvaluatorId ?? undefined;
+    history.createdBy = params.actedByUserId;
+    history.updatedBy = params.actedByUserId;
+    await this.stageHistoryRepository.save(history);
   }
 }

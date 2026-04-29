@@ -10,6 +10,11 @@ import {
   Matches,
 } from 'class-validator';
 
+const normalizePhoneNumber = (value?: string) =>
+  typeof value === 'string'
+    ? value.replace(/[\s()-]/g, '').trim()
+    : value;
+
 export class RegisterDto {
   @ApiProperty({
     example: 'joram@gmail.com',
@@ -57,6 +62,19 @@ export class RegisterDto {
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   lastName?: string;
+
+  @ApiProperty({
+    example: '+255657000000',
+    description: 'Phone number with country code',
+  })
+  @IsNotEmpty({ message: 'Phone number is required' })
+  @IsString()
+  @Transform(({ value }) => normalizePhoneNumber(value))
+  @Matches(/^\+[1-9]\d{1,14}$/, {
+    message:
+      'Phone number must be in international format (e.g., +255657000000)',
+  })
+  phoneNumber?: string;
 }
 
 export class VerifyEmailDto {

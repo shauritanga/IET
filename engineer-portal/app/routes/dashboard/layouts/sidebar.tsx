@@ -1,77 +1,73 @@
 import * as React from "react"
+import { NavLink } from "react-router"
+import { LogoutIcon } from "~/components/portal/icons"
+import { useLogout } from "~/routes/auth/logout/index"
+import { navSections } from "~/routes/dashboard/layouts/sidebar-list-items"
 
-import {
-    Sidebar,
-    SidebarContent, SidebarFooter,
-    SidebarGroup,
-    SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from "~/components/ui/sidebar"
-import {menuItems} from "~/routes/dashboard/layouts/sidebar-list-items";
-import {Link, NavLink, useNavigate} from "react-router";
-import {Button} from "~/components/ui/button";
-import {
-    getMembershipApplicationCtaLabel,
-    shouldShowMembershipApplicationCta,
-} from "~/utils/application-status";
-import {useGetUserProfile} from "~/routes/dashboard/profile/repositories/handle-get-user-profile";
+type AppSidebarProps = {
+    open: boolean
+    userName: string
+    userInitials: string
+}
 
-
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
-    const navigate = useNavigate();
-    const {data} = useGetUserProfile();
-    const registrationStatus = data?.data.registrationStatus;
-    const shouldShowApplicationCta = shouldShowMembershipApplicationCta(registrationStatus);
-    const applicationCtaLabel = getMembershipApplicationCtaLabel(registrationStatus);
+export function AppSidebar({ open, userName, userInitials }: AppSidebarProps) {
+    const logout = useLogout()
 
     return (
-        <Sidebar variant="floating" {...props} className="pr-0 border-none">
-            <SidebarHeader>
-                <SidebarMenu>
-                    <SidebarMenuItem className={"flex justify-between"}>
-                        <Link to="/">
-                            <img src={"/IET-Logo-2.png"} alt={"IET-logo"} width={150}/>
-                        </Link>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarHeader>
-            <SidebarContent>
-                <SidebarGroup>
-                    <SidebarMenu className="gap-2">
-                        {menuItems.map((item) => (
-                            <SidebarMenuItem key={item.title}>
-                                <NavLink to={item.url}>
-                                    {({isActive}) => (
-                                        <SidebarMenuButton
-                                            size="lg"
-                                            isActive={isActive}
-                                            className={isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground font-medium"}
-                                        >
-                                            <div className="flex items-center justify-center rounded-lg">
-                                                {item.icon}
-                                            </div>
-                                            <span>{item.title}</span>
-                                        </SidebarMenuButton>
-                                    )}
-                                </NavLink>
-                            </SidebarMenuItem>
+        <aside className={`sidebar ${open ? "open" : "collapsed"}`}>
+            <div className="sidebar-logo">
+                <div className="logo-img">
+                    <img src="/IET-Logo-2.png" alt="IET Tanzania" />
+                </div>
+                <div className="logo-text">
+                    <span className="org-name">
+                        Institution of Engineers<br />Tanzania
+                    </span>
+                    <span className="org-sub">
+                        Member Portal
+                    </span>
+                </div>
+            </div>
+
+            <nav className="sidebar-nav">
+                {navSections.map((section) => (
+                    <React.Fragment key={section.label}>
+                        <div className="nav-section-label">{section.label}</div>
+                        {section.items.map((item) => (
+                            <NavLink key={item.title} to={item.url}>
+                                {({ isActive }) => (
+                                    <div className={`nav-item ${isActive ? "active" : ""}`}>
+                                        <span className="nav-icon">
+                                            {item.icon}
+                                        </span>
+                                        <span>{item.title}</span>
+                                        {item.badge != null && (
+                                            <span className="nav-badge">{item.badge}</span>
+                                        )}
+                                    </div>
+                                )}
+                            </NavLink>
                         ))}
-                    </SidebarMenu>
-                </SidebarGroup>
-            </SidebarContent>
-            <SidebarFooter className={"mb-4 lg:mb-0"}>
-                {shouldShowApplicationCta ? (
-                    <Button
-                        size="lg"
-                        onClick={() => navigate("/application")}
-                        className="h-12 rounded-2xl bg-[#390909] text-white shadow-[0_14px_32px_rgba(57,9,9,0.18)] hover:bg-[#4A1212]"
-                    >
-                        {applicationCtaLabel}
-                    </Button>
-                ) : null}
-            </SidebarFooter>
-        </Sidebar>
+                    </React.Fragment>
+                ))}
+            </nav>
+
+            <div className="sidebar-bottom">
+                <div className="sidebar-user">
+                    <div className="user-ava-sb">
+                        {userInitials}
+                    </div>
+                    <div className="user-info">
+                        <strong>
+                            {userName}
+                        </strong>
+                        <span>Civil Engineer, Corp.</span>
+                    </div>
+                    <button type="button" className="btn-logout" title="Logout" onClick={logout}>
+                        <LogoutIcon className="h-[15px] w-[15px]" />
+                    </button>
+                </div>
+            </div>
+        </aside>
     )
 }

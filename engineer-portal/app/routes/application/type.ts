@@ -14,6 +14,8 @@ export interface ApplicationDraftData {
     completedSteps: ApplicationStep[];
     referenceNumber: string | null;
     status: ApplicationStatus | null;
+    reviewStage?: ApplicationReviewStage | null;
+    stageUpdatedAt?: string | null;
     registration: Registration | null;
 }
 
@@ -62,9 +64,23 @@ export type ApplicationStatus =
     | "REJECTED"
     | "CHANGES_REQUESTED";
 
+export type ApplicationReviewStage =
+    | "SECRETARIAT_REVIEW"
+    | "EVALUATOR_REVIEW"
+    | "MPDC_REVIEW"
+    | "COUNCIL_REVIEW"
+    | "APPROVAL_NOTICE_SENT";
+
 export interface Registration {
     id: string;
     status: ApplicationStatus;
+    reviewStage?: ApplicationReviewStage | null;
+    stageUpdatedAt?: string | null;
+    assignedEvaluatorId?: string | null;
+    assignedAt?: string | null;
+    submittedAt?: string | null;
+    councilApprovedAt?: string | null;
+    approvalNoticeSentAt?: string | null;
     currentStep: ApplicationStep;
     completedSteps: ApplicationStep[];
     personalDetails: PersonalDetails;
@@ -80,6 +96,25 @@ export interface Registration {
     declarationSignature: string | null;
     declarationDate: string | null;
     referenceNumber?: string | null;
+    stageHistory?: ApplicationStageHistory[];
+}
+
+export interface ApplicationStageHistory {
+    id: string;
+    fromStage?: ApplicationReviewStage | null;
+    toStage: ApplicationReviewStage;
+    action:
+        | "SUBMITTED"
+        | "ASSIGNED"
+        | "ADVANCED"
+        | "RETURNED_FOR_CHANGES"
+        | "REJECTED"
+        | "APPROVED_BY_COUNCIL"
+        | "NOTICE_SENT"
+        | "RESUBMITTED";
+    comments?: string | null;
+    assignedEvaluatorId?: string | null;
+    createdAt: string;
 }
 
 export interface PersonalDetails {

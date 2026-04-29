@@ -1,14 +1,35 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { redirect, useNavigate, type LoaderFunctionArgs } from "react-router";
 import type { AxiosError } from "axios";
+import type { ApiEnvelope, AuthResponse } from "~/types";
+import { getCookieValue } from "~/utils/cookies";
+import {
+  clearSession,
+  getStoredUser,
+  isAdminRole,
+  ROLE_KEY,
+  persistSession,
+  setPendingTwoFactor,
+  TOKEN_KEY,
+} from "~/utils/auth";
 import http from "~/utils/http";
-import { clearSession, getStoredUser, isAdminRole, persistSession } from "~/utils/auth";
-import type { ApiEnvelope, LoginResponse } from "~/types";
+
+export const loader = ({ request }: LoaderFunctionArgs) => {
+  const token = getCookieValue(request, TOKEN_KEY);
+  const role = getCookieValue(request, ROLE_KEY);
+
+  if (token && isAdminRole(role)) {
+    return redirect("/dashboard");
+  }
+
+  return null;
+};
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@iet.or.tz");
-  const [password, setPassword] = useState("Admin@123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -20,89 +41,130 @@ export default function AdminLoginPage() {
     }
   }, [navigate]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const fieldClassName =
+    "h-[44px] w-full rounded-[8px] border border-[var(--border)] bg-white px-[13px] text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--red-dark)]";
+
+  async function handleSubmit() {
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
+    clearSession();
 
     try {
-      const response = await http.post<ApiEnvelope<LoginResponse>>("/auth/login", {
-        email,
+      const response = await http.post<ApiEnvelope<AuthResponse>>("/auth/login", {
+        email: email.trim(),
         password,
       });
 
-      const payload = response.data.data;
+      const result = response.data.data;
 
-      if (!isAdminRole(payload.user.role)) {
-        clearSession();
-        setError("This account is valid, but it is not allowed to use the admin portal.");
+      if ("validate2FA" in result) {
+        setPendingTwoFactor({
+          userId: result.validate2FA,
+          email: email.trim(),
+        });
+        navigate("/auth/otp", { replace: true });
         return;
       }
 
-      persistSession(payload.user, payload.accessToken, payload.refreshToken);
+      if (!isAdminRole(result.user.role)) {
+        setError("This account does not have admin portal access.");
+        return;
+      }
+
+      persistSession(result.user, result.accessToken, result.refreshToken);
       navigate("/dashboard", { replace: true });
-    } catch (err) {
-      const axiosError = err as AxiosError<{ message?: string }>;
-      setError(axiosError.response?.data?.message ?? "Login failed.");
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setError(apiError.response?.data?.message ?? "Login request did not reach the backend.");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="auth-form-wrap">
-      <h2 className="auth-title">Log In</h2>
-      <p className="auth-subtitle auth-centered">
-        Pease enter your registered email and password below to Sign in.
+    <div>
+      <h2 className="font-serif-display text-center text-[24px] font-bold text-[var(--text)]">
+        Log In
+      </h2>
+      <p className="mx-auto mt-[5px] max-w-[290px] text-center text-[12px] leading-[1.6] text-[var(--muted)]">
+        Please enter your registered email and password below to sign in.
       </p>
 
-      <form onSubmit={handleSubmit} className="auth-form">
-        <div className="field">
-          <label htmlFor="email">Email</label>
+      <div className="mt-[22px]">
+        <div className="mb-[14px]">
+          <label htmlFor="email" className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">
+            Email
+          </label>
           <input
             id="email"
             type="email"
             value={email}
             placeholder="example@gmail.com"
             onChange={(event) => setEmail(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            className={fieldClassName}
             required
           />
         </div>
 
-        <div className="field">
-          <label htmlFor="password">Password</label>
+        <div className="mb-[14px]">
+          <label htmlFor="password" className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">
+            Password
+          </label>
           <input
             id="password"
             type="password"
             value={password}
             placeholder="Password"
             onChange={(event) => setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            className={fieldClassName}
             required
           />
         </div>
 
-        <div className="auth-form-row">
-          <label className="remember-me">
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <label className="inline-flex items-center gap-2 text-[12px] text-[var(--muted)]">
             <input
               type="checkbox"
               checked={rememberMe}
               onChange={(event) => setRememberMe(event.target.checked)}
+              className="h-[14px] w-[14px] accent-[#4f0f0c]"
             />
-            <span>Remember me for 30 days</span>
+            <span>Remember me</span>
           </label>
-          <a href="#" className="forgot-link">Forgot Password?</a>
+          <a href="#" className="text-[12px] font-semibold text-[var(--red)]">
+            Forgot Password?
+          </a>
         </div>
 
-        {error ? <div className="error-banner">{error}</div> : null}
+        {error ? (
+          <div className="mt-4 rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
+            {error}
+          </div>
+        ) : null}
 
-        <button className="button button-primary auth-submit" type="submit" disabled={submitting}>
-          {submitting ? "Signing In..." : "Sign In"}
+        <button
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-[8px] bg-[var(--red-dark)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={submitting}
+        >
+          <span>{submitting ? "Signing In..." : "Sign In"}</span>
+          {!submitting ? <ArrowRight size={14} /> : null}
         </button>
-
-        <p className="auth-register-copy">
-          Dont have an account? <a href="#" className="register-link">Click here to register</a>
-        </p>
-      </form>
+      </div>
     </div>
   );
 }

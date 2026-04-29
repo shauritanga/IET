@@ -91,6 +91,14 @@ export enum ApplicationStatus {
   CHANGES_REQUESTED = 'CHANGES_REQUESTED', // Changes requested
 }
 
+export enum ApplicationReviewStage {
+  SECRETARIAT_REVIEW = 'SECRETARIAT_REVIEW',
+  EVALUATOR_REVIEW = 'EVALUATOR_REVIEW',
+  MPDC_REVIEW = 'MPDC_REVIEW',
+  COUNCIL_REVIEW = 'COUNCIL_REVIEW',
+  APPROVAL_NOTICE_SENT = 'APPROVAL_NOTICE_SENT',
+}
+
 export enum ApplicationType {
   NEW = 'NEW', // New registration
   UPGRADING = 'UPGRADING', // Upgrading membership class
