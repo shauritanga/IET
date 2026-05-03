@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MembershipFeeEntity } from '../entities/membership-fee.entity';
 import { UserEntity } from '../../user/entities/user.entity';
+import { MembershipCategoryEntity } from '../../admin/entities/membership-category.entity';
+import { SystemSettingEntity } from '../../admin/entities/system-setting.entity';
 import {
   FeeStatus,
   MembershipClass,
@@ -15,6 +17,21 @@ import {
   PaymentMethod,
 } from '../../../common/enums';
 import { InitiateFeePaymentDto } from '../dto';
+
+type FiscalYearSettings = {
+  startMonth: number;
+  startDay: number;
+  endMonth: number;
+  endDay: number;
+};
+
+const FISCAL_YEAR_SETTING_KEY = 'membership_fiscal_year';
+const DEFAULT_FISCAL_YEAR_SETTINGS: FiscalYearSettings = {
+  startMonth: 7,
+  startDay: 11,
+  endMonth: 7,
+  endDay: 10,
+};
 
 @Injectable()
 export class MembershipService {
@@ -36,7 +53,25 @@ export class MembershipService {
     private feeRepository: Repository<MembershipFeeEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(MembershipCategoryEntity)
+    private membershipCategoryRepository: Repository<MembershipCategoryEntity>,
+    @InjectRepository(SystemSettingEntity)
+    private settingRepository: Repository<SystemSettingEntity>,
   ) {}
+
+  async getMembershipCategories(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      yearlyFee: number;
+      minYearsExperience: number;
+      description: string | null;
+    }>
+  > {
+    return this.membershipCategoryRepository.find({
+      order: { minYearsExperience: 'ASC', name: 'ASC' },
+    });
+  }
 
   /**
    * Get membership details for user
@@ -80,6 +115,10 @@ export class MembershipService {
       );
     }
 
+    const annualFee = user.membershipClass
+      ? await this.getMembershipFeeAmount(user.membershipClass)
+      : null;
+
     return {
       membershipId: user.membershipId,
       membershipClass: user.membershipClass,
@@ -88,9 +127,7 @@ export class MembershipService {
       location: user.location,
       joiningDate: user.joiningDate,
       expiryDate: user.membershipExpiryDate,
-      annualFee: user.membershipClass
-        ? this.FEE_AMOUNTS[user.membershipClass]
-        : null,
+      annualFee,
       nextPaymentDue,
       daysUntilExpiry,
     };
@@ -184,10 +221,10 @@ export class MembershipService {
       fee.userId = userId;
       fee.year = dto.year;
       fee.membershipClass = user.membershipClass;
-      fee.amount = this.FEE_AMOUNTS[user.membershipClass];
+      fee.amount = await this.getMembershipFeeAmount(user.membershipClass);
       fee.currency = 'TZS';
       fee.status = FeeStatus.PENDING;
-      fee.dueDate = new Date(dto.year, 6, 10); // July 10th
+      fee.dueDate = await this.getFiscalYearEndDate(dto.year);
       fee = await this.feeRepository.save(fee);
     }
 
@@ -254,7 +291,7 @@ export class MembershipService {
     // Update user membership status and expiry
     const user = fee.user;
     user.membershipStatus = MembershipStatus.ACTIVE;
-    user.membershipExpiryDate = new Date(fee.year + 1, 6, 10); // Expiry July 10th next year
+    user.membershipExpiryDate = await this.getFiscalYearEndDate(fee.year);
     await this.userRepository.save(user);
 
     this.logger.log(`Fee ${feeId} marked as paid, receipt: ${receiptNumber}`);
@@ -383,7 +420,50 @@ export class MembershipService {
         .execute();
     }
 
+    await this.userRepository
+      .createQueryBuilder()
+      .update(UserEntity)
+      .set({ membershipStatus: MembershipStatus.EXPIRED })
+      .where('"membershipExpiryDate" < :now', { now })
+      .andWhere('membershipStatus = :active', { active: MembershipStatus.ACTIVE })
+      .execute();
+
     this.logger.log('Fee statuses updated');
+  }
+
+  private async getMembershipFeeAmount(
+    membershipClass: MembershipClass,
+  ): Promise<number> {
+    const category = await this.membershipCategoryRepository.findOne({
+      where: { name: membershipClass },
+    });
+
+    return category?.yearlyFee ?? this.FEE_AMOUNTS[membershipClass];
+  }
+
+  private async getFiscalYearSettings(): Promise<FiscalYearSettings> {
+    const setting = await this.settingRepository.findOneBy({
+      key: FISCAL_YEAR_SETTING_KEY,
+    });
+    if (!setting) {
+      return DEFAULT_FISCAL_YEAR_SETTINGS;
+    }
+
+    try {
+      return {
+        ...DEFAULT_FISCAL_YEAR_SETTINGS,
+        ...(JSON.parse(setting.value) as Partial<FiscalYearSettings>),
+      };
+    } catch {
+      return DEFAULT_FISCAL_YEAR_SETTINGS;
+    }
+  }
+
+  private async getFiscalYearEndDate(year: number): Promise<Date> {
+    const settings = await this.getFiscalYearSettings();
+    const date = new Date(year, settings.endMonth - 1, settings.endDay);
+    date.setHours(23, 59, 59, 999);
+    return date;
   }
 
   /**

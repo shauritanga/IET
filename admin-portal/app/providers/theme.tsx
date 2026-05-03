@@ -12,22 +12,21 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<ThemeMode>("light");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+function getInitialTheme(): ThemeMode {
+    if (typeof window === "undefined") return "light";
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    const nextTheme: ThemeMode =
+    return (
       stored === "dark" || stored === "light"
         ? stored
         : window.matchMedia("(prefers-color-scheme: dark)").matches
           ? "dark"
-          : "light";
+          : "light"
+    );
+}
 
-    setTheme(nextTheme);
-  }, []);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
 
   useEffect(() => {
     if (typeof document === "undefined") return;

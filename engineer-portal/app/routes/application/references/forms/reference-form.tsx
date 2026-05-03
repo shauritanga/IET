@@ -28,14 +28,14 @@ const ReferenceSection = ({ prefix, number, title, subtitle, badge, badgeColor, 
     const fieldErrors = errors[prefix];
 
     return (
-        <div className="rounded-xl border border-[var(--iet-border)] overflow-hidden bg-white">
+        <div className="rounded-xl border border-[var(--iet-border)] overflow-hidden bg-[var(--iet-white)]">
             {/* Card Header */}
-            <div className="bg-[#FDF0F0] px-[18px] py-[13px] border-b border-[var(--iet-border)] flex items-center gap-[10px]">
-                <div className="w-7 h-7 rounded-full bg-[#E20C0A] text-white text-[12px] font-extrabold flex items-center justify-center shrink-0">
+            <div className="bg-[var(--iet-red-pale)] px-[18px] py-[13px] border-b border-[var(--iet-border)] flex items-center gap-[10px]">
+                <div className="w-7 h-7 rounded-full bg-[var(--iet-red)] text-white text-[12px] font-extrabold flex items-center justify-center shrink-0">
                     {number}
                 </div>
                 <div>
-                    <div className="text-[13px] font-bold text-[#390909]">{title}</div>
+                    <div className="text-[13px] font-bold text-[var(--iet-red-dark)]">{title}</div>
                     <div className="text-[10.5px] text-[var(--iet-muted)] mt-[1px]">{subtitle}</div>
                 </div>
                 <div className="ml-auto">
@@ -71,7 +71,7 @@ const ReferenceSection = ({ prefix, number, title, subtitle, badge, badgeColor, 
                         <FieldLabel>
                             Membership Grade *{" "}
                             {prefix === "supporter" && (
-                                <span className="text-[#E20C0A] font-bold text-[10px] normal-case tracking-normal">
+                                <span className="text-[var(--iet-red)] font-bold text-[10px] normal-case tracking-normal">
                                     (Corporate Member or Fellow only)
                                 </span>
                             )}
@@ -154,7 +154,7 @@ const ReferenceForm = () => {
                 <p className="text-[11.5px] text-[#5D4037] leading-relaxed">
                     <strong>Reference 1</strong> must be a current IET Tanzania member of any grade.{" "}
                     <strong>Reference 2</strong> must be a{" "}
-                    <span className="text-[#390909] font-bold">Corporate Member or Fellow</span>{" "}
+                    <span className="text-[var(--iet-red-dark)] font-bold">Corporate Member or Fellow</span>{" "}
                     of IET Tanzania. Both referees must know you professionally.
                 </p>
             </div>
@@ -174,7 +174,7 @@ const ReferenceForm = () => {
                 title="Reference 2"
                 subtitle="Must be a Corporate Member or Fellow of IET Tanzania"
                 badge="Corporate / Fellow Only"
-                badgeColor="bg-[rgba(226,12,10,.1)] text-[#390909] border border-[rgba(226,12,10,.2)]"
+                badgeColor="bg-[var(--iet-red-pale)] text-[var(--iet-red-dark)] border border-[var(--iet-border)]"
                 gradeOptions={SUPPORTER_GRADES}
             />
         </div>

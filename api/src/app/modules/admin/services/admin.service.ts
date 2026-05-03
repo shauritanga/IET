@@ -30,6 +30,7 @@ import {
   AdminUserQueryDto,
   CreateAdminUserDto,
   UpdateAdminUserDto,
+  FiscalYearSettingsDto,
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
@@ -52,6 +53,14 @@ const PORTAL_ROLES = [
   UserRole.COUNCIL,
   UserRole.REVIEWER,
 ] as const;
+
+const FISCAL_YEAR_SETTING_KEY = 'membership_fiscal_year';
+const DEFAULT_FISCAL_YEAR_SETTINGS: FiscalYearSettingsDto = {
+  startMonth: 7,
+  startDay: 11,
+  endMonth: 7,
+  endDay: 10,
+};
 
 @Injectable()
 export class AdminService {
@@ -816,9 +825,7 @@ export class AdminService {
             membershipClass: dto.membershipClass,
             membershipStatus: MembershipStatus.ACTIVE,
             joiningDate: new Date(),
-            membershipExpiryDate: new Date(
-              Date.now() + 365 * 24 * 60 * 60 * 1000,
-            ),
+            membershipExpiryDate: await this.getUpcomingFiscalYearEndDate(),
           },
         );
         registration.councilApprovedAt = now;
@@ -1338,6 +1345,15 @@ export class AdminService {
       membershipsExpired = expiredResult.affected ?? 0;
     }
 
+    const expiredByDateResult = await this.userRepository
+      .createQueryBuilder()
+      .update()
+      .set({ membershipStatus: MembershipStatus.EXPIRED })
+      .where('"membershipExpiryDate" < :today', { today })
+      .andWhere('membershipStatus = :active', { active: MembershipStatus.ACTIVE })
+      .execute();
+    membershipsExpired += expiredByDateResult.affected ?? 0;
+
     this.logger.log(
       `Maintenance: ${feesMarkedOverdue} fees marked overdue, ${membershipsExpired} memberships expired`,
     );
@@ -1368,6 +1384,81 @@ export class AdminService {
     setting.value = JSON.stringify(fees);
     await this.settingRepository.save(setting);
     return fees;
+  }
+
+  async getFiscalYearSettings(): Promise<FiscalYearSettingsDto> {
+    const setting = await this.settingRepository.findOneBy({
+      key: FISCAL_YEAR_SETTING_KEY,
+    });
+    if (!setting) {
+      return DEFAULT_FISCAL_YEAR_SETTINGS;
+    }
+
+    try {
+      return {
+        ...DEFAULT_FISCAL_YEAR_SETTINGS,
+        ...(JSON.parse(setting.value) as Partial<FiscalYearSettingsDto>),
+      };
+    } catch {
+      return DEFAULT_FISCAL_YEAR_SETTINGS;
+    }
+  }
+
+  async updateFiscalYearSettings(
+    dto: FiscalYearSettingsDto,
+  ): Promise<FiscalYearSettingsDto> {
+    const normalized: FiscalYearSettingsDto = {
+      startMonth: dto.startMonth,
+      startDay: dto.startDay,
+      endMonth: dto.endMonth,
+      endDay: dto.endDay,
+    };
+
+    const startDate = new Date(2025, normalized.startMonth - 1, normalized.startDay);
+    const endDate = new Date(2025, normalized.endMonth - 1, normalized.endDay);
+    if (
+      startDate.getMonth() !== normalized.startMonth - 1 ||
+      startDate.getDate() !== normalized.startDay ||
+      endDate.getMonth() !== normalized.endMonth - 1 ||
+      endDate.getDate() !== normalized.endDay
+    ) {
+      throw new BadRequestException('Fiscal year dates are invalid');
+    }
+
+    let setting = await this.settingRepository.findOneBy({
+      key: FISCAL_YEAR_SETTING_KEY,
+    });
+    if (!setting) {
+      setting = this.settingRepository.create({
+        key: FISCAL_YEAR_SETTING_KEY,
+        value: '{}',
+      });
+    }
+    setting.value = JSON.stringify(normalized);
+    await this.settingRepository.save(setting);
+    return normalized;
+  }
+
+  private async getUpcomingFiscalYearEndDate(reference = new Date()): Promise<Date> {
+    const settings = await this.getFiscalYearSettings();
+    const currentYearEnd = new Date(
+      reference.getFullYear(),
+      settings.endMonth - 1,
+      settings.endDay,
+    );
+    currentYearEnd.setHours(23, 59, 59, 999);
+
+    if (reference <= currentYearEnd) {
+      return currentYearEnd;
+    }
+
+    const nextYearEnd = new Date(
+      reference.getFullYear() + 1,
+      settings.endMonth - 1,
+      settings.endDay,
+    );
+    nextYearEnd.setHours(23, 59, 59, 999);
+    return nextYearEnd;
   }
 
   private async recordStageHistory(

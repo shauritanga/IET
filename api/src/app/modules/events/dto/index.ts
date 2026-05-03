@@ -110,6 +110,23 @@ export class AgendaItemDto {
   description?: string;
 }
 
+export class OrganizerDto {
+  @ApiPropertyOptional({ example: 'IET Tanzania' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'events@iet.or.tz' })
+  @IsOptional()
+  @IsString()
+  contact?: string;
+
+  @ApiPropertyOptional({ example: '+255 22 211 0000' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}
+
 export class CreateEventDto {
   @ApiProperty({ example: 'Structural Design CPD Workshop' })
   @IsNotEmpty()
@@ -197,6 +214,14 @@ export class CreateEventDto {
   @Type(() => AgendaItemDto)
   agenda?: AgendaItemDto[];
 
+  @ApiPropertyOptional({
+    example: ['https://cdn.iet.or.tz/events/gallery-1.jpg'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
   @ApiPropertyOptional({ example: '2025-10-20' })
   @IsOptional()
   @IsDateString()
@@ -226,10 +251,21 @@ export class CreateEventDto {
   @IsString({ each: true })
   requirements?: string[];
 
+  @ApiPropertyOptional({ type: OrganizerDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => OrganizerDto)
+  organizer?: OrganizerDto;
+
   @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  registrationOpen?: boolean;
 }
 
 export class UpdateEventDto extends PartialType(CreateEventDto) {}
@@ -250,10 +286,10 @@ export class RegisterForEventDto {
   @MaxLength(500)
   specialRequirements?: string;
 
-  @ApiProperty({ example: 'MPESA', enum: PaymentMethod })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ example: 'MPESA', enum: PaymentMethod })
+  @IsOptional()
   @IsEnum(PaymentMethod)
-  paymentMethod: PaymentMethod;
+  paymentMethod?: PaymentMethod;
 
   @ApiPropertyOptional({ example: '+255657000000' })
   @IsOptional()

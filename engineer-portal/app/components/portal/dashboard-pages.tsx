@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react"
 import { useMemo, useState } from "react"
+import { useMutation } from "@tanstack/react-query"
+import toast from "react-hot-toast"
 import { Link } from "react-router"
 import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
 import { membershipBenefits, profileDocumentItems, type KpiItem } from "~/components/portal/mock-data"
@@ -8,6 +10,7 @@ import { useEvents } from "~/routes/dashboard/events/repositories/use-events"
 import { mapDashboardEventToCard, type PortalEventCard } from "~/routes/dashboard/events/utils"
 import { useGetUserProfile } from "~/routes/dashboard/profile/repositories/handle-get-user-profile"
 import { useMembershipFeeHistory } from "~/routes/dashboard/home/repositories/useMembershipFeeHistory"
+import http from "~/utils/http"
 
 const EVENT_TYPE_FILTERS = [
     { value: "", label: "All Types" },
@@ -19,6 +22,36 @@ const EVENT_TYPE_FILTERS = [
     { value: "AGM", label: "AGM" },
     { value: "NETWORKING", label: "Networking" },
 ] as const
+
+type EventPaymentMethod = "AIRTEL_MONEY" | "TIGO_PESA" | "HALOPESA" | "MPESA" | "SELCOM"
+
+const EVENT_PAYMENT_METHOD_LABELS: Record<EventPaymentMethod, string> = {
+    TIGO_PESA: "Mixx by Yas",
+    HALOPESA: "Halopesa",
+    AIRTEL_MONEY: "Airtel Money",
+    MPESA: "M-Pesa",
+    SELCOM: "Card Payment",
+}
+
+const EVENT_MOBILE_PAYMENT_METHODS: EventPaymentMethod[] = ["TIGO_PESA", "HALOPESA", "AIRTEL_MONEY", "MPESA"]
+
+const normalizePaymentPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, "")
+
+    if (digits.startsWith("255") && digits.length === 12) {
+        return digits
+    }
+
+    if (digits.startsWith("0") && digits.length === 10) {
+        return `255${digits.slice(1)}`
+    }
+
+    if (digits.length === 9) {
+        return `255${digits}`
+    }
+
+    return digits
+}
 
 const iconMap = {
     star: StarIcon,
@@ -499,21 +532,67 @@ export const DashboardEventsPage = () => {
     const [cost, setCost] = useState("")
     const [view, setView] = useState<"list" | "grid">("list")
     const [selectedEvent, setSelectedEvent] = useState<PortalEventCard | null>(null)
+    const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set())
     const [drawerVisible, setDrawerVisible] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
+    const [paymentStepOpen, setPaymentStepOpen] = useState(false)
+    const [eventPaymentMethod, setEventPaymentMethod] = useState<EventPaymentMethod>("TIGO_PESA")
+    const [paymentPhoneNumber, setPaymentPhoneNumber] = useState("")
 
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const fromDateStr = thirtyDaysAgo.toISOString().slice(0, 10)
-    const { data, isLoading, isError } = useEvents({
+    const { data, isLoading, isError, refetch } = useEvents({
         limit: 100,
         fromDate: fromDateStr,
         category: type || undefined,
         location: location || undefined,
         search: query || undefined,
     })
+    const registerMutation = useMutation({
+        mutationFn: async ({
+            event,
+            paymentMethod,
+            phoneNumber,
+        }: {
+            event: PortalEventCard
+            paymentMethod?: EventPaymentMethod
+            phoneNumber?: string
+        }) => {
+            const response = await http.post(`/events/${event.id}/register`, {
+                attendeeType: "MEMBER",
+                ...(paymentMethod ? { paymentMethod } : {}),
+                ...(phoneNumber ? { phoneNumber } : {}),
+            })
+            return { event, result: response.data?.data }
+        },
+        onSuccess: async ({ event }) => {
+            toast.success(event.free ? "Registration confirmed." : "Payment recorded and registration confirmed.")
+            await refetch()
+            setPaymentStepOpen(false)
+            setRegisteredEventIds((current) => new Set(current).add(event.id))
+            setSelectedEvent((current) => current?.id === event.id
+                ? {
+                    ...current,
+                    isRegistered: true,
+                    registeredCount: (current.registeredCount ?? 0) + 1,
+                    isFull: current.availableSlots ? (current.registeredCount ?? 0) + 1 >= current.availableSlots : current.isFull,
+                }
+                : current,
+            )
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.message ?? "Failed to register for this event.")
+        },
+    })
 
-    const events = useMemo(() => (data?.data ?? []).map(mapDashboardEventToCard), [data])
+    const events = useMemo(
+        () => (data?.data ?? []).map((event) => {
+            const card = mapDashboardEventToCard(event)
+            return registeredEventIds.has(card.id) ? { ...card, isRegistered: true } : card
+        }),
+        [data, registeredEventIds],
+    )
     const filteredEvents = useMemo(
         () => events.filter((event) => {
             const matchesCost = !cost || (cost === "free" ? event.free : !event.free)
@@ -524,6 +603,9 @@ export const DashboardEventsPage = () => {
 
     const openDrawer = (event: PortalEventCard) => {
         setSelectedEvent(event)
+        setPaymentStepOpen(false)
+        setEventPaymentMethod("TIGO_PESA")
+        setPaymentPhoneNumber("")
         setDrawerVisible(true)
         requestAnimationFrame(() => setDrawerOpen(true))
     }
@@ -533,8 +615,54 @@ export const DashboardEventsPage = () => {
         setTimeout(() => {
             setDrawerVisible(false)
             setSelectedEvent(null)
+            setPaymentStepOpen(false)
+            setEventPaymentMethod("TIGO_PESA")
+            setPaymentPhoneNumber("")
         }, 280)
     }
+
+    const registerForSelectedEvent = () => {
+        if (!selectedEvent || selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending) return
+
+        if (!selectedEvent.free) {
+            setPaymentStepOpen(true)
+            return
+        }
+
+        registerMutation.mutate({ event: selectedEvent })
+    }
+
+    const completePaidEventRegistration = () => {
+        if (!selectedEvent || selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending) return
+
+        const normalizedPhoneNumber = normalizePaymentPhoneNumber(paymentPhoneNumber)
+
+        if (EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod) && !paymentPhoneNumber.trim()) {
+            toast.error("Phone number is required for mobile money payments.")
+            return
+        }
+
+        if (EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod) && !/^255\d{9}$/.test(normalizedPhoneNumber)) {
+            toast.error("Use phone number format 255XXXXXXXXX.")
+            return
+        }
+
+        registerMutation.mutate({
+            event: selectedEvent,
+            paymentMethod: eventPaymentMethod,
+            phoneNumber: EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod) ? normalizedPhoneNumber : undefined,
+        })
+    }
+
+    const registrationButtonLabel = selectedEvent?.isRegistered
+        ? "Already Registered"
+        : selectedEvent?.isFull
+            ? "Event Full"
+            : registerMutation.isPending && registerMutation.variables?.event.id === selectedEvent?.id
+                ? paymentStepOpen ? "Processing..." : "Registering..."
+                : paymentStepOpen
+                    ? "Complete Registration"
+                    : "Register"
 
     return (
         <div>
@@ -722,11 +850,139 @@ export const DashboardEventsPage = () => {
                                         </div>
                                     </div>
                                 )}
+                                {paymentStepOpen && !selectedEvent.free && (
+                                    <div style={{ marginTop: 20, border: "1px solid var(--iet-border)", borderRadius: 10, overflow: "hidden", background: "var(--iet-white)" }}>
+                                        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--iet-border)", background: "var(--iet-bg)" }}>
+                                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--iet-red-dark)" }}>Payment Method</div>
+                                            <div style={{ fontSize: 11.5, color: "var(--iet-muted)", marginTop: 3 }}>Choose how you want to complete this registration.</div>
+                                        </div>
+                                        <div style={{ padding: 16 }}>
+                                            <div style={{ display: "grid", gap: 8 }}>
+                                                {EVENT_MOBILE_PAYMENT_METHODS.map((method) => (
+                                                    <button
+                                                        key={method}
+                                                        type="button"
+                                                        onClick={() => setEventPaymentMethod(method)}
+                                                        style={{
+                                                            width: "100%",
+                                                            border: `1.5px solid ${eventPaymentMethod === method ? "var(--iet-red)" : "var(--iet-border)"}`,
+                                                            borderRadius: 8,
+                                                            background: eventPaymentMethod === method ? "var(--iet-red-pale)" : "var(--iet-bg)",
+                                                            padding: "11px 12px",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "space-between",
+                                                            cursor: "pointer",
+                                                            fontFamily: "Montserrat,sans-serif",
+                                                            color: "var(--iet-text)",
+                                                        }}
+                                                    >
+                                                        <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, fontWeight: 700 }}>
+                                                            <span style={{
+                                                                width: 12,
+                                                                height: 12,
+                                                                borderRadius: "50%",
+                                                                border: `1.5px solid ${eventPaymentMethod === method ? "var(--iet-red)" : "var(--iet-muted)"}`,
+                                                                background: eventPaymentMethod === method ? "var(--iet-red)" : "transparent",
+                                                                flexShrink: 0,
+                                                            }} />
+                                                            {EVENT_PAYMENT_METHOD_LABELS[method]}
+                                                        </span>
+                                                        <span style={{ fontSize: 10.5, color: "var(--iet-muted)", fontWeight: 600 }}>Mobile money</span>
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEventPaymentMethod("SELCOM")}
+                                                    style={{
+                                                        width: "100%",
+                                                        border: `1.5px solid ${eventPaymentMethod === "SELCOM" ? "var(--iet-red)" : "var(--iet-border)"}`,
+                                                        borderRadius: 8,
+                                                        background: eventPaymentMethod === "SELCOM" ? "var(--iet-red-pale)" : "var(--iet-bg)",
+                                                        padding: "11px 12px",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                        cursor: "pointer",
+                                                        fontFamily: "Montserrat,sans-serif",
+                                                        color: "var(--iet-text)",
+                                                    }}
+                                                >
+                                                    <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, fontWeight: 700 }}>
+                                                        <span style={{
+                                                            width: 12,
+                                                            height: 12,
+                                                            borderRadius: "50%",
+                                                            border: `1.5px solid ${eventPaymentMethod === "SELCOM" ? "var(--iet-red)" : "var(--iet-muted)"}`,
+                                                            background: eventPaymentMethod === "SELCOM" ? "var(--iet-red)" : "transparent",
+                                                            flexShrink: 0,
+                                                        }} />
+                                                        Card Payment
+                                                    </span>
+                                                    <span style={{ fontSize: 10.5, color: "var(--iet-muted)", fontWeight: 600 }}>Secure checkout</span>
+                                                </button>
+                                            </div>
+
+                                            <div style={{ marginTop: 14, border: "1px solid var(--iet-border)", borderRadius: 8, padding: 12, background: "var(--iet-bg)" }}>
+                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 12 }}>
+                                                    <span style={{ color: "var(--iet-muted)" }}>{selectedEvent.title}</span>
+                                                    <span style={{ color: "var(--iet-red-dark)", fontWeight: 800, whiteSpace: "nowrap" }}>TZS {selectedEvent.price.toLocaleString()}</span>
+                                                </div>
+                                                <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 12.5, fontWeight: 800, color: "var(--iet-red-dark)" }}>
+                                                    <span>Total</span>
+                                                    <span>TZS {selectedEvent.price.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+
+                                            {EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod) && (
+                                                <div style={{ marginTop: 14 }}>
+                                                    <label style={{ display: "block", fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".7px", color: "var(--iet-muted)", marginBottom: 6 }}>Phone Number</label>
+                                                    <input
+                                                        type="tel"
+                                                        value={paymentPhoneNumber}
+                                                        onChange={(event) => setPaymentPhoneNumber(event.target.value)}
+                                                        placeholder="e.g. 255712000000"
+                                                        style={{
+                                                            width: "100%",
+                                                            border: "1.5px solid var(--iet-border)",
+                                                            borderRadius: 8,
+                                                            background: "var(--iet-white)",
+                                                            padding: "9px 11px",
+                                                            fontSize: 12.5,
+                                                            fontFamily: "Montserrat,sans-serif",
+                                                            color: "var(--iet-text)",
+                                                            outline: "none",
+                                                        }}
+                                                    />
+                                                    <p style={{ fontSize: 11, color: "var(--iet-muted)", marginTop: 6 }}>Use the format 255XXXXXXXXX.</p>
+                                                </div>
+                                            )}
+
+                                            <div style={{ marginTop: 14, fontSize: 11.5, lineHeight: 1.6, color: "var(--iet-muted)" }}>
+                                                {EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod)
+                                                    ? "A payment prompt will be sent to the selected mobile money number to complete registration."
+                                                    : "Continue to complete payment through secure card checkout."}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div style={{ padding: "14px 20px", borderTop: "1px solid var(--iet-border)", display: "flex", gap: 10, flexShrink: 0 }}>
                             <button className="btn btn-outline" style={{ flex: 1, justifyContent: "center" }} onClick={closeDrawer}>Cancel</button>
-                            <button className="btn btn-red" style={{ flex: 1, justifyContent: "center" }}>Register</button>
+                            <button
+                                className="btn btn-red"
+                                style={{
+                                    flex: 1,
+                                    justifyContent: "center",
+                                    opacity: selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending ? 0.65 : 1,
+                                    cursor: selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending ? "not-allowed" : "pointer",
+                                }}
+                                disabled={selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending}
+                                onClick={paymentStepOpen && !selectedEvent.free ? completePaidEventRegistration : registerForSelectedEvent}
+                            >
+                                {registrationButtonLabel}
+                            </button>
                         </div>
                     </div>
                 </>

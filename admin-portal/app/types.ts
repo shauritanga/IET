@@ -128,15 +128,34 @@ export type AdminEvent = {
   endTime: string;
   location?: string | null;
   isOnline: boolean;
+  onlineUrl?: string | null;
   guestOfHonor?: string | null;
+  speakers?: Array<{
+    name: string;
+    title?: string;
+    bio?: string;
+    photo?: string;
+  }>;
+  agenda?: Array<{
+    time: string;
+    title: string;
+    description?: string;
+  }>;
   registrationDeadline?: string | null;
   registrationFee: number;
   cpdPoints: number;
   maxParticipants?: number | null;
+  requirements?: string[];
+  organizer?: {
+    name?: string;
+    contact?: string;
+    phone?: string;
+  };
   registeredCount: number;
   isPublished: boolean;
   registrationOpen: boolean;
   coverImage?: string | null;
+  images?: string[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -172,11 +191,31 @@ export type AdminEventPayload = {
   endTime: string;
   location?: string;
   isOnline: boolean;
+  onlineUrl?: string;
+  guestOfHonor?: string;
+  speakers?: Array<{
+    name: string;
+    title?: string;
+    bio?: string;
+    photo?: string;
+  }>;
+  agenda?: Array<{
+    time: string;
+    title: string;
+    description?: string;
+  }>;
   registrationDeadline?: string;
   registrationFee?: number;
   cpdPoints?: number;
   maxParticipants?: number;
   requirements?: string[];
+  organizer?: {
+    name?: string;
+    contact?: string;
+    phone?: string;
+  };
   isPublished?: boolean;
+  registrationOpen?: boolean;
   coverImage?: string;
+  images?: string[];
 };

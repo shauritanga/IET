@@ -31,6 +31,20 @@ import { InitiateFeePaymentDto } from '../dto';
 export class MembershipController {
   constructor(private membershipService: MembershipService) {}
 
+  @Get('categories')
+  @ApiOperation({ summary: 'List available membership categories' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Membership categories retrieved successfully',
+  })
+  async getMembershipCategories() {
+    const result = await this.membershipService.getMembershipCategories();
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
   // ============================================
   // MEMBERSHIP DETAILS
   // ============================================

@@ -35,8 +35,8 @@ const PersonalDetailsForm = () => {
         <FieldGroup className={"grid grid-cols-1 md:grid-cols-2 gap-8"}>
             {/* Section: Profile Photo */}
             <div className="md:col-span-2 flex items-center gap-3 mt-1">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Profile Photo</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Profile Photo</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
             <Field className="md:col-span-2">
                 <FieldLabel htmlFor="title">Upload a recent passport-size photo for official use.</FieldLabel>
@@ -59,8 +59,8 @@ const PersonalDetailsForm = () => {
             </Field>
             {/* Section: Identity */}
             <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Identity</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Identity</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
             <Field>
                 <FieldLabel htmlFor="title">Title</FieldLabel>
@@ -112,8 +112,8 @@ const PersonalDetailsForm = () => {
             <Field/>
             {/* Section: Contact Details */}
             <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Contact Details</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Contact Details</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
             <Field>
                 <FieldLabel htmlFor="email">E-Mail</FieldLabel>
@@ -182,8 +182,8 @@ const PersonalDetailsForm = () => {
 
             {/* Section: Professional Background */}
             <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Professional Background</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Professional Background</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
             <Field>
                 <FieldLabel htmlFor="employer">Employer/Organization</FieldLabel>

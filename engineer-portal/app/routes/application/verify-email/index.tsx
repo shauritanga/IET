@@ -9,7 +9,7 @@ const VerifyEmail = () => {
             <div className={"space-y-4 flex-1"}>
                 <div>
                     <h2 className={"text-xl font-semibold"}>Verify E-Mail</h2>
-                    <p className={"text-sm text-neutral-400"}>We have sent a code to your email: </p>
+                    <p className={"text-sm text-[var(--iet-muted)]"}>We have sent a code to your email: </p>
                 </div>
 
                 <div>

@@ -11,18 +11,18 @@ import PillRadioGroup from "~/components/custom/pill-radio-groups";
 import { FilePickerCard } from "~/components/custom/file-pickers/file-picker-card";
 import {Separator} from "~/components/ui/separator";
 import {Button} from "~/components/ui/button";
+import {useQuery} from "@tanstack/react-query";
+import http from "~/utils/http";
+import type {APIResponse} from "~/types/types";
 
 
-// ─── Grade Options ───────────────────────────────────────────────────────────
-
-const GRADE_OPTIONS = [
-    { value: "Student Member",   emoji: "🎓", subtitle: "Currently studying" },
-    { value: "Graduate Member",  emoji: "📋", subtitle: "Recent graduate" },
-    { value: "Associate Member", emoji: "⚙️", subtitle: "Technician level" },
-    { value: "Corporate Member", emoji: "🏗️", subtitle: "Chartered engineer" },
-    { value: "Fellow",           emoji: "🏆", subtitle: "Distinguished service" },
-    { value: "Honorary Fellow",  emoji: "⭐", subtitle: "Special recognition" },
-];
+type MembershipCategory = {
+    id: string;
+    name: string;
+    yearlyFee: number;
+    minYearsExperience: number;
+    description: string | null;
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -49,14 +49,14 @@ const InstitutionCard = ({
     classRegistered: string;
     onRemove: () => void;
 }) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <div className="flex items-center justify-between p-4 bg-[var(--iet-white)] rounded-xl border border-[var(--iet-border)] shadow-sm">
         <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <Building2 className="w-5 h-5 text-red-400"/>
             </div>
             <div>
-                <p className="font-medium text-gray-800">{institutionName || "New Institution"}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-[var(--iet-text)]">{institutionName || "New Institution"}</p>
+                <p className="text-sm text-[var(--iet-muted)]">
                     {registrationDate
                         ? new Date(registrationDate).toLocaleDateString()
                         : ""
@@ -89,8 +89,18 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
         watch,
         formState: {errors},
     } = useFormContext<RegistrationDetailsFormType>();
+    const {data: categoryResponse, isLoading: categoriesLoading, isError: categoriesError} = useQuery({
+        queryKey: ["membership-categories"],
+        queryFn: async () => {
+            const response = await http.get<APIResponse<MembershipCategory[]>>("/memberships/categories");
+            return response.data;
+        },
+    });
 
     const {fields} = institutionsFieldArray;
+    const categories = categoryResponse?.data ?? [];
+    const selectedMembershipType = watch("appliedMembershipType");
+    const selectedCategory = categories.find((category) => category.name === selectedMembershipType);
 
     const isRegisteredWithStatutoryBoard = watch("registeredWithStatutoryBoard");
     const isMemberOfinstitutions = watch("memberOfOtherInstitutions");
@@ -107,8 +117,8 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
 
             {/* Section: Engineering Profile */}
             <div className="md:col-span-2 flex items-center gap-3 mt-1">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Engineering Profile</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Engineering Profile</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
 
             {/* Engineering Discipline */}
@@ -138,36 +148,36 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
                 )}
             </Field>
 
-            {/* Membership Grade — visual cards */}
+            {/* Membership Grade */}
             <Field className="md:col-span-2">
                 <FieldLabel>Membership Grade *</FieldLabel>
-                <Controller
-                    control={control}
-                    name="appliedMembershipType"
-                    render={({ field }) => (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-[10px] mt-1">
-                            {GRADE_OPTIONS.map((grade) => {
-                                const selected = field.value === grade.value;
-                                return (
-                                    <button
-                                        key={grade.value}
-                                        type="button"
-                                        onClick={() => field.onChange(grade.value)}
-                                        className={`rounded-[10px] px-[14px] py-[13px] text-center cursor-pointer transition-all border-2 ${
-                                            selected
-                                                ? "border-[#E20C0A] bg-[#FDF0F0]"
-                                                : "border-[var(--iet-border)] bg-white hover:border-[#E20C0A]/50"
-                                        }`}
-                                    >
-                                        <div className="text-[18px] mb-[5px]">{grade.emoji}</div>
-                                        <div className="text-[11.5px] font-bold text-[#390909]">{grade.value}</div>
-                                        <div className="text-[10px] text-[var(--iet-muted)] mt-[3px]">{grade.subtitle}</div>
-                                    </button>
-                                );
-                            })}
+                <NativeSelect {...register("appliedMembershipType")} disabled={categoriesLoading}>
+                    <NativeSelectOption value="">
+                        {categoriesLoading ? "Loading membership grades..." : "Select membership grade"}
+                    </NativeSelectOption>
+                    {categories.map((category) => (
+                        <NativeSelectOption key={category.id} value={category.name}>
+                            {category.name}
+                        </NativeSelectOption>
+                    ))}
+                </NativeSelect>
+                {selectedCategory && (
+                    <div className="mt-3 rounded-xl border border-[var(--iet-border)] bg-[var(--iet-bg)] p-4 text-sm text-[var(--iet-muted)]">
+                        <p className="font-semibold text-[var(--iet-red-dark)]">{selectedCategory.name}</p>
+                        {selectedCategory.description && <p className="mt-1">{selectedCategory.description}</p>}
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full bg-[var(--iet-white)] px-3 py-1 font-medium text-[var(--iet-red-dark)]">
+                                {selectedCategory.minYearsExperience} year{selectedCategory.minYearsExperience === 1 ? "" : "s"} minimum experience
+                            </span>
+                            <span className="rounded-full bg-[var(--iet-white)] px-3 py-1 font-medium text-[var(--iet-red-dark)]">
+                                TZS {selectedCategory.yearlyFee.toLocaleString()} yearly fee
+                            </span>
                         </div>
-                    )}
-                />
+                    </div>
+                )}
+                {categoriesError && (
+                    <p className="mt-2 text-xs text-red-500">Unable to load membership grades. Refresh and try again.</p>
+                )}
                 {errors.appliedMembershipType && (
                     <FieldError>{errors.appliedMembershipType.message}</FieldError>
                 )}
@@ -175,8 +185,8 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
 
             {/* Section: Professional Registrations */}
             <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Professional Registrations</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Professional Registrations</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
 
             {/* Registered with Statutory Boards */}
@@ -222,8 +232,8 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
 
             {/* Section: Other Memberships */}
             <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Other Memberships</span>
-                <div className="flex-1 h-px bg-[#E8D5D5]" />
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Other Memberships</span>
+                <div className="flex-1 h-px bg-[var(--iet-border)]" />
             </div>
 
             {/* Member of Other Engineering Institutions */}

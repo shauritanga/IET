@@ -71,31 +71,31 @@ export default function WelcomePage() {
     return (
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 py-6">
             <div className="space-y-2 text-center">
-                <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#4D302A]">
+                <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[var(--iet-red-dark)]">
                     Membership Application Status
                 </h1>
-                <p className="mx-auto max-w-2xl text-sm leading-6 text-[#7A7773]">
+                <p className="mx-auto max-w-2xl text-sm leading-6 text-[var(--iet-muted)]">
                     Your application is active in the review workflow. You can follow every stage here until the final decision is reached.
                 </p>
             </div>
 
-            <Card className="rounded-[24px] border border-[#EFE5E1] bg-white px-5 py-5 shadow-[0_12px_28px_rgba(95,69,60,0.06)] md:px-6">
-                <div className="grid gap-4 border-b border-[#F3E8E4] pb-5 md:grid-cols-[1.4fr_1fr_1fr]">
+            <Card className="rounded-[24px] border border-[var(--iet-border)] bg-[var(--iet-white)] px-5 py-5 shadow-[var(--shadow-md)] md:px-6">
+                <div className="grid gap-4 border-b border-[var(--iet-border)] pb-5 md:grid-cols-[1.4fr_1fr_1fr]">
                     <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A5938E]">Reference Number</p>
-                        <p className="mt-1 text-[17px] font-semibold text-[#4D302A]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--iet-muted)]">Reference Number</p>
+                        <p className="mt-1 text-[17px] font-semibold text-[var(--iet-red-dark)]">
                             {registration?.referenceNumber || "Awaiting Reference"}
                         </p>
                     </div>
                     <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A5938E]">Application Status</p>
-                        <p className="mt-1 text-[15px] font-medium text-[#5A3D38]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--iet-muted)]">Application Status</p>
+                        <p className="mt-1 text-[15px] font-medium text-[var(--iet-text)]">
                             {getRegistrationStatusLabel(registration?.status)}
                         </p>
                     </div>
                     <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A5938E]">Current Review Stage</p>
-                        <p className="mt-1 text-[15px] font-medium text-[#5A3D38]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--iet-muted)]">Current Review Stage</p>
+                        <p className="mt-1 text-[15px] font-medium text-[var(--iet-text)]">
                             {getReviewStageLabel(currentStage)}
                         </p>
                     </div>
@@ -117,20 +117,20 @@ export default function WelcomePage() {
                                                 ? "border-[#48A764] bg-[#DDF7E5] text-[#2F7E4A]"
                                                 : isActive
                                                     ? "border-[#A86454] bg-[#F8EEE9] text-[#7C4C41]"
-                                                    : "border-[#E7D8D3] bg-white text-[#A5938E]",
+                                                    : "border-[var(--iet-border)] bg-[var(--iet-white)] text-[var(--iet-muted)]",
                                         ].join(" ")}
                                     >
                                         {isDone || isFinalDone ? "✓" : index + 1}
                                     </div>
                                     {index < timelineSteps.length - 1 ? (
-                                        <div className={`mt-1 h-10 w-px ${isDone ? "bg-[#D2E9D9]" : "bg-[#EEE4E0]"}`} />
+                                        <div className={`mt-1 h-10 w-px ${isDone ? "bg-[#D2E9D9]" : "bg-[var(--iet-border)]"}`} />
                                     ) : null}
                                 </div>
 
-                                <div className="flex-1 rounded-[18px] border border-[#F0E5E1] bg-[#FFFDFC] px-4 py-3">
+                                <div className="flex-1 rounded-[18px] border border-[var(--iet-border)] bg-[var(--iet-white)] px-4 py-3">
                                     <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                                        <h2 className="text-[15px] font-semibold text-[#4D302A]">{step.label}</h2>
-                                        <p className="text-xs text-[#9C8882]">
+                                        <h2 className="text-[15px] font-semibold text-[var(--iet-red-dark)]">{step.label}</h2>
+                                        <p className="text-xs text-[var(--iet-muted)]">
                                             {index < currentIndex || isFinalDone
                                                 ? formatDateTime(stageTimestamps.get(step.stage) ?? registration?.stageUpdatedAt)
                                                 : isActive
@@ -138,7 +138,7 @@ export default function WelcomePage() {
                                                     : "Pending"}
                                         </p>
                                     </div>
-                                    <p className="mt-1.5 text-sm leading-6 text-[#746B67]">{step.description}</p>
+                                    <p className="mt-1.5 text-sm leading-6 text-[var(--iet-muted)]">{step.description}</p>
                                 </div>
                             </div>
                         );

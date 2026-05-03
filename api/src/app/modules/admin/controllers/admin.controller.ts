@@ -46,6 +46,7 @@ import {
   AdminUserQueryDto,
   CreateAdminUserDto,
   UpdateAdminUserDto,
+  FiscalYearSettingsDto,
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
@@ -451,6 +452,22 @@ export class AdminController {
   async updateFeeConfig(@Body() body: Record<string, number>) {
     const fees = await this.adminService.updateFeeConfig(body);
     return { success: true, data: fees, message: 'Fee configuration updated successfully' };
+  }
+
+  @Get('settings/fiscal-year')
+  @ApiOperation({ summary: 'Get membership fiscal year configuration' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Fiscal year configuration retrieved' })
+  async getFiscalYearSettings() {
+    const settings = await this.adminService.getFiscalYearSettings();
+    return { success: true, data: settings };
+  }
+
+  @Put('settings/fiscal-year')
+  @ApiOperation({ summary: 'Update membership fiscal year configuration' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Fiscal year configuration updated' })
+  async updateFiscalYearSettings(@Body() dto: FiscalYearSettingsDto) {
+    const settings = await this.adminService.updateFiscalYearSettings(dto);
+    return { success: true, data: settings, message: 'Fiscal year configuration updated successfully' };
   }
 
   // ============================================

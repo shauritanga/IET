@@ -7,6 +7,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { EventEntity, EventRegistrationEntity } from '../entities';
+import { UserEntity } from '../../user/entities/user.entity';
+import { EmailService } from '../../shared/services/email.service';
+import { SmsService } from '../../shared/services/sms.service';
 import {
   EventQueryDto,
   CreateEventDto,
@@ -19,7 +22,9 @@ import {
   EventCategory,
   EventRegistrationStatus,
   AttendeeType,
+  PaymentMethod,
   PaymentStatus,
+  UserRole,
 } from '../../../common/enums';
 
 @Injectable()
@@ -31,6 +36,10 @@ export class EventsService {
     private eventRepository: Repository<EventEntity>,
     @InjectRepository(EventRegistrationEntity)
     private registrationRepository: Repository<EventRegistrationEntity>,
+    @InjectRepository(UserEntity)
+    private userRepository: Repository<UserEntity>,
+    private emailService: EmailService,
+    private smsService: SmsService,
   ) {}
 
   /**
@@ -260,18 +269,18 @@ export class EventsService {
       throw new BadRequestException('Registration deadline has passed');
     }
 
-    // Check if already registered
+    // Check if already registered. Cancelled registrations can be reused
+    // because the table has a unique eventId/userId constraint.
     const existingReg = await this.registrationRepository.findOne({
       where: {
         userId,
         eventId,
-        status: In([
-          EventRegistrationStatus.PENDING_PAYMENT,
-          EventRegistrationStatus.CONFIRMED,
-        ]),
       },
     });
-    if (existingReg) {
+    if (
+      existingReg &&
+      existingReg.status !== EventRegistrationStatus.CANCELLED
+    ) {
       throw new BadRequestException(
         'You are already registered for this event',
       );
@@ -294,35 +303,39 @@ export class EventsService {
       }
     }
 
-    // Create registration
-    const registration = new EventRegistrationEntity();
+    // Create or restore registration
+    const registration = existingReg || new EventRegistrationEntity();
     registration.eventId = eventId;
     registration.userId = userId;
     registration.attendeeType = dto.attendeeType || AttendeeType.MEMBER;
     registration.specialRequirements = dto.specialRequirements;
+    registration.cancelledAt = undefined;
+    registration.cancellationReason = undefined;
+    registration.refundAmount = 0;
+    registration.refundStatus = undefined;
 
-    // If event is free, auto-confirm
-    if (event.registrationFee === 0) {
-      registration.status = EventRegistrationStatus.CONFIRMED;
-      registration.confirmedAt = new Date();
-      registration.ticketNumber = await this.generateTicketNumber(
-        event.startDate.getFullYear(),
-      );
-    } else {
-      registration.status = EventRegistrationStatus.PENDING_PAYMENT;
-      // TODO: Create payment record
+    const eventYear = new Date(event.startDate).getFullYear();
+    registration.status = EventRegistrationStatus.CONFIRMED;
+    registration.confirmedAt = new Date();
+    registration.ticketNumber = await this.generateTicketNumber(eventYear);
+
+    if (event.registrationFee > 0) {
+      registration.amountPaid = event.registrationFee;
+      registration.paymentMethod = dto.paymentMethod || PaymentMethod.MPESA;
+      registration.transactionRef = this.generateEventPaymentReference();
     }
 
     const savedReg = await this.registrationRepository.save(registration);
 
     this.logger.log(`User ${userId} registered for event ${eventId}`);
+    await this.notifySuperAdminsOfEventRegistration(event, savedReg, userId);
 
     return {
       registrationId: savedReg.id,
       eventId: event.id,
       eventTitle: event.title,
       status: savedReg.status,
-      paymentId: savedReg.paymentId,
+      paymentId: savedReg.paymentId ?? null,
       amount: event.registrationFee,
       currency: 'TZS',
     };
@@ -655,11 +668,31 @@ export class EventsService {
       endTime: string;
       location?: string | null;
       isOnline: boolean;
+      onlineUrl?: string | null;
       guestOfHonor?: string | null;
+      speakers: Array<{
+        name: string;
+        title?: string;
+        bio?: string;
+        photo?: string;
+      }>;
+      agenda: Array<{
+        time: string;
+        title: string;
+        description?: string;
+      }>;
       registrationDeadline?: Date | null;
       registrationFee: number;
       cpdPoints: number;
       maxParticipants?: number | null;
+      requirements: string[];
+      organizer: {
+        name?: string;
+        contact?: string;
+        phone?: string;
+      };
+      coverImage?: string | null;
+      images: string[];
       registeredCount: number;
       isPublished: boolean;
       registrationOpen: boolean;
@@ -705,11 +738,18 @@ export class EventsService {
       endTime: event.endTime,
       location: event.location,
       isOnline: event.isOnline,
+      onlineUrl: event.onlineUrl,
       guestOfHonor: event.guestOfHonor,
+      speakers: event.speakers ?? [],
+      agenda: event.agenda ?? [],
       registrationDeadline: event.registrationDeadline ?? null,
       registrationFee: event.registrationFee,
       cpdPoints: event.cpdPoints,
       maxParticipants: event.maxParticipants ?? null,
+      requirements: event.requirements ?? [],
+      organizer: event.organizer ?? {},
+      coverImage: event.coverImage,
+      images: event.images ?? [],
       registeredCount: countMap.get(event.id) || 0,
       isPublished: event.isPublished,
       registrationOpen: event.registrationOpen,
@@ -729,6 +769,124 @@ export class EventsService {
       .replace(/(^-|-$)/g, '');
     const year = new Date().getFullYear();
     return `${baseSlug}-${year}`;
+  }
+
+  private generateEventPaymentReference(): string {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+    return `EVT-PAY-${date}-${random}`;
+  }
+
+  private async notifySuperAdminsOfEventRegistration(
+    event: EventEntity,
+    registration: EventRegistrationEntity,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const [member, superAdmins] = await Promise.all([
+        this.userRepository.findOne({ where: { id: userId } }),
+        this.userRepository.find({
+          where: { role: UserRole.SUPER_ADMIN, isActive: true },
+        }),
+      ]);
+
+      if (!superAdmins.length) {
+        this.logger.warn(
+          `No active super admins found for event registration alert ${registration.id}`,
+        );
+        return;
+      }
+
+      const memberName = member?.fullName || member?.email || 'IET member';
+      const eventDate = new Date(event.startDate).toLocaleDateString();
+      const eventTime = `${event.startTime} - ${event.endTime}`;
+      const location = event.isOnline ? 'Online' : event.location || 'TBA';
+      const amount = registration.amountPaid || event.registrationFee || 0;
+      const subject = `New Event Registration - ${event.title}`;
+      const textLines = [
+        `A member has registered for ${event.title}.`,
+        `Member: ${memberName}`,
+        `Email: ${member?.email || 'N/A'}`,
+        `Phone: ${member?.phoneNumber || 'N/A'}`,
+        `Event: ${event.title}`,
+        `Date: ${eventDate}`,
+        `Time: ${eventTime}`,
+        `Location: ${location}`,
+        `Status: ${registration.status}`,
+        `Ticket: ${registration.ticketNumber || 'Pending'}`,
+        `Amount: TZS ${amount.toLocaleString()}`,
+        `Registration ID: ${registration.id}`,
+      ];
+      const text = textLines.join('\n');
+      const html = `
+        <div style="font-family: Arial, sans-serif; color: #1C1010; line-height: 1.5;">
+          <h2 style="color: #390909;">New Event Registration</h2>
+          <p>A member has registered for <strong>${event.title}</strong>.</p>
+          <table style="border-collapse: collapse; width: 100%; max-width: 640px;">
+            ${[
+              ['Member', memberName],
+              ['Email', member?.email || 'N/A'],
+              ['Phone', member?.phoneNumber || 'N/A'],
+              ['Event', event.title],
+              ['Date', eventDate],
+              ['Time', eventTime],
+              ['Location', location],
+              ['Status', registration.status],
+              ['Ticket', registration.ticketNumber || 'Pending'],
+              ['Amount', `TZS ${amount.toLocaleString()}`],
+              ['Registration ID', registration.id],
+            ]
+              .map(
+                ([label, value]) => `
+                  <tr>
+                    <td style="border: 1px solid #E8D5D5; padding: 8px; font-weight: 700;">${label}</td>
+                    <td style="border: 1px solid #E8D5D5; padding: 8px;">${value}</td>
+                  </tr>
+                `,
+              )
+              .join('')}
+          </table>
+        </div>
+      `;
+      const smsMessage = `IET: ${memberName} registered for ${event.title} on ${eventDate}. Status: ${registration.status}. Ticket: ${registration.ticketNumber || 'Pending'}.`;
+
+      await Promise.all(
+        superAdmins.map(async (admin) => {
+          const tasks: Promise<unknown>[] = [];
+
+          if (admin.email) {
+            tasks.push(
+              this.emailService
+                .send({ to: admin.email, subject, html, text })
+                .catch((error: Error) => {
+                  this.logger.error(
+                    `Failed to email event registration alert to ${admin.email}: ${error.message}`,
+                  );
+                }),
+            );
+          }
+
+          if (admin.phoneNumber) {
+            tasks.push(
+              this.smsService
+                .send({ to: admin.phoneNumber, message: smsMessage })
+                .catch((error: Error) => {
+                  this.logger.error(
+                    `Failed to SMS event registration alert to ${admin.phoneNumber}: ${error.message}`,
+                  );
+                }),
+            );
+          }
+
+          await Promise.all(tasks);
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to send super admin event registration alerts for ${registration.id}: ${message}`,
+      );
+    }
   }
 
   private async generateTicketNumber(year: number): Promise<string> {

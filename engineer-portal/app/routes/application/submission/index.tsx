@@ -123,20 +123,20 @@ const Submission = () => {
             {!paymentCompleted ? (
                 <section className="flex flex-col gap-6">
                     <div className="flex flex-col gap-2">
-                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[#390909] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
+                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[var(--iet-red-dark)] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
                             Step 5 of 5
                         </div>
-                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[#390909] leading-tight">Complete Payment to Continue</h2>
+                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[var(--iet-red-dark)] leading-tight">Complete Payment to Continue</h2>
                         <p className="text-[13px] text-[var(--iet-muted)]">
                             Complete payment to submit your application.
                         </p>
                     </div>
 
-                    <div className="bg-white rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8">
+                    <div className="bg-[var(--iet-white)] rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8">
                     <div className="space-y-6">
                         <div className="space-y-3">
-                            <p className="text-sm font-semibold text-[#390909]">Select Application Type</p>
-                            <div className="inline-flex rounded-xl bg-[#ECE3E3] p-1">
+                            <p className="text-sm font-semibold text-[var(--iet-red-dark)]">Select Application Type</p>
+                            <div className="inline-flex rounded-xl bg-[var(--iet-bg)] p-1">
                                 {[
                                     { value: "GRADUATE", label: "Graduate" },
                                     { value: "STANDARD", label: "Others" },
@@ -147,8 +147,8 @@ const Submission = () => {
                                         onClick={() => setApplicationType(option.value as "GRADUATE" | "STANDARD")}
                                         className={`rounded-lg px-5 py-2 text-sm font-medium transition ${
                                             applicationType === option.value
-                                                ? "bg-[#FDE8E7] text-[#E44C3C]"
-                                                : "text-neutral-500"
+                                                ? "bg-[var(--iet-red-pale)] text-[var(--iet-red)]"
+                                                : "text-[var(--iet-muted)]"
                                         }`}
                                     >
                                         {option.label}
@@ -158,7 +158,7 @@ const Submission = () => {
                         </div>
 
                         <div className="space-y-3">
-                            <p className="border-b border-[#E6DDDD] pb-3 text-xs font-semibold tracking-[0.16em] text-neutral-500">
+                            <p className="border-b border-[var(--iet-border)] pb-3 text-xs font-semibold tracking-[0.16em] text-[var(--iet-muted)]">
                                 MOBILE NETWORKS
                             </p>
                             <div className="space-y-3">
@@ -169,26 +169,26 @@ const Submission = () => {
                                         onClick={() => setPaymentMethod(method)}
                                         className={`flex w-full items-center justify-between rounded-xl border px-4 py-4 text-left ${
                                             paymentMethod === method
-                                                ? "border-[#E44C3C] bg-white"
-                                                : "border-[#EEE6E6] bg-[#FBF8F8]"
+                                                ? "border-[var(--iet-red)] bg-[var(--iet-white)]"
+                                                : "border-[var(--iet-border)] bg-[var(--iet-bg)]"
                                         }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className={`h-3.5 w-3.5 rounded-full border ${
                                                 paymentMethod === method
-                                                    ? "border-[#E44C3C] bg-[#E44C3C]"
+                                                    ? "border-[var(--iet-red)] bg-[var(--iet-red)]"
                                                     : "border-neutral-300"
                                             }`} />
-                                            <span className="font-medium text-[#390909]">{methodLabels[method]}</span>
+                                            <span className="font-medium text-[var(--iet-red-dark)]">{methodLabels[method]}</span>
                                         </div>
-                                        <span className="text-sm text-neutral-400">{paymentMethod === method ? "Selected" : ""}</span>
+                                        <span className="text-sm text-[var(--iet-muted)]">{paymentMethod === method ? "Selected" : ""}</span>
                                     </button>
                                 ))}
                             </div>
                         </div>
 
                         <div className="space-y-3">
-                            <p className="border-b border-[#E6DDDD] pb-3 text-xs font-semibold tracking-[0.16em] text-neutral-500">
+                            <p className="border-b border-[var(--iet-border)] pb-3 text-xs font-semibold tracking-[0.16em] text-[var(--iet-muted)]">
                                 CREDIT CARD
                             </p>
                             <button
@@ -196,37 +196,37 @@ const Submission = () => {
                                 onClick={() => setPaymentMethod("SELCOM")}
                                 className={`flex w-full items-center justify-between rounded-xl border px-4 py-4 text-left ${
                                     paymentMethod === "SELCOM"
-                                        ? "border-[#E44C3C] bg-white"
-                                        : "border-[#EEE6E6] bg-[#FBF8F8]"
+                                        ? "border-[var(--iet-red)] bg-[var(--iet-white)]"
+                                        : "border-[var(--iet-border)] bg-[var(--iet-bg)]"
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <span className={`h-3.5 w-3.5 rounded-full border ${
                                         paymentMethod === "SELCOM"
-                                            ? "border-[#E44C3C] bg-[#E44C3C]"
+                                            ? "border-[var(--iet-red)] bg-[var(--iet-red)]"
                                             : "border-neutral-300"
                                     }`} />
-                                    <span className="font-medium text-[#390909]">Card Payment</span>
+                                    <span className="font-medium text-[var(--iet-red-dark)]">Card Payment</span>
                                 </div>
-                                <span className="text-sm text-neutral-400">Powered by ClickPesa</span>
+                                <span className="text-sm text-[var(--iet-muted)]">Powered by ClickPesa</span>
                             </button>
                         </div>
 
-                        <div className="rounded-2xl bg-[#F8F4F4] p-5">
-                            <p className="text-sm text-neutral-500">
+                        <div className="rounded-2xl bg-[var(--iet-bg)] p-5">
+                            <p className="text-sm text-[var(--iet-muted)]">
                                 {mobileMethods.includes(paymentMethod)
                                     ? "Pay directly from the website and you will receive a payment verification prompt to complete the transaction."
                                     : "You will be redirected to complete the payment securely through ClickPesa card checkout."}
                             </p>
 
-                            <div className="mt-4 rounded-xl bg-[#F8F4F4] p-4">
-                                <p className="text-sm font-semibold text-[#390909]">Payment Summary</p>
+                            <div className="mt-4 rounded-xl bg-[var(--iet-white)] border border-[var(--iet-border)] p-4">
+                                <p className="text-sm font-semibold text-[var(--iet-red-dark)]">Payment Summary</p>
                                 <div className="mt-3 space-y-3 text-sm">
-                                    <div className="flex items-center justify-between border-b border-[#DED5D5] pb-3">
+                                    <div className="flex items-center justify-between border-b border-[var(--iet-border)] pb-3">
                                         <span>{applicationType === "GRADUATE" ? "Graduate Application" : "Standard Application"}</span>
                                         <span>{amount.toLocaleString()} TZS</span>
                                     </div>
-                                    <div className="flex items-center justify-between font-semibold text-[#390909]">
+                                    <div className="flex items-center justify-between font-semibold text-[var(--iet-red-dark)]">
                                         <span>Total Fee</span>
                                         <span>{amount.toLocaleString()} TZS</span>
                                     </div>
@@ -241,16 +241,16 @@ const Submission = () => {
                                         value={phoneNumber}
                                         onChange={(event) => setPhoneNumber(event.target.value)}
                                         placeholder="e.g. 255712000000"
-                                        className="w-full rounded-lg border-[1.5px] border-[var(--iet-border)] bg-[var(--iet-bg)] px-3 py-2 text-[12.5px] text-foreground outline-none transition-[border-color,background] placeholder:text-[var(--iet-muted)] focus:border-[var(--iet-red)] focus:bg-white"
+                                        className="w-full rounded-lg border-[1.5px] border-[var(--iet-border)] bg-[var(--iet-white)] px-3 py-2 text-[12.5px] text-[var(--iet-text)] outline-none transition-[border-color,background] placeholder:text-[var(--iet-muted)] focus:border-[var(--iet-red)] focus:bg-[var(--iet-white)]"
                                     />
-                                    <p className="text-xs text-neutral-500">
+                                    <p className="text-xs text-[var(--iet-muted)]">
                                         Use the format <span className="font-medium">255XXXXXXXXX</span>.
                                     </p>
                                 </div>
                             )}
 
                             {paymentState?.message && (
-                                <div className="mt-4 rounded-xl bg-[#FDF1F0] px-4 py-3 text-sm text-[#9B3B32]">
+                                <div className="mt-4 rounded-xl bg-[var(--iet-red-pale)] px-4 py-3 text-sm text-[var(--iet-red-dark)]">
                                     {paymentState.message}
                                 </div>
                             )}
@@ -273,16 +273,16 @@ const Submission = () => {
                 <form className="flex flex-col gap-6" onSubmit={handleSubmit(submitDeclaration)}>
                     {/* Header */}
                     <div className="flex flex-col gap-2">
-                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[#390909] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
+                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[var(--iet-red-dark)] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
                             Step 5 of 5
                         </div>
-                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[#390909] leading-tight">Declaration & Submission</h2>
+                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[var(--iet-red-dark)] leading-tight">Declaration & Submission</h2>
                         <p className="text-[13px] text-[var(--iet-muted)]">Review and complete your final submission.</p>
                     </div>
 
                     {/* White Card */}
-                    <div className="bg-white rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8 space-y-6">
-                        <div className="rounded-xl border border-[var(--iet-border)] bg-[#F8F4F4] p-5">
+                    <div className="bg-[var(--iet-white)] rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8 space-y-6">
+                        <div className="rounded-xl border border-[var(--iet-border)] bg-[var(--iet-bg)] p-5">
                             <p className="text-sm text-[var(--iet-muted)] leading-relaxed">
                                 I, the undersigned, agree that in the event of election as a Member of the Institution
                                 of Engineers Tanzania (IET), I will abide by the Constitution and Bye-laws of the Institution
@@ -292,7 +292,7 @@ const Submission = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <p className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Applicant Signature</p>
+                            <p className="text-[10px] font-black uppercase tracking-[1.2px] text-[var(--iet-muted)]">Applicant Signature</p>
                             <Field className="max-w-md">
                                 <Controller
                                     name="declarationAgreed"
@@ -334,7 +334,7 @@ const Submission = () => {
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-2">
                         <Link to="/application/references">
-                            <button type="button" className="inline-flex items-center gap-2 border border-[var(--iet-border)] bg-white text-[#390909] px-5 py-2.5 rounded-xl text-sm font-semibold hover:border-[var(--iet-red)] hover:text-[var(--iet-red)] transition-colors">
+                            <button type="button" className="inline-flex items-center gap-2 border border-[var(--iet-border)] bg-[var(--iet-white)] text-[var(--iet-red-dark)] px-5 py-2.5 rounded-xl text-sm font-semibold hover:border-[var(--iet-red)] hover:text-[var(--iet-red)] transition-colors">
                                 ← Back
                             </button>
                         </Link>

@@ -11,6 +11,8 @@ import {
   IsBoolean,
   MinLength,
   Matches,
+  Min,
+  Max,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -353,6 +355,36 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+export class FiscalYearSettingsDto {
+  @ApiProperty({ example: 7, minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  startMonth: number;
+
+  @ApiProperty({ example: 11, minimum: 1, maximum: 31 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(31)
+  startDay: number;
+
+  @ApiProperty({ example: 7, minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  endMonth: number;
+
+  @ApiProperty({ example: 10, minimum: 1, maximum: 31 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(31)
+  endDay: number;
 }
 
 export class MembershipCategoryQueryDto {

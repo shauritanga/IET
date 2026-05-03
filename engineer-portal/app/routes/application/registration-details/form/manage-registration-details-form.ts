@@ -14,7 +14,7 @@ export const InstitutionSchema = z.object({
 
 export const RegistrationDetailsFormSchema = z.object({
     engineeringDiscipline: z.string({message: "Engineering Discipline is required"}),
-    appliedMembershipType: z.string({message: "Membership type is required"}),
+    appliedMembershipType: z.string({message: "Membership type is required"}).min(1, "Membership type is required"),
     registeredWithStatutoryBoard: z.boolean(),
     memberOfOtherInstitutions: z.boolean(),
     supportingDocument: z.url().optional(),

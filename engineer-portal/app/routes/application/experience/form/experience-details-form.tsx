@@ -29,14 +29,14 @@ const EducationCard = ({
     endDate: string;
     onRemove: () => void;
 }) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <div className="flex items-center justify-between p-4 bg-[var(--iet-white)] rounded-xl border border-[var(--iet-border)] shadow-sm">
         <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <GraduationCap className="w-5 h-5 text-blue-400"/>
             </div>
             <div>
                 <p className="font-medium">{institutionName || "New Institution"}</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[var(--iet-muted)]">
                     {courseName && `${courseName} • `}{startDate} – {endDate}
                 </p>
             </div>
@@ -56,14 +56,14 @@ const WorkExperienceCard = ({
     endDate: string;
     onRemove: () => void;
 }) => (
-    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+    <div className="flex items-center justify-between p-4 bg-[var(--iet-white)] rounded-xl border border-[var(--iet-border)] shadow-sm">
         <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                 <Briefcase className="w-5 h-5 text-green-400"/>
             </div>
             <div>
-                <p className="font-medium text-gray-800">{employer || "New Employer"}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-[var(--iet-text)]">{employer || "New Employer"}</p>
+                <p className="text-sm text-[var(--iet-muted)]">
                     {position && `${position} • `}{startDate} – {endDate}
                 </p>
             </div>

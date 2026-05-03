@@ -1,6 +1,5 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
 import {
   Button,
   Card,
@@ -10,19 +9,14 @@ import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import { settings } from "~/data/admin-prototype";
 
-type FeeConfig = Record<string, number>;
-
-const FEE_CLASS_LABELS: Record<string, string> = {
-  GRADUATE: "Graduate Member",
-  ASSOCIATE: "Associate Member (AMIET)",
-  MIET: "Member (MIET)",
-  CORPORATE: "Corporate Member (CMIET)",
-  SENIOR: "Senior Member (SMIET)",
-  FELLOW: "Fellow (FIET)",
-  HONORARY: "Honorary Fellow",
+type FiscalYearSettings = {
+  startMonth: number;
+  startDay: number;
+  endMonth: number;
+  endDay: number;
 };
 
-function FeeInput({
+function NumberInput({
   label,
   value,
   onChange,
@@ -37,15 +31,12 @@ function FeeInput({
         {label}
       </label>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11.5px] font-semibold text-[var(--muted)]">
-          TZS
-        </span>
         <input
           type="number"
           min={0}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] py-[9px] pl-10 pr-3 text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+          className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
         />
       </div>
     </div>
@@ -53,42 +44,52 @@ function FeeInput({
 }
 
 export default function SettingsPage() {
-  const [fees, setFees] = useState<FeeConfig>({});
-  const [feesLoading, setFeesLoading] = useState(true);
-  const [feesSaving, setFeesSaving] = useState(false);
-  const [feesError, setFeesError] = useState<string | null>(null);
-  const [feesSavedMsg, setFeesSavedMsg] = useState<string | null>(null);
+  const [fiscalYear, setFiscalYear] = useState<FiscalYearSettings>({
+    startMonth: 7,
+    startDay: 11,
+    endMonth: 7,
+    endDay: 10,
+  });
+  const [fiscalLoading, setFiscalLoading] = useState(true);
+  const [fiscalSaving, setFiscalSaving] = useState(false);
+  const [fiscalError, setFiscalError] = useState<string | null>(null);
+  const [fiscalSavedMsg, setFiscalSavedMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadFees();
+    void loadFiscalYear();
   }, []);
 
-  async function loadFees() {
-    setFeesLoading(true);
-    setFeesError(null);
+  async function loadFiscalYear() {
+    setFiscalLoading(true);
+    setFiscalError(null);
     try {
-      const { data } = await http.get<ApiEnvelope<FeeConfig>>("/admin/settings/fees");
-      setFees(data.data ?? {});
+      const { data } = await http.get<ApiEnvelope<FiscalYearSettings>>("/admin/settings/fiscal-year");
+      if (data.data) {
+        setFiscalYear(data.data);
+      }
     } catch {
-      setFeesError("Failed to load fee configuration.");
+      setFiscalError("Failed to load fiscal year configuration.");
     } finally {
-      setFeesLoading(false);
+      setFiscalLoading(false);
     }
   }
 
-  async function saveFees() {
-    setFeesSaving(true);
-    setFeesError(null);
-    setFeesSavedMsg(null);
+  async function saveFiscalYear() {
+    setFiscalSaving(true);
+    setFiscalError(null);
+    setFiscalSavedMsg(null);
     try {
-      await http.put<ApiEnvelope<FeeConfig>>("/admin/settings/fees", fees);
-      setFeesSavedMsg("Fee configuration saved successfully.");
-      setTimeout(() => setFeesSavedMsg(null), 3000);
+      const { data } = await http.put<ApiEnvelope<FiscalYearSettings>>("/admin/settings/fiscal-year", fiscalYear);
+      if (data.data) {
+        setFiscalYear(data.data);
+      }
+      setFiscalSavedMsg("Fiscal year configuration saved successfully.");
+      setTimeout(() => setFiscalSavedMsg(null), 3000);
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setFeesError(apiError.response?.data?.message ?? "Failed to save fees.");
+      setFiscalError(apiError.response?.data?.message ?? "Failed to save fiscal year configuration.");
     } finally {
-      setFeesSaving(false);
+      setFiscalSaving(false);
     }
   }
 
@@ -118,48 +119,53 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        <Card title="Membership Fees (TZS)">
-          {feesLoading ? (
+        <Card title="Membership Fiscal Year">
+          {fiscalLoading ? (
             <div className="py-6 text-center text-[12px] text-[var(--muted)]">
-              Loading fee configuration…
+              Loading fiscal year configuration…
             </div>
           ) : (
             <div className="space-y-[14px]">
-              {feesError && (
+              {fiscalError && (
                 <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-                  {feesError}
+                  {fiscalError}
                 </div>
               )}
-              {feesSavedMsg && (
+              {fiscalSavedMsg && (
                 <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f5e9] px-3 py-2 text-[11.5px] font-semibold text-[#1a6b3c]">
-                  {feesSavedMsg}
+                  {fiscalSavedMsg}
                 </div>
               )}
-              {Object.entries(fees).map(([cls, amount]) => (
-                <FeeInput
-                  key={cls}
-                  label={FEE_CLASS_LABELS[cls] ?? cls}
-                  value={amount}
-                  onChange={(v) => setFees((prev) => ({ ...prev, [cls]: v }))}
+              <p className="text-[12px] leading-5 text-[var(--muted)]">
+                Active memberships expire after the fiscal year end date. Members will be asked to renew after that date.
+              </p>
+              <div className="grid gap-[12px] md:grid-cols-2">
+                <NumberInput
+                  label="Start Month"
+                  value={fiscalYear.startMonth}
+                  onChange={(v) => setFiscalYear((prev) => ({ ...prev, startMonth: v }))}
                 />
-              ))}
-              <Button tone="dark" onClick={() => void saveFees()} disabled={feesSaving}>
-                {feesSaving ? "Saving…" : "Update Fees"}
+                <NumberInput
+                  label="Start Day"
+                  value={fiscalYear.startDay}
+                  onChange={(v) => setFiscalYear((prev) => ({ ...prev, startDay: v }))}
+                />
+                <NumberInput
+                  label="End Month"
+                  value={fiscalYear.endMonth}
+                  onChange={(v) => setFiscalYear((prev) => ({ ...prev, endMonth: v }))}
+                />
+                <NumberInput
+                  label="End Day"
+                  value={fiscalYear.endDay}
+                  onChange={(v) => setFiscalYear((prev) => ({ ...prev, endDay: v }))}
+                />
+              </div>
+              <Button tone="dark" onClick={() => void saveFiscalYear()} disabled={fiscalSaving}>
+                {fiscalSaving ? "Saving…" : "Update Fiscal Year"}
               </Button>
             </div>
           )}
-        </Card>
-
-        <Card title="Users">
-          <div className="space-y-[12px]">
-            <p className="text-[12px] leading-5 text-[var(--muted)]">
-              Create portal users and assign workflow roles for Secretariat,
-              Evaluator, MPDC, Council, Admin, and Super Admin access.
-            </p>
-            <Link to="/dashboard/admin-users">
-              <Button tone="dark">Manage Users</Button>
-            </Link>
-          </div>
         </Card>
 
         <Card title="Selcom Payment Config">
