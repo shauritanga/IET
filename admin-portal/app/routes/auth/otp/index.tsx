@@ -183,7 +183,7 @@ export default function OtpPage() {
         type="button"
         onClick={() => void handleVerify(code)}
         disabled={submitting || code.length < 6}
-        className="mx-auto flex w-full max-w-[280px] items-center justify-center gap-2 rounded-[8px] bg-[var(--red-dark)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"
+        className="mx-auto flex w-full max-w-[280px] items-center justify-center gap-2 rounded-[8px] bg-[var(--red)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red-mid)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"
       >
         <Lock size={14} />
         <span>{submitting ? "Verifying..." : "Verify & Enter Admin Portal"}</span>

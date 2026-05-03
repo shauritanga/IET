@@ -52,6 +52,7 @@
     --iet-text:      #1C1010;
     --iet-muted:     #7A6060;
     --iet-border:    #E8D5D5;
+    --iet-white:     #ffffff;
     --shadow-x: 0;
     --shadow-y: 1px;
     --shadow-blur: 3px;
@@ -122,6 +123,17 @@
     --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.20), 0 4px 6px -1px hsl(0 0% 0% / 0.20);
     --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.20), 0 8px 10px -1px hsl(0 0% 0% / 0.20);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.50);
+    /* IET design tokens — dark overrides */
+    --iet-white:     #171414;
+    --iet-bg:        #0f0e0e;
+    --iet-text:      #f2ecec;
+    --iet-muted:     #b59d9d;
+    --iet-border:    #2d2626;
+    --iet-red:       #ff5a58;
+    --iet-red-dark:  #ffd9d8;
+    --iet-red-light: #4c1a1a;
+    --iet-red-pale:  #2b1414;
+    --iet-red-mid:   #ff3e3b;
 }
 
 @theme inline {
@@ -206,7 +218,7 @@
     ::-webkit-scrollbar-thumb { background: #E8D5D5; border-radius: 10px; }
 
     .dark .bg-white {
-        background-color: var(--card) !important;
+        background-color: var(--iet-white) !important;
     }
 
     .dark .topbar,
@@ -233,6 +245,10 @@
     .dark .auth-wrap {
         background: var(--background);
     }
+
+    .dark .user-pill-name {
+        color: var(--iet-text);
+    }
 }
 
 @layer components {
@@ -246,7 +262,7 @@
 
     .sidebar {
         width: 268px;
-        background: white;
+        background: var(--iet-white);
         min-height: 100vh;
         position: fixed;
         top: 0;
@@ -437,7 +453,7 @@
 
     .topbar {
         height: 50px;
-        background: white;
+        background: var(--iet-white);
         border-bottom: 1px solid var(--iet-border);
         display: flex;
         align-items: center;
@@ -502,7 +518,7 @@
         height: 30px;
         border-radius: 50%;
         border: 1.5px solid var(--iet-border);
-        background: white;
+        background: var(--iet-white);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -577,7 +593,7 @@
         max-width: 520px;
         border-radius: 24px;
         overflow: hidden;
-        background: white;
+        background: var(--iet-white);
         border: 1px solid rgba(255, 255, 255, .65);
         box-shadow: 0 24px 60px rgba(57, 9, 9, .24);
     }
@@ -695,7 +711,7 @@
 
     .apply-modal-topbar {
         height: 50px;
-        background: white;
+        background: var(--iet-white);
         border-bottom: 1px solid var(--iet-border);
         display: flex;
         align-items: center;
@@ -717,7 +733,7 @@
         cursor: pointer;
         color: var(--iet-muted);
         transition: all .15s;
-        background: white;
+        background: var(--iet-white);
     }
 
     .apply-modal-close:hover {
@@ -749,7 +765,7 @@
     .apply-modal-steps {
         width: 300px;
         min-width: 300px;
-        background: white;
+        background: var(--iet-white);
         border-right: 1px solid var(--iet-border);
         display: flex;
         flex-direction: column;
@@ -992,7 +1008,7 @@
     }
 
     .apply-placeholder-card {
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 14px;
         padding: 24px;
@@ -1069,7 +1085,7 @@
         cursor: pointer;
         transition: all .18s;
         text-align: center;
-        background: white;
+        background: var(--iet-white);
     }
 
     .apply-grade-card.active,
@@ -1119,7 +1135,7 @@
         padding: 14px 16px;
         cursor: pointer;
         text-align: left;
-        background: white;
+        background: var(--iet-white);
         transition: all .16s;
     }
 
@@ -1196,7 +1212,7 @@
         cursor: pointer;
         transition: border-color .15s, background .15s;
         display: block;
-        background: white;
+        background: var(--iet-white);
     }
 
     .apply-drop-zone-large {
@@ -1239,7 +1255,7 @@
 
     .apply-file-item,
     .apply-upload-inline {
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 8px;
         padding: 10px 12px;
@@ -1258,7 +1274,7 @@
     }
 
     .apply-repeat-card {
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 12px;
         padding: 16px;
@@ -1396,7 +1412,7 @@
     }
 
     .apply-reference-card {
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 12px;
         overflow: hidden;
@@ -1543,7 +1559,7 @@
     }
 
     .apply-pay-tab.active {
-        background: white;
+        background: var(--iet-white);
         color: var(--iet-red-dark);
         box-shadow: 0 1px 4px rgba(0,0,0,.08);
         font-weight: 700;
@@ -1567,7 +1583,7 @@
         text-align: center;
         cursor: pointer;
         transition: all .16s;
-        background: white;
+        background: var(--iet-white);
     }
 
     .apply-network-label {
@@ -1611,7 +1627,7 @@
 
     .apply-bank-card,
     .apply-receipt-card {
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 12px;
         overflow: hidden;
@@ -1652,7 +1668,7 @@
         align-items: center;
         gap: 18px;
         padding: 18px;
-        background: white;
+        background: var(--iet-white);
         border: 1px solid var(--iet-border);
         border-radius: 12px;
     }
@@ -1924,7 +1940,7 @@
     }
 
     .card {
-        background: white;
+        background: var(--iet-white);
         border-radius: 14px;
         border: 1px solid var(--iet-border);
         overflow: hidden;
@@ -2051,7 +2067,7 @@
     }
 
     .kpi {
-        background: white;
+        background: var(--iet-white);
         border-radius: 12px;
         border: 1px solid var(--iet-border);
         padding: 18px 18px 14px;
@@ -2200,7 +2216,7 @@
     }
 
     .ben-card {
-        background: white;
+        background: var(--iet-white);
         border-radius: 12px;
         border: 1px solid var(--iet-border);
         padding: 16px;
@@ -2275,7 +2291,7 @@
     }
 
     .profile-hero {
-        background: white;
+        background: var(--iet-white);
         border-radius: 16px;
         border: 1px solid var(--iet-border);
         padding: 26px 30px;
@@ -2372,7 +2388,7 @@
 
     .form-input:focus {
         border-color: var(--iet-red);
-        background: white;
+        background: var(--iet-white);
     }
 
     .form-row {
@@ -2386,7 +2402,7 @@
         inset: 0;
         z-index: 9000;
         display: flex;
-        background: white;
+        background: var(--iet-white);
     }
 
     .auth-left {
@@ -2557,7 +2573,7 @@
         font-family: "Montserrat", sans-serif;
         font-size: 13px;
         color: var(--iet-text);
-        background: white;
+        background: var(--iet-white);
         outline: none;
     }
 
@@ -2570,7 +2586,7 @@
         padding: 13px;
         border: none;
         border-radius: 8px;
-        background: var(--iet-red-dark);
+        background: var(--iet-red);
         color: white;
         font-family: "Montserrat", sans-serif;
         font-size: 13.5px;
@@ -2585,7 +2601,7 @@
     }
 
     .auth-btn-main:hover:not(:disabled) {
-        background: var(--iet-red);
+        background: var(--iet-red-mid);
     }
 
     .auth-btn-main:disabled {
@@ -2639,7 +2655,7 @@
         font-size: 22px;
         font-weight: 800;
         color: var(--iet-red-dark);
-        background: white;
+        background: var(--iet-white);
         outline: none;
         font-family: "Source Serif 4", serif;
         caret-color: var(--iet-red);
@@ -2658,7 +2674,7 @@
     }
 
     .ev-card {
-        background: white;
+        background: var(--iet-white);
         border-radius: 14px;
         border: 1px solid var(--iet-border);
         overflow: hidden;

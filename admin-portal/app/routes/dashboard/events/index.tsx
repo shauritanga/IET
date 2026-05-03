@@ -1,8 +1,10 @@
 import type { AxiosError } from "axios";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventAttendeesResponse, EventCategory } from "~/types";
+
+// ── Types ──────────────────────────────────────────────────────────
 
 type EventFormState = {
   title: string;
@@ -18,6 +20,15 @@ type EventFormState = {
   coverImage: string;
 };
 
+type AttendeesView = {
+  event: AdminEvent;
+  data: EventAttendeesResponse | null;
+  loading: boolean;
+  error: string | null;
+};
+
+// ── Constants ──────────────────────────────────────────────────────
+
 const MODE_OPTIONS = ["In-person", "Online", "Hybrid"] as const;
 
 const CATEGORY_OPTIONS: Array<{ value: EventCategory; label: string }> = [
@@ -31,12 +42,11 @@ const CATEGORY_OPTIONS: Array<{ value: EventCategory; label: string }> = [
 ];
 
 const CATEGORY_LABELS: Record<EventCategory, string> = CATEGORY_OPTIONS.reduce(
-  (acc, option) => {
-    acc[option.value] = option.label;
-    return acc;
-  },
+  (acc, option) => { acc[option.value] = option.label; return acc; },
   {} as Record<EventCategory, string>,
 );
+
+// ── Form Helpers ───────────────────────────────────────────────────
 
 function FormLabel({ children }: { children: string }) {
   return (
@@ -46,66 +56,37 @@ function FormLabel({ children }: { children: string }) {
   );
 }
 
-function FormInput({
-  type = "text",
-  placeholder,
-  value,
-  onChange,
-}: {
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (value: string) => void;
+function FormInput({ type = "text", placeholder, value, onChange }: {
+  type?: string; placeholder?: string; value: string; onChange: (value: string) => void;
 }) {
   return (
     <input
-      type={type}
-      placeholder={placeholder}
-      value={value}
+      type={type} placeholder={placeholder} value={value}
       onChange={(event) => onChange(event.target.value)}
       className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
     />
   );
 }
 
-function FormSelect({
-  options,
-  value,
-  onChange,
-}: {
-  options: Array<{ value: string; label: string }>;
-  value: string;
-  onChange: (value: string) => void;
+function FormSelect({ options, value, onChange }: {
+  options: Array<{ value: string; label: string }>; value: string; onChange: (value: string) => void;
 }) {
   return (
     <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
+      value={value} onChange={(event) => onChange(event.target.value)}
       className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
     >
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
+        <option key={option.value} value={option.value}>{option.label}</option>
       ))}
     </select>
   );
 }
 
+// ── Event Utilities ────────────────────────────────────────────────
+
 function emptyFormState(): EventFormState {
-  return {
-    title: "",
-    category: "CONFERENCE",
-    mode: "In-person",
-    startDateTime: "",
-    endDateTime: "",
-    location: "",
-    capacity: "",
-    fee: "",
-    cpdHours: "",
-    description: "",
-    coverImage: "",
-  };
+  return { title: "", category: "CONFERENCE", mode: "In-person", startDateTime: "", endDateTime: "", location: "", capacity: "", fee: "", cpdHours: "", description: "", coverImage: "" };
 }
 
 function splitDateTimeLocal(value: string) {
@@ -120,15 +101,9 @@ function combineDateTimeLocal(dateValue?: string | null, timeValue?: string | nu
 
 function formatDateForTable(value: string) {
   if (!value) return "—";
-
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(parsed);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(parsed);
 }
 
 function formatMoney(value: number) {
@@ -143,17 +118,12 @@ function modeForEvent(event: AdminEvent): EventFormState["mode"] {
 
 function toFormState(event: AdminEvent): EventFormState {
   return {
-    title: event.title,
-    category: event.category,
-    mode: modeForEvent(event),
+    title: event.title, category: event.category, mode: modeForEvent(event),
     startDateTime: combineDateTimeLocal(event.startDate, event.startTime),
     endDateTime: combineDateTimeLocal(event.endDate ?? event.startDate, event.endTime),
-    location: event.location ?? "",
-    capacity: event.maxParticipants?.toString() ?? "",
-    fee: event.registrationFee.toString(),
-    cpdHours: event.cpdPoints.toString(),
-    description: event.description ?? "",
-    coverImage: event.coverImage ?? "",
+    location: event.location ?? "", capacity: event.maxParticipants?.toString() ?? "",
+    fee: event.registrationFee.toString(), cpdHours: event.cpdPoints.toString(),
+    description: event.description ?? "", coverImage: event.coverImage ?? "",
   };
 }
 
@@ -163,36 +133,26 @@ function validateForm(formState: EventFormState) {
   if (!formState.startDateTime) return "Start date and time are required.";
   if (!formState.location.trim()) return "Venue / location is required.";
   if (!formState.capacity.trim()) return "Capacity is required.";
-
   const capacity = Number(formState.capacity);
   const fee = formState.fee.trim() ? Number(formState.fee) : 0;
   const cpdHours = formState.cpdHours.trim() ? Number(formState.cpdHours) : 0;
-
   if (Number.isNaN(capacity) || capacity < 1) return "Capacity must be a valid number.";
   if (Number.isNaN(fee) || fee < 0) return "Fee must be zero or a valid positive number.";
   if (Number.isNaN(cpdHours) || cpdHours < 0) return "CPD hours must be zero or a valid positive number.";
-
   return null;
 }
 
 function toPayload(formState: EventFormState, publish: boolean): AdminEventPayload {
   const start = splitDateTimeLocal(formState.startDateTime);
   const end = splitDateTimeLocal(formState.endDateTime || formState.startDateTime);
-
   return {
-    title: formState.title.trim(),
-    description: formState.description.trim() || undefined,
-    category: formState.category,
-    startDate: start.date,
-    startTime: start.time,
-    endDate: end.date,
-    endTime: end.time,
-    location: formState.location.trim(),
+    title: formState.title.trim(), description: formState.description.trim() || undefined,
+    category: formState.category, startDate: start.date, startTime: start.time,
+    endDate: end.date, endTime: end.time, location: formState.location.trim(),
     isOnline: formState.mode !== "In-person",
     registrationFee: formState.fee.trim() ? Number(formState.fee) : 0,
     cpdPoints: formState.cpdHours.trim() ? Number(formState.cpdHours) : 0,
-    maxParticipants: Number(formState.capacity),
-    isPublished: publish,
+    maxParticipants: Number(formState.capacity), isPublished: publish,
     coverImage: formState.coverImage || undefined,
   };
 }
@@ -203,19 +163,193 @@ function eventLocationLabel(event: AdminEvent) {
   return `${event.location} · Online`;
 }
 
-function eventStatusLabel(event: AdminEvent) {
-  return event.isPublished ? "Open" : "Draft";
-}
-
 function eventRegistrationsLabel(event: AdminEvent) {
   const capacity = event.maxParticipants ? event.maxParticipants.toString() : "Unlimited";
   return `${event.registeredCount} / ${capacity}`;
 }
 
+// ── Row Action Menu ────────────────────────────────────────────────
+
+function RowMenu({ onAttendees, onEdit }: { onAttendees: () => void; onEdit: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setOpenUp(window.innerHeight - rect.bottom < 120);
+    }
+    setOpen((o) => !o);
+  }
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] border-[var(--border)] bg-white text-[var(--muted)] transition-colors duration-150 hover:border-[var(--red-dark)] hover:text-[var(--red-dark)]"
+        style={{ background: open ? "var(--bg)" : undefined }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          style={{ position: "absolute", right: 0, zIndex: 200, ...(openUp ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }) }}
+          className="min-w-[150px] overflow-hidden rounded-[10px] border border-[var(--border)] bg-white shadow-[0_8px_24px_rgba(0,0,0,.12)]"
+        >
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onAttendees(); }}
+            className="flex w-full items-center gap-[9px] px-[14px] py-[9px] text-left text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--bg)]"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Attendees
+          </button>
+          <div className="mx-[10px] h-px bg-[var(--border)]" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onEdit(); }}
+            className="flex w-full items-center gap-[9px] px-[14px] py-[9px] text-left text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--bg)]"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Attendees Full Page ────────────────────────────────────────────
+
+function AttendeesPage({ view, onBack }: { view: AttendeesView; onBack: () => void }) {
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Breadcrumb */}
+      <nav style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
+        <button
+          type="button"
+          onClick={onBack}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--red-dark)", fontWeight: 700, fontSize: 12, padding: 0, display: "flex", alignItems: "center", gap: 5 }}
+          onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
+          onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Events
+        </button>
+        <span style={{ color: "var(--border)" }}>/</span>
+        <span style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "var(--text)" }}>
+          {view.event.title}
+        </span>
+        <span style={{ color: "var(--border)" }}>/</span>
+        <span style={{ fontWeight: 600, color: "var(--muted)" }}>Attendees</span>
+      </nav>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Attendees</h1>
+          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+            {view.event.title} · {formatDateForTable(view.event.startDate)}
+          </p>
+        </div>
+        {view.data && (
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 8, padding: "5px 12px" }}>
+            {view.data.total} registered
+          </span>
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+        {view.loading ? (
+          <div style={{ padding: "52px 20px", textAlign: "center" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "var(--red-dark)", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+            <p style={{ fontSize: 12, color: "var(--muted)" }}>Loading attendees…</p>
+          </div>
+        ) : view.error ? (
+          <div style={{ padding: "24px", background: "var(--red-pale)", borderRadius: 10, margin: 16, border: "1px solid #f0b0b0" }}>
+            <p style={{ fontSize: 12, color: "var(--red)", fontWeight: 600 }}>{view.error}</p>
+          </div>
+        ) : !view.data || view.data.attendees.length === 0 ? (
+          <div style={{ padding: "56px 20px", textAlign: "center" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--red-dark)", marginBottom: 4 }}>No registrations yet</p>
+            <p style={{ fontSize: 11.5, color: "var(--muted)" }}>Attendees will appear here once registrations come in.</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="table-proto min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Ticket #</th>
+                  <th>Email</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Paid</th>
+                  <th>Checked In</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.data.attendees.map((a) => (
+                  <tr key={a.id}>
+                    <td className="text-[12px] font-semibold">{a.fullName}</td>
+                    <td className="font-mono text-[11.5px]">{a.ticketNumber}</td>
+                    <td className="text-[11.5px]">{a.email}</td>
+                    <td className="text-[11.5px]">{a.attendeeType}</td>
+                    <td>
+                      <StatusBadge tone={a.status === "CONFIRMED" ? "approved" : "pending"}>
+                        {a.status}
+                      </StatusBadge>
+                    </td>
+                    <td className="text-[11.5px]">{formatMoney(a.amountPaid)}</td>
+                    <td>
+                      {a.checkedIn
+                        ? <StatusBadge tone="approved">Yes</StatusBadge>
+                        : <StatusBadge tone="pending">No</StatusBadge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────
+
 export default function EventsAndTrainingPage() {
   const [eventRows, setEventRows] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [formState, setFormState] = useState<EventFormState>(emptyFormState());
@@ -223,37 +357,14 @@ export default function EventsAndTrainingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  const [attendeesModalOpen, setAttendeesModalOpen] = useState(false);
-  const [attendeesData, setAttendeesData] = useState<EventAttendeesResponse | null>(null);
-  const [attendeesLoading, setAttendeesLoading] = useState(false);
-  const [attendeesError, setAttendeesError] = useState<string | null>(null);
+  const [attendeesView, setAttendeesView] = useState<AttendeesView | null>(null);
 
   const isEditing = editingEventId !== null;
   const editingEvent = eventRows.find((event) => event.id === editingEventId) ?? null;
 
-  async function openAttendeesModal(event: AdminEvent) {
-    setAttendeesData(null);
-    setAttendeesError(null);
-    setAttendeesLoading(true);
-    setAttendeesModalOpen(true);
-
-    try {
-      const { data } = await http.get<ApiEnvelope<EventAttendeesResponse>>(
-        `/admin/events/${event.id}/registrations`,
-      );
-      setAttendeesData(data.data);
-    } catch (error) {
-      const apiError = error as AxiosError<{ message?: string }>;
-      setAttendeesError(apiError.response?.data?.message ?? "Failed to load attendees.");
-    } finally {
-      setAttendeesLoading(false);
-    }
-  }
-
   async function loadEvents() {
     setLoading(true);
     setPageError(null);
-
     try {
       const { data } = await http.get<ApiEnvelope<AdminEvent[]>>("/admin/events");
       setEventRows(data.data ?? []);
@@ -266,9 +377,21 @@ export default function EventsAndTrainingPage() {
     }
   }
 
-  useEffect(() => {
-    void loadEvents();
-  }, []);
+  useEffect(() => { void loadEvents(); }, []);
+
+  async function openAttendeesPage(event: AdminEvent) {
+    const view: AttendeesView = { event, data: null, loading: true, error: null };
+    setAttendeesView(view);
+    try {
+      const { data } = await http.get<ApiEnvelope<EventAttendeesResponse>>(
+        `/admin/events/${event.id}/registrations`,
+      );
+      setAttendeesView((v) => v ? { ...v, data: data.data, loading: false } : v);
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setAttendeesView((v) => v ? { ...v, error: apiError.response?.data?.message ?? "Failed to load attendees.", loading: false } : v);
+    }
+  }
 
   function updateField<K extends keyof EventFormState>(key: K, value: EventFormState[K]) {
     setFormState((current) => ({ ...current, [key]: value }));
@@ -291,10 +414,8 @@ export default function EventsAndTrainingPage() {
   async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setIsUploadingImage(true);
     setFormError(null);
-
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -317,23 +438,16 @@ export default function EventsAndTrainingPage() {
 
   async function saveEvent(publish: boolean) {
     const validationError = validateForm(formState);
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
-
+    if (validationError) { setFormError(validationError); return; }
     setIsSubmitting(true);
     setFormError(null);
-
     const payload = toPayload(formState, publish);
-
     try {
       if (isEditing && editingEvent) {
         await http.patch<ApiEnvelope<AdminEvent>>(`/admin/events/${editingEvent.id}`, payload);
       } else {
         await http.post<ApiEnvelope<AdminEvent>>("/admin/events", payload);
       }
-
       await loadEvents();
       setIsEventModalOpen(false);
       setEditingEventId(null);
@@ -346,6 +460,11 @@ export default function EventsAndTrainingPage() {
     }
   }
 
+  // Show attendees full page when selected
+  if (attendeesView) {
+    return <AttendeesPage view={attendeesView} onBack={() => setAttendeesView(null)} />;
+  }
+
   return (
     <section>
       <div className="mb-[18px] flex items-center justify-between">
@@ -355,18 +474,14 @@ export default function EventsAndTrainingPage() {
             Create and manage IET Tanzania events, trainings and conferences
           </p>
         </div>
-        <Button tone="red" onClick={openCreateModal}>
-          + Create Event
-        </Button>
+        <Button tone="red" onClick={openCreateModal}>+ Create Event</Button>
       </div>
 
       {pageError ? (
         <div className="mb-[14px] rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-4 py-3 text-[11.5px] font-semibold text-[var(--red)]">
           <div className="flex items-center justify-between gap-3">
             <span>{pageError}</span>
-            <Button tone="outline" onClick={() => void loadEvents()}>
-              Retry
-            </Button>
+            <Button tone="outline" onClick={() => void loadEvents()}>Retry</Button>
           </div>
         </div>
       ) : null}
@@ -396,9 +511,7 @@ export default function EventsAndTrainingPage() {
                     <td className="text-[11.5px]">{CATEGORY_LABELS[event.category] ?? event.category}</td>
                     <td className="text-[11.5px]">
                       <div>{formatDateForTable(event.startDate)}</div>
-                      <div className="text-[10px] text-[var(--muted)]">
-                        {event.startTime} - {event.endTime}
-                      </div>
+                      <div className="text-[10px] text-[var(--muted)]">{event.startTime} - {event.endTime}</div>
                     </td>
                     <td className="text-[11.5px]">{eventLocationLabel(event)}</td>
                     <td className="text-[11.5px]">{eventRegistrationsLabel(event)}</td>
@@ -409,10 +522,10 @@ export default function EventsAndTrainingPage() {
                       </StatusBadge>
                     </td>
                     <td>
-                      <div className="flex items-center gap-[6px]">
-                        <Button onClick={() => void openAttendeesModal(event)}>Attendees</Button>
-                        <Button onClick={() => openEditModal(event)}>Edit</Button>
-                      </div>
+                      <RowMenu
+                        onAttendees={() => void openAttendeesPage(event)}
+                        onEdit={() => openEditModal(event)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -436,9 +549,7 @@ export default function EventsAndTrainingPage() {
         bodyClassName="space-y-[14px]"
         footer={
           <div className="flex justify-end gap-[9px]">
-            <Button tone="outline" onClick={closeModal} disabled={isSubmitting}>
-              Cancel
-            </Button>
+            <Button tone="outline" onClick={closeModal} disabled={isSubmitting}>Cancel</Button>
             <Button tone="dark" onClick={() => void saveEvent(false)} disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : "Save as Draft"}
             </Button>
@@ -456,89 +567,50 @@ export default function EventsAndTrainingPage() {
 
         <div>
           <FormLabel>Event Title *</FormLabel>
-          <FormInput
-            placeholder="e.g. IET Annual Engineering Conference 2025"
-            value={formState.title}
-            onChange={(value) => updateField("title", value)}
-          />
+          <FormInput placeholder="e.g. IET Annual Engineering Conference 2025" value={formState.title} onChange={(value) => updateField("title", value)} />
         </div>
 
         <div className="grid gap-[14px] md:grid-cols-2">
           <div>
             <FormLabel>Event Category *</FormLabel>
-            <FormSelect
-              options={CATEGORY_OPTIONS}
-              value={formState.category}
-              onChange={(value) => updateField("category", value as EventCategory)}
-            />
+            <FormSelect options={CATEGORY_OPTIONS} value={formState.category} onChange={(value) => updateField("category", value as EventCategory)} />
           </div>
           <div>
             <FormLabel>Mode *</FormLabel>
-            <FormSelect
-              options={MODE_OPTIONS.map((value) => ({ value, label: value }))}
-              value={formState.mode}
-              onChange={(value) => updateField("mode", value as EventFormState["mode"])}
-            />
+            <FormSelect options={MODE_OPTIONS.map((value) => ({ value, label: value }))} value={formState.mode} onChange={(value) => updateField("mode", value as EventFormState["mode"])} />
           </div>
         </div>
 
         <div className="grid gap-[14px] md:grid-cols-2">
           <div>
             <FormLabel>Start Date &amp; Time *</FormLabel>
-            <FormInput
-              type="datetime-local"
-              value={formState.startDateTime}
-              onChange={(value) => updateField("startDateTime", value)}
-            />
+            <FormInput type="datetime-local" value={formState.startDateTime} onChange={(value) => updateField("startDateTime", value)} />
           </div>
           <div>
             <FormLabel>End Date &amp; Time</FormLabel>
-            <FormInput
-              type="datetime-local"
-              value={formState.endDateTime}
-              onChange={(value) => updateField("endDateTime", value)}
-            />
+            <FormInput type="datetime-local" value={formState.endDateTime} onChange={(value) => updateField("endDateTime", value)} />
           </div>
         </div>
 
         <div className="grid gap-[14px] md:grid-cols-2">
           <div>
             <FormLabel>Venue / Location *</FormLabel>
-            <FormInput
-              placeholder="Venue name or Online"
-              value={formState.location}
-              onChange={(value) => updateField("location", value)}
-            />
+            <FormInput placeholder="Venue name or Online" value={formState.location} onChange={(value) => updateField("location", value)} />
           </div>
           <div>
             <FormLabel>Capacity *</FormLabel>
-            <FormInput
-              type="number"
-              placeholder="e.g. 200"
-              value={formState.capacity}
-              onChange={(value) => updateField("capacity", value)}
-            />
+            <FormInput type="number" placeholder="e.g. 200" value={formState.capacity} onChange={(value) => updateField("capacity", value)} />
           </div>
         </div>
 
         <div className="grid gap-[14px] md:grid-cols-2">
           <div>
             <FormLabel>Fee (TZS)</FormLabel>
-            <FormInput
-              type="number"
-              placeholder="0 for free"
-              value={formState.fee}
-              onChange={(value) => updateField("fee", value)}
-            />
+            <FormInput type="number" placeholder="0 for free" value={formState.fee} onChange={(value) => updateField("fee", value)} />
           </div>
           <div>
             <FormLabel>CPD Hours</FormLabel>
-            <FormInput
-              type="number"
-              placeholder="e.g. 6"
-              value={formState.cpdHours}
-              onChange={(value) => updateField("cpdHours", value)}
-            />
+            <FormInput type="number" placeholder="e.g. 6" value={formState.cpdHours} onChange={(value) => updateField("cpdHours", value)} />
           </div>
         </div>
 
@@ -546,11 +618,7 @@ export default function EventsAndTrainingPage() {
           <FormLabel>Cover Image</FormLabel>
           {formState.coverImage ? (
             <div className="relative overflow-hidden rounded-[7px] border-[1.5px] border-[var(--border)]">
-              <img
-                src={formState.coverImage}
-                alt="Cover"
-                className="h-[140px] w-full object-cover"
-              />
+              <img src={formState.coverImage} alt="Cover" className="h-[140px] w-full object-cover" />
               <button
                 type="button"
                 onClick={() => updateField("coverImage", "")}
@@ -561,17 +629,9 @@ export default function EventsAndTrainingPage() {
             </div>
           ) : (
             <label className={`flex h-[80px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[7px] border-[1.5px] border-dashed border-[var(--border)] bg-[var(--bg)] transition-colors hover:border-[var(--red-dark)] hover:bg-[var(--red-pale)] ${isUploadingImage ? "opacity-60 pointer-events-none" : ""}`}>
-              <span className="text-[11px] font-semibold text-[var(--muted)]">
-                {isUploadingImage ? "Uploading…" : "Click to upload cover image"}
-              </span>
+              <span className="text-[11px] font-semibold text-[var(--muted)]">{isUploadingImage ? "Uploading…" : "Click to upload cover image"}</span>
               <span className="text-[10px] text-[var(--muted)]">JPG, PNG or WEBP · max 10 MB</span>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                disabled={isUploadingImage}
-                onChange={(e) => void handleCoverImageChange(e)}
-              />
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={isUploadingImage} onChange={(e) => void handleCoverImageChange(e)} />
             </label>
           )}
         </div>
@@ -579,88 +639,11 @@ export default function EventsAndTrainingPage() {
         <div>
           <FormLabel>Description</FormLabel>
           <textarea
-            rows={3}
-            placeholder="Event description…"
-            value={formState.description}
+            rows={3} placeholder="Event description…" value={formState.description}
             onChange={(event) => updateField("description", event.target.value)}
             className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           />
         </div>
-      </Modal>
-
-      <Modal
-        title={
-          attendeesData
-            ? `${attendeesData.eventTitle} — Attendees (${attendeesData.total})`
-            : "Event Attendees"
-        }
-        open={attendeesModalOpen}
-        onClose={() => setAttendeesModalOpen(false)}
-        bodyClassName=""
-        footer={
-          <div className="flex justify-end">
-            <Button tone="outline" onClick={() => setAttendeesModalOpen(false)}>
-              Close
-            </Button>
-          </div>
-        }
-      >
-        {attendeesLoading && (
-          <div className="py-8 text-center text-[12px] text-[var(--muted)]">
-            Loading attendees…
-          </div>
-        )}
-        {attendeesError && (
-          <div className="rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-            {attendeesError}
-          </div>
-        )}
-        {attendeesData && !attendeesLoading && (
-          attendeesData.attendees.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-[var(--muted)]">
-              No registrations yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table-proto min-w-full border-separate border-spacing-0">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Ticket #</th>
-                    <th>Email</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Paid</th>
-                    <th>Checked In</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendeesData.attendees.map((a) => (
-                    <tr key={a.id}>
-                      <td className="text-[12px] font-semibold">{a.fullName}</td>
-                      <td className="font-mono text-[11.5px]">{a.ticketNumber}</td>
-                      <td className="text-[11.5px]">{a.email}</td>
-                      <td className="text-[11.5px]">{a.attendeeType}</td>
-                      <td>
-                        <StatusBadge tone={a.status === "CONFIRMED" ? "approved" : "pending"}>
-                          {a.status}
-                        </StatusBadge>
-                      </td>
-                      <td className="text-[11.5px]">{formatMoney(a.amountPaid)}</td>
-                      <td>
-                        {a.checkedIn ? (
-                          <StatusBadge tone="approved">Yes</StatusBadge>
-                        ) : (
-                          <StatusBadge tone="pending">No</StatusBadge>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        )}
       </Modal>
     </section>
   );

@@ -547,13 +547,13 @@ export const DashboardEventsPage = () => {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <div className="ev-search-box" style={{ display: "flex", alignItems: "center", gap: 7, background: "white", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 11px", width: 200, flexShrink: 0 }}>
+                <div className="ev-search-box" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 11px", width: 200, flexShrink: 0 }}>
                     <SearchIcon width="12" height="12" stroke="var(--iet-muted)" />
                     <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" style={{ border: "none", background: "transparent", outline: "none", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", width: "100%" }} />
                 </div>
 
                 <div style={{ position: "relative" }}>
-                    <select value={type} onChange={(e) => setType(e.target.value)} style={{ appearance: "none", background: "white", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                    <select value={type} onChange={(e) => setType(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         {EVENT_TYPE_FILTERS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
@@ -562,7 +562,7 @@ export const DashboardEventsPage = () => {
                 </div>
 
                 <div style={{ position: "relative" }}>
-                    <select value={location} onChange={(e) => setLocation(e.target.value)} style={{ appearance: "none", background: "white", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                    <select value={location} onChange={(e) => setLocation(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         <option value="">All Locations</option>
                         <option value="Dar es Salaam">Dar es Salaam</option>
                         <option value="Arusha">Arusha</option>
@@ -573,7 +573,7 @@ export const DashboardEventsPage = () => {
                 </div>
 
                 <div style={{ position: "relative" }}>
-                    <select value={cost} onChange={(e) => setCost(e.target.value)} style={{ appearance: "none", background: "white", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                    <select value={cost} onChange={(e) => setCost(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         <option value="">All Costs</option>
                         <option value="free">Free</option>
                         <option value="paid">Paid</option>
@@ -584,8 +584,8 @@ export const DashboardEventsPage = () => {
                 <button className="btn btn-outline btn-sm" onClick={() => { setQuery(""); setType(""); setLocation(""); setCost("") }}>Clear</button>
                 <div style={{ flex: 1 }} />
                 <div style={{ display: "flex", gap: 2, background: "var(--iet-bg)", border: "1px solid var(--iet-border)", borderRadius: 7, padding: 3, flexShrink: 0 }}>
-                    <button onClick={() => setView("list")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "list" ? "white" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "list" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "list" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><ListIcon width="13" height="13" /></button>
-                    <button onClick={() => setView("grid")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "grid" ? "white" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "grid" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "grid" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><GridIcon width="13" height="13" /></button>
+                    <button onClick={() => setView("list")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "list" ? "var(--iet-white)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "list" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "list" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><ListIcon width="13" height="13" /></button>
+                    <button onClick={() => setView("grid")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "grid" ? "var(--iet-white)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "grid" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "grid" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><GridIcon width="13" height="13" /></button>
                 </div>
             </div>
 
@@ -615,7 +615,7 @@ export const DashboardEventsPage = () => {
                         return (
                             <div
                                 key={event.id}
-                                style={{ background: "white", border: "1px solid var(--iet-border)", borderRadius: 10, display: "flex", alignItems: "center", padding: "14px 18px", gap: 18, transition: "border-color .15s,box-shadow .15s" }}
+                                style={{ background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 10, display: "flex", alignItems: "center", padding: "14px 18px", gap: 18, transition: "border-color .15s,box-shadow .15s" }}
                                 onMouseOver={(ev) => { ev.currentTarget.style.borderColor = "var(--iet-red)"; ev.currentTarget.style.boxShadow = "0 2px 10px rgba(226,12,10,.07)" }}
                                 onMouseOut={(ev) => { ev.currentTarget.style.borderColor = "var(--iet-border)"; ev.currentTarget.style.boxShadow = "" }}
                             >
@@ -653,7 +653,7 @@ export const DashboardEventsPage = () => {
                         return (
                             <div
                                 key={event.id}
-                                style={{ background: "white", border: "1px solid var(--iet-border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", transition: "box-shadow .18s,transform .18s" }}
+                                style={{ background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", transition: "box-shadow .18s,transform .18s" }}
                                 onMouseOver={(ev) => { ev.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; ev.currentTarget.style.transform = "translateY(-2px)" }}
                                 onMouseOut={(ev) => { ev.currentTarget.style.boxShadow = ""; ev.currentTarget.style.transform = "" }}
                             >
@@ -687,11 +687,11 @@ export const DashboardEventsPage = () => {
             {drawerVisible && selectedEvent && (
                 <>
                     <div onClick={closeDrawer} style={{ position: "fixed", inset: 0, background: "rgba(28,16,16,.35)", zIndex: 500, backdropFilter: "blur(2px)" }} />
-                    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "96vw", background: "white", zIndex: 501, boxShadow: "-8px 0 40px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden", transition: "transform .28s cubic-bezier(.4,0,.2,1)", transform: drawerOpen ? "translateX(0)" : "translateX(100%)" }}>
+                    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "96vw", background: "var(--iet-white)", zIndex: 501, boxShadow: "-8px 0 40px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden", transition: "transform .28s cubic-bezier(.4,0,.2,1)", transform: drawerOpen ? "translateX(0)" : "translateX(100%)" }}>
                         <div style={{ height: 54, display: "flex", alignItems: "center", gap: 12, padding: "0 20px", borderBottom: "1px solid var(--iet-border)", flexShrink: 0 }}>
                             <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--iet-red-pale)", display: "flex", alignItems: "center", justifyContent: "center" }}><CalendarIcon width="15" height="15" stroke="var(--iet-red)" /></div>
                             <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--iet-text)" }}>{selectedEvent.type} Details</span>
-                            <button onClick={closeDrawer} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--iet-muted)", background: "white", transition: "all .15s" }}><CloseIcon width="13" height="13" /></button>
+                            <button onClick={closeDrawer} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--iet-muted)", background: "var(--iet-white)", transition: "all .15s" }}><CloseIcon width="13" height="13" /></button>
                         </div>
                         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 24px" }}>
                             <div style={{ width: "100%", height: 200, background: selectedEvent.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>

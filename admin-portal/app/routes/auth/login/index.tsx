@@ -156,7 +156,7 @@ export default function AdminLoginPage() {
         ) : null}
 
         <button
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-[8px] bg-[var(--red-dark)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-[8px] bg-[var(--red)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red-mid)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"
           type="button"
           onClick={() => void handleSubmit()}
           disabled={submitting}
