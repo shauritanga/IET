@@ -34,7 +34,7 @@ export class SmsService {
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
-    this.defaultSenderId = configService.get('BEEM_SENDER_ID', 'IET');
+    this.defaultSenderId = configService.get('BEEM_SOURCE_ADDR', 'IET');
   }
 
   /**
@@ -213,7 +213,7 @@ export class SmsService {
       const data = (await res.json()) as any;
 
       if (!res.ok || !data.successful) {
-        this.logger.error(`Beem SMS failed: ${JSON.stringify(data)}`);
+        this.logger.error(`Beem SMS failed [HTTP ${res.status}]: ${JSON.stringify(data)}`);
         return {
           success: false,
           error: data.message || 'Beem API error',

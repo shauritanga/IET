@@ -33,6 +33,11 @@ const PersonalDetailsForm = () => {
 
     return (
         <FieldGroup className={"grid grid-cols-1 md:grid-cols-2 gap-8"}>
+            {/* Section: Profile Photo */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-1">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Profile Photo</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
             <Field className="md:col-span-2">
                 <FieldLabel htmlFor="title">Upload a recent passport-size photo for official use.</FieldLabel>
                 <Controller
@@ -52,9 +57,14 @@ const PersonalDetailsForm = () => {
                     <FieldError>{errors.profilePhotoUrl.message}</FieldError>
                 )}
             </Field>
+            {/* Section: Identity */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Identity</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
             <Field>
                 <FieldLabel htmlFor="title">Title</FieldLabel>
-                <NativeSelect className={"bg-white h-11 shadow-none!"} {...register("title")}>
+                <NativeSelect {...register("title")}>
                     <NativeSelectOption value="">Select title</NativeSelectOption>
                     <NativeSelectOption value="Eng.">Eng</NativeSelectOption>
                     <NativeSelectOption value="Prof.">Prof</NativeSelectOption>
@@ -100,6 +110,11 @@ const PersonalDetailsForm = () => {
                 {errors.gender && <FieldError>{errors.gender.message}</FieldError>}
             </Field>
             <Field/>
+            {/* Section: Contact Details */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Contact Details</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
             <Field>
                 <FieldLabel htmlFor="email">E-Mail</FieldLabel>
                 <Input id="email" type="email" placeholder="Enter your email address" {...register("email")} />
@@ -128,7 +143,7 @@ const PersonalDetailsForm = () => {
                     control={control}
                     render={({field}) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger className={"bg-white! shadow-none! h-11!"}>
+                            <SelectTrigger>
                                 <SelectValue placeholder="Select nationality"/>
                             </SelectTrigger>
                             <SelectContent>
@@ -165,6 +180,11 @@ const PersonalDetailsForm = () => {
                 {errors.dateOfBirth && <FieldError>{errors.dateOfBirth.message}</FieldError>}
             </Field>
 
+            {/* Section: Professional Background */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Professional Background</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
             <Field>
                 <FieldLabel htmlFor="employer">Employer/Organization</FieldLabel>
                 <Input id="employer" placeholder="Enter your employer" {...register("employer")} />

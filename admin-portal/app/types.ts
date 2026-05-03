@@ -1,4 +1,11 @@
-export type AdminRole = "ADMIN" | "SUPER_ADMIN";
+export type AdminRole =
+  | "ADMIN"
+  | "SUPER_ADMIN"
+  | "SECRETARIAT"
+  | "EVALUATOR"
+  | "MPDC"
+  | "COUNCIL"
+  | "REVIEWER";
 
 export type ApiEnvelope<T> = {
   success?: boolean;
@@ -19,6 +26,10 @@ export type LoginUser = {
   id: string;
   email: string;
   fullName: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  isActive?: boolean | null;
   membershipId: string | null;
   membershipStatus: string | null;
   role: string | null;
@@ -78,6 +89,7 @@ export type MemberSummary = {
   firstName?: string;
   lastName?: string;
   email: string;
+  profilePhotoUrl?: string | null;
   membershipId?: string | null;
   membershipClass?: string | null;
   membershipStatus?: string | null;
@@ -124,8 +136,30 @@ export type AdminEvent = {
   registeredCount: number;
   isPublished: boolean;
   registrationOpen: boolean;
+  coverImage?: string | null;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type EventAttendee = {
+  id: string;
+  ticketNumber: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string | null;
+  attendeeType: string;
+  status: string;
+  amountPaid: number;
+  checkedIn: boolean;
+  checkedInAt?: string | null;
+  registeredAt: string;
+};
+
+export type EventAttendeesResponse = {
+  eventId: string;
+  eventTitle: string;
+  total: number;
+  attendees: EventAttendee[];
 };
 
 export type AdminEventPayload = {
@@ -144,4 +178,5 @@ export type AdminEventPayload = {
   maxParticipants?: number;
   requirements?: string[];
   isPublished?: boolean;
+  coverImage?: string;
 };

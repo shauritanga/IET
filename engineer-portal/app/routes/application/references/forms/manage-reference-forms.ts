@@ -6,17 +6,18 @@ import {useApplicationFormStore} from "~/routes/application/store/useApplication
 import {useGetApplicationDraft} from "~/routes/application/repository/useResumeApplication";
 
 
-export const ProposerSchema = z.object({
+const RefereeSchema = z.object({
     fullName: z.string().min(1, "Full name is required"),
     membershipCategory: z.string().min(1, "Membership category is required"),
     membershipNumber: z.string().min(1, "Membership number is required"),
+    organisation: z.string().min(1, "Organisation is required"),
+    email: z.string().email("Valid email is required"),
+    phoneNumber: z.string().min(1, "Phone number is required"),
+    relationship: z.string().min(1, "Relationship is required"),
 });
 
-export const SupporterSchema = z.object({
-    fullName: z.string().min(1, "Full name is required"),
-    membershipCategory: z.string().min(1, "Membership category is required"),
-    membershipNumber: z.string().min(1, "Membership number is required"),
-});
+export const ProposerSchema = RefereeSchema;
+export const SupporterSchema = RefereeSchema;
 
 export const ReferenceDetailsFormSchema = z.object({
     proposer: ProposerSchema,
@@ -29,11 +30,13 @@ export const useManageReferenceDetailsForm = () => {
     const { references, setReferences, _hasHydrated } = useApplicationFormStore();
     const { data: draft } = useGetApplicationDraft();
 
+    const emptyReferee = { fullName: "", membershipCategory: "", membershipNumber: "", organisation: "", email: "", phoneNumber: "", relationship: "" };
+
     const form = useForm<ReferenceDetailsFormType>({
         resolver: zodResolver(ReferenceDetailsFormSchema),
         defaultValues: {
-            proposer: { fullName: "", membershipCategory: "", membershipNumber: "" },
-            supporter: { fullName: "", membershipCategory: "", membershipNumber: "" },
+            proposer: { ...emptyReferee },
+            supporter: { ...emptyReferee },
         },
     });
 
@@ -55,11 +58,19 @@ export const useManageReferenceDetailsForm = () => {
                 fullName: proposer?.fullName ?? "",
                 membershipCategory: proposer?.membershipCategory ?? "",
                 membershipNumber: proposer?.membershipNumber ?? "",
+                organisation: (proposer as any)?.organisation ?? "",
+                email: (proposer as any)?.email ?? "",
+                phoneNumber: (proposer as any)?.phoneNumber ?? "",
+                relationship: (proposer as any)?.relationship ?? "",
             },
             supporter: {
                 fullName: supporter?.fullName ?? "",
                 membershipCategory: supporter?.membershipCategory ?? "",
                 membershipNumber: supporter?.membershipNumber ?? "",
+                organisation: (supporter as any)?.organisation ?? "",
+                email: (supporter as any)?.email ?? "",
+                phoneNumber: (supporter as any)?.phoneNumber ?? "",
+                relationship: (supporter as any)?.relationship ?? "",
             },
         });
     }, [draft, form]);

@@ -1,14 +1,7 @@
-import { type LoaderFunctionArgs, Outlet, redirect, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef } from "react";
+import { User, UserId, SquareAcademicCap, UsersGroupRounded, FileCheck } from "@solar-icons/react";
 import { Button } from "~/components/ui/button";
-import {
-    FileCheck,
-    User,
-    UsersGroupRounded,
-    UserId,
-    SquareAcademicCap,
-    VerifiedCheck,
-} from "@solar-icons/react/ssr";
 import { cn } from "~/lib/utils";
 import { Spinner } from "~/components/ui/spinner";
 import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
@@ -111,122 +104,112 @@ const RegisterLayout = () => {
     }
 
     return (
-        <div className="flex flex-col lg:flex-row lg:gap-4 w-full lg:min-h-dvh">
-            {/* Mobile top bar */}
-            <div className={"p-4 fixed w-full z-50 bg-white flex flex-col gap-2 lg:hidden"}>
-                <div className="space-y-2 flex flex-col items-center">
-                    <img src={"/IET-Logo-2.png"} alt={"IET-logo"} width={120} />
-                    <h1 className={"text-lg font-semibold text-center"}>IET Membership Application</h1>
-                </div>
-                <div
-                    className="grid pt-2"
-                    style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
-                >
-                    {steps.map((step, index) => (
-                        <div
-                            key={index}
-                            className={cn(
-                                "h-1",
-                                isStepCompleted(index) || isCurrentStep(step.link) || isWelcomePage
-                                    ? "bg-[#390909]"
-                                    : "bg-neutral-200"
-                            )}
-                        />
-                    ))}
-                </div>
-            </div>
+        <div className="flex h-screen overflow-hidden">
+            {/* Left sidebar */}
+            <div className="w-[300px] min-w-[300px] bg-white border-r border-[#E8D5D5] flex flex-col justify-between p-8 overflow-y-auto">
+                <div className="flex flex-col gap-10">
+                    <img src="/IET-Logo-2.png" alt="IET-logo" width={130} />
 
-            {/* Desktop sidebar */}
-            <div className={"w-1/3 p-6 lg:px-8 lg:flex flex-col justify-between space-y-4 relative hidden"}>
-                <div className={"space-y-20"}>
-                    <div className="space-y-4 flex flex-col items-start">
-                        <img src={"/IET-Logo-2.png"} alt={"IET-logo"} width={150} />
-                    </div>
-                    <div className={"space-y-8 flex flex-col items-start w-full"}>
-                        <h1 className={"text-xl font-semibold text-center"}>IET Membership Application</h1>
-                        <div className={"flex flex-col gap-2 items-start w-full"}>
-                            {steps.map((step, index) => (
-                                <div key={index} className={"flex items-start w-full"}>
-                                    <div className={"flex flex-col items-center mr-4"}>
-                                        <div className={cn("border rounded-lg p-2 bg-white shrink-0 border-gray-200")}>
-                                            <span
-                                                className={cn(
-                                                    isCurrentStep(step.link) || isStepCompleted(index)
-                                                        ? "text-[#390909]"
-                                                        : "text-[#969393]"
-                                                )}
-                                            >
-                                                {step.icon}
-                                            </span>
+                    <div className="flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.8px] text-[#7A6060] mb-3">
+                            Application Steps
+                        </p>
+
+                        {/* Progress bar */}
+                        {!isWelcomePage && currentStepIndex >= 0 && (
+                            <div className="mb-4 px-1">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-semibold text-[#7A6060]">
+                                        Step {currentStepIndex + 1} of {steps.length}
+                                    </span>
+                                    <span className="text-[10px] font-semibold text-[#7A6060]">
+                                        {Math.round((currentStepIndex / steps.length) * 100)}%
+                                    </span>
+                                </div>
+                                <div className="h-1 w-full rounded-full bg-[#E8D5D5]">
+                                    <div
+                                        className="h-1 rounded-full bg-[#390909] transition-all duration-500"
+                                        style={{ width: `${(currentStepIndex / steps.length) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {steps.map((step, index) => {
+                            const completed = isStepCompleted(index) || isWelcomePage;
+                            const active = isCurrentStep(step.link) && !isWelcomePage;
+                            return (
+                                <div key={index} className="flex items-start">
+                                    <div className="flex flex-col items-center mr-3 shrink-0">
+                                        <div
+                                            className={cn(
+                                                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all",
+                                                completed
+                                                    ? "bg-green-600 text-white shadow-[0_0_0_3px_rgba(34,197,94,0.18)]"
+                                                    : active
+                                                    ? "bg-[#390909] text-white shadow-[0_0_0_4px_rgba(57,9,9,0.14)]"
+                                                    : "bg-[#F5F0F0] text-[#B0A0A0] border border-[#E8D5D5]"
+                                            )}
+                                        >
+                                            {completed ? (
+                                                <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+                                                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                                </svg>
+                                            ) : active ? (
+                                                <span className="[&>svg]:size-4">{step.icon}</span>
+                                            ) : (
+                                                <span className="text-[11px] font-bold">{index + 1}</span>
+                                            )}
                                         </div>
                                         {index < steps.length - 1 && (
                                             <div
-                                                className={"w-0.5 flex-1 mt-1 min-h-6"}
-                                                style={{
-                                                    backgroundColor: isConnectorActive(index) ? "#390909" : "#e5e7eb",
-                                                }}
+                                                className={cn(
+                                                    "w-0.5 mt-1 mb-1 rounded-full transition-colors duration-300",
+                                                    completed ? "bg-green-500" : "bg-[#E8D5D5]"
+                                                )}
+                                                style={{ height: "32px" }}
                                             />
                                         )}
                                     </div>
-
-                                    <div className={"flex justify-between items-start w-full pb-6"}>
-                                        <div>
-                                            <h3
-                                                className={cn(
-                                                    "text-md font-semibold",
-                                                    isCurrentStep(step.link) || isStepCompleted(index)
-                                                        ? "text-[#390909]"
-                                                        : "text-[#969393]"
-                                                )}
-                                            >
-                                                {step.label}
-                                            </h3>
-                                            <p
-                                                className={cn(
-                                                    "text-sm font-light max-w-100",
-                                                    isCurrentStep(step.link) || isStepCompleted(index)
-                                                        ? "text-[#390909]"
-                                                        : "text-[#969393]"
-                                                )}
-                                            >
-                                                {step.description}
-                                            </p>
-                                        </div>
-                                        <div className={"shrink-0 ml-2"}>
-                                            {isCurrentStep(step.link) && !isWelcomePage ? (
-                                                <Spinner className="text-green-600 size-6" />
-                                            ) : isStepCompleted(index) ? (
-                                                <VerifiedCheck
-                                                    weight="BoldDuotone"
-                                                    size={24}
-                                                    className="text-green-600"
-                                                />
-                                            ) : null}
-                                        </div>
+                                    <div className={cn("pt-0.5", index < steps.length - 1 ? "pb-5" : "")}>
+                                        <p
+                                            className={cn(
+                                                "text-sm font-semibold leading-tight",
+                                                active || completed ? "text-[#390909]" : "text-[#B0A0A0]"
+                                            )}
+                                        >
+                                            {step.label}
+                                        </p>
+                                        <p
+                                            className={cn(
+                                                "text-[11px] mt-0.5",
+                                                active || completed ? "text-[#7A6060]" : "text-[#C8B8B8]"
+                                            )}
+                                        >
+                                            {step.description}
+                                        </p>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
-                <Button
-                    onClick={() => navigate("/dashboard/home", { replace: true })}
-                    variant={"outline"}
-                    size={"lg"}
-                    className={"w-fit text-red-600"}
+
+                <button
+                    type="button"
+                    onClick={() => navigate("/dashboard/membership", { replace: true })}
+                    className="mt-6 text-sm font-medium text-[#7A6060] hover:text-[#E20C0A] transition-colors text-left"
                 >
-                    Cancel
-                </Button>
+                    ← Cancel Application
+                </button>
             </div>
 
-            {/* Main content */}
-            <div className={"relative w-full lg:w-2/3 lg:p-4 mt-32 lg:mt-0 lg:max-h-dvh overflow-hidden"}>
-                <div
-                    className={
-                        "w-full flex justify-center h-full rounded-4xl overflow-y-auto no-scrollbar lg:bg-[#F5F0F0] p-4 lg:pb-4 lg:pt-8"
-                    }
-                >
-                    <Outlet />
+            {/* Right content */}
+            <div className="flex-1 overflow-y-auto bg-[#F7F3F3]">
+                <div className="min-h-full flex justify-center px-12 py-9">
+                    <div className="w-full max-w-[800px]">
+                        <Outlet />
+                    </div>
                 </div>
             </div>
         </div>

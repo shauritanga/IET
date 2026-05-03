@@ -14,6 +14,14 @@ export class AdminGuard implements CanActivate {
       return false;
     }
 
-    return [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role);
+    return [
+      UserRole.ADMIN,
+      UserRole.SUPER_ADMIN,
+      UserRole.SECRETARIAT,
+      UserRole.EVALUATOR,
+      UserRole.MPDC,
+      UserRole.COUNCIL,
+      UserRole.REVIEWER,
+    ].includes(user.role);
   }
 }

@@ -10,8 +10,22 @@ import type { ReactNode } from "react";
 import type { Route } from "./+types/root";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./app.css";
+import { ThemeProvider } from "~/providers/theme";
 
 const queryClient = new QueryClient();
+const themeInitScript = `
+(function() {
+  try {
+    var key = "iet-theme";
+    var stored = window.localStorage.getItem(key);
+    var theme = stored === "dark" || stored === "light"
+      ? stored
+      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  } catch (error) {}
+})();
+`;
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -28,12 +42,13 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
         {children}
@@ -46,11 +61,13 @@ export function Layout({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen">
-        <Outlet />
-      </div>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <div className="min-h-screen">
+          <Outlet />
+        </div>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

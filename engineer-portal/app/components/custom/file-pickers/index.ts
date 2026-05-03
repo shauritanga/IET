@@ -1,1 +1,1 @@
-export { FilePickerCard } from "~/components/file-pickers/file-picker-card";
+export { FilePickerCard } from "~/components/custom/file-pickers/file-picker-card";

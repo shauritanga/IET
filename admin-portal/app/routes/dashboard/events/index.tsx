@@ -1,8 +1,8 @@
 import type { AxiosError } from "axios";
-import { useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useState } from "react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
-import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventCategory } from "~/types";
+import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventAttendeesResponse, EventCategory } from "~/types";
 
 type EventFormState = {
   title: string;
@@ -15,6 +15,7 @@ type EventFormState = {
   fee: string;
   cpdHours: string;
   description: string;
+  coverImage: string;
 };
 
 const MODE_OPTIONS = ["In-person", "Online", "Hybrid"] as const;
@@ -103,6 +104,7 @@ function emptyFormState(): EventFormState {
     fee: "",
     cpdHours: "",
     description: "",
+    coverImage: "",
   };
 }
 
@@ -151,6 +153,7 @@ function toFormState(event: AdminEvent): EventFormState {
     fee: event.registrationFee.toString(),
     cpdHours: event.cpdPoints.toString(),
     description: event.description ?? "",
+    coverImage: event.coverImage ?? "",
   };
 }
 
@@ -190,6 +193,7 @@ function toPayload(formState: EventFormState, publish: boolean): AdminEventPaylo
     cpdPoints: formState.cpdHours.trim() ? Number(formState.cpdHours) : 0,
     maxParticipants: Number(formState.capacity),
     isPublished: publish,
+    coverImage: formState.coverImage || undefined,
   };
 }
 
@@ -217,9 +221,34 @@ export default function EventsAndTrainingPage() {
   const [formState, setFormState] = useState<EventFormState>(emptyFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const [attendeesModalOpen, setAttendeesModalOpen] = useState(false);
+  const [attendeesData, setAttendeesData] = useState<EventAttendeesResponse | null>(null);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+  const [attendeesError, setAttendeesError] = useState<string | null>(null);
 
   const isEditing = editingEventId !== null;
   const editingEvent = eventRows.find((event) => event.id === editingEventId) ?? null;
+
+  async function openAttendeesModal(event: AdminEvent) {
+    setAttendeesData(null);
+    setAttendeesError(null);
+    setAttendeesLoading(true);
+    setAttendeesModalOpen(true);
+
+    try {
+      const { data } = await http.get<ApiEnvelope<EventAttendeesResponse>>(
+        `/admin/events/${event.id}/registrations`,
+      );
+      setAttendeesData(data.data);
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setAttendeesError(apiError.response?.data?.message ?? "Failed to load attendees.");
+    } finally {
+      setAttendeesLoading(false);
+    }
+  }
 
   async function loadEvents() {
     setLoading(true);
@@ -257,6 +286,27 @@ export default function EventsAndTrainingPage() {
     setFormState(toFormState(event));
     setFormError(null);
     setIsEventModalOpen(true);
+  }
+
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    setFormError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await http.post<ApiEnvelope<{ url: string }>>("/uploads", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      updateField("coverImage", data.data.url);
+    } catch {
+      setFormError("Failed to upload image. Please try again.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   }
 
   function closeModal() {
@@ -355,11 +405,14 @@ export default function EventsAndTrainingPage() {
                     <td className="text-[11.5px]">{formatMoney(event.registrationFee)}</td>
                     <td>
                       <StatusBadge tone={event.isPublished ? "approved" : "pending"}>
-                        {eventStatusLabel(event)}
+                        {event.isPublished ? "Published" : "Draft"}
                       </StatusBadge>
                     </td>
                     <td>
-                      <Button onClick={() => openEditModal(event)}>Edit</Button>
+                      <div className="flex items-center gap-[6px]">
+                        <Button onClick={() => void openAttendeesModal(event)}>Attendees</Button>
+                        <Button onClick={() => openEditModal(event)}>Edit</Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -389,7 +442,7 @@ export default function EventsAndTrainingPage() {
             <Button tone="dark" onClick={() => void saveEvent(false)} disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : "Save as Draft"}
             </Button>
-            <Button tone="red" onClick={() => void saveEvent(true)} disabled={isSubmitting}>
+            <Button tone="red" onClick={() => void saveEvent(isEditing ? (editingEvent?.isPublished ?? true) : true)} disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Create & Publish"}
             </Button>
           </div>
@@ -490,6 +543,40 @@ export default function EventsAndTrainingPage() {
         </div>
 
         <div>
+          <FormLabel>Cover Image</FormLabel>
+          {formState.coverImage ? (
+            <div className="relative overflow-hidden rounded-[7px] border-[1.5px] border-[var(--border)]">
+              <img
+                src={formState.coverImage}
+                alt="Cover"
+                className="h-[140px] w-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => updateField("coverImage", "")}
+                className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-[2px] text-[10px] font-semibold text-white hover:bg-black/70"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label className={`flex h-[80px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[7px] border-[1.5px] border-dashed border-[var(--border)] bg-[var(--bg)] transition-colors hover:border-[var(--red-dark)] hover:bg-[var(--red-pale)] ${isUploadingImage ? "opacity-60 pointer-events-none" : ""}`}>
+              <span className="text-[11px] font-semibold text-[var(--muted)]">
+                {isUploadingImage ? "Uploading…" : "Click to upload cover image"}
+              </span>
+              <span className="text-[10px] text-[var(--muted)]">JPG, PNG or WEBP · max 10 MB</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={isUploadingImage}
+                onChange={(e) => void handleCoverImageChange(e)}
+              />
+            </label>
+          )}
+        </div>
+
+        <div>
           <FormLabel>Description</FormLabel>
           <textarea
             rows={3}
@@ -499,6 +586,81 @@ export default function EventsAndTrainingPage() {
             className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           />
         </div>
+      </Modal>
+
+      <Modal
+        title={
+          attendeesData
+            ? `${attendeesData.eventTitle} — Attendees (${attendeesData.total})`
+            : "Event Attendees"
+        }
+        open={attendeesModalOpen}
+        onClose={() => setAttendeesModalOpen(false)}
+        bodyClassName=""
+        footer={
+          <div className="flex justify-end">
+            <Button tone="outline" onClick={() => setAttendeesModalOpen(false)}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {attendeesLoading && (
+          <div className="py-8 text-center text-[12px] text-[var(--muted)]">
+            Loading attendees…
+          </div>
+        )}
+        {attendeesError && (
+          <div className="rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
+            {attendeesError}
+          </div>
+        )}
+        {attendeesData && !attendeesLoading && (
+          attendeesData.attendees.length === 0 ? (
+            <div className="py-8 text-center text-[12px] text-[var(--muted)]">
+              No registrations yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table-proto min-w-full border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Ticket #</th>
+                    <th>Email</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Paid</th>
+                    <th>Checked In</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendeesData.attendees.map((a) => (
+                    <tr key={a.id}>
+                      <td className="text-[12px] font-semibold">{a.fullName}</td>
+                      <td className="font-mono text-[11.5px]">{a.ticketNumber}</td>
+                      <td className="text-[11.5px]">{a.email}</td>
+                      <td className="text-[11.5px]">{a.attendeeType}</td>
+                      <td>
+                        <StatusBadge tone={a.status === "CONFIRMED" ? "approved" : "pending"}>
+                          {a.status}
+                        </StatusBadge>
+                      </td>
+                      <td className="text-[11.5px]">{formatMoney(a.amountPaid)}</td>
+                      <td>
+                        {a.checkedIn ? (
+                          <StatusBadge tone="approved">Yes</StatusBadge>
+                        ) : (
+                          <StatusBadge tone="pending">No</StatusBadge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
       </Modal>
     </section>
   );

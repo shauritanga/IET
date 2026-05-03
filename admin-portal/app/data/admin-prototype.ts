@@ -27,6 +27,7 @@ export const navGroups = [
     items: [
       { to: "/dashboard/applications", label: "Applications" },
       { to: "/dashboard/members", label: "Members" },
+      { to: "/dashboard/membership-categories", label: "Categories" },
     ],
   },
   {
@@ -39,7 +40,7 @@ export const navGroups = [
   },
   {
     label: "System",
-    items: [{ to: "/dashboard/settings", label: "Settings" }],
+    items: [{ to: "/dashboard/admin-users", label: "Users" }],
   },
 ] as const;
 
@@ -50,6 +51,8 @@ export const pageLabels: Record<string, string> = {
   "/dashboard/events": "Events",
   "/dashboard/payments": "Payments",
   "/dashboard/reports": "Reports",
+  "/dashboard/admin-users": "Users",
+  "/dashboard/membership-categories": "Membership Categories",
   "/dashboard/settings": "Settings",
 };
 

@@ -164,6 +164,28 @@ export class RegistrationEntity extends AuditableEntity {
   }>;
 
   // ============================================
+  // REGISTRATION DETAILS (STEP 2) — DOCUMENTS
+  // ============================================
+
+  @ApiProperty({
+    example: 'https://storage.example.com/docs/statutory-board.pdf',
+    description: 'URL of statutory board supporting document',
+  })
+  @Column({ nullable: true })
+  supportingDocumentUrl?: string;
+
+  // ============================================
+  // EDUCATION & EXPERIENCE (STEP 3)
+  // ============================================
+
+  @ApiProperty({
+    example: 'https://storage.example.com/docs/cv.pdf',
+    description: 'URL of uploaded curriculum vitae',
+  })
+  @Column({ nullable: true })
+  cvAttachment?: string;
+
+  // ============================================
   // EMAIL VERIFICATION (STEP 5)
   // ============================================
 

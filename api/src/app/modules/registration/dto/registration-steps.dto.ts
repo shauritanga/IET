@@ -278,6 +278,27 @@ export class RefereeDto {
   @IsNotEmpty()
   @IsString()
   membershipCategory: string;
+
+  @ApiPropertyOptional({ example: 'Tanzania Engineers Registration Board' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  organisation?: string;
+
+  @ApiPropertyOptional({ example: 'referee@email.com' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ example: '+255712345678' })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Current Supervisor / Manager' })
+  @IsOptional()
+  @IsString()
+  relationship?: string;
 }
 
 export class ReferencesDto {

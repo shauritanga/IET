@@ -8,7 +8,15 @@ export const USER_KEY = "admin-user";
 export const PENDING_2FA_KEY = "admin-pending-2fa";
 
 export function isAdminRole(role: string | null | undefined): role is AdminRole {
-  return role === "ADMIN" || role === "SUPER_ADMIN";
+  return [
+    "ADMIN",
+    "SUPER_ADMIN",
+    "SECRETARIAT",
+    "EVALUATOR",
+    "MPDC",
+    "COUNCIL",
+    "REVIEWER",
+  ].includes(role ?? "");
 }
 
 export function getStoredUser(): LoginUser | null {

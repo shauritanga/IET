@@ -175,6 +175,14 @@ export class CreateEventDto {
   @MaxLength(255)
   guestOfHonor?: string;
 
+  @ApiPropertyOptional({
+    example: 'http://67.205.135.70:3000/uploads/images/c5a85146-30a7-424b-a9ac-099e9844b0fb.jpeg',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  coverImage?: string;
+
   @ApiPropertyOptional({ type: [SpeakerDto] })
   @IsOptional()
   @IsArray()

@@ -12,6 +12,7 @@ import "./app.css";
 import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {AuthProvider} from "~/providers/auth-context";
 import {Toaster} from "react-hot-toast";
+import {ThemeProvider} from "~/providers/theme";
 
 export const links: Route.LinksFunction = () => [
     {rel: "preconnect", href: "https://fonts.googleapis.com"},
@@ -27,16 +28,30 @@ export const links: Route.LinksFunction = () => [
 ];
 
 const queryClient = new QueryClient()
+const themeInitScript = `
+(function() {
+  try {
+    var key = "iet-theme";
+    var stored = window.localStorage.getItem(key);
+    var theme = stored === "dark" || stored === "light"
+      ? stored
+      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  } catch (error) {}
+})();
+`;
 
 
 export function Layout({children}: { children: React.ReactNode }) {
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
         <head>
             <meta charSet="utf-8"/>
             <meta name="viewport" content="width=device-width, initial-scale=1"/>
             <Meta/>
             <Links/>
+            <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         </head>
 
         <body>
@@ -49,9 +64,11 @@ export function Layout({children}: { children: React.ReactNode }) {
 }
 
 export default function App() {
-    return <AuthProvider>
-        <QueryClientProvider client={queryClient}><Toaster position="top-center"/> <Outlet/> </QueryClientProvider>
-    </AuthProvider>
+    return <ThemeProvider>
+        <AuthProvider>
+            <QueryClientProvider client={queryClient}><Toaster position="top-center"/> <Outlet/> </QueryClientProvider>
+        </AuthProvider>
+    </ThemeProvider>
 
 }
 

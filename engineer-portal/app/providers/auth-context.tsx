@@ -7,7 +7,13 @@ import {
     deleteFromCookie,
     getFromCookie
 } from "~/utils/storage";
-import { createAuthSession, clearAuthSession, writeAuthSession } from "~/utils/otp-session";
+import {
+    createAuthSession,
+    clearAuthSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
+    REGISTRATION_STATUS_COOKIE_KEY,
+    writeAuthSession,
+} from "~/utils/otp-session";
 import {TOKEN_KEY, USER_KEY} from "~/utils/http";
 import type {User} from "~/routes/auth/types";
 
@@ -47,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToCookie(TOKEN_KEY, token);               // 👈 cookie instead of localStorage
         setToStorage(USER_KEY, user);                // user info stays in localStorage
         if (refreshToken) setToCookie("global-rt", refreshToken);
-        setToCookie("global-ms", user.membershipStatus);
+        setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, user.membershipStatus ?? "");
+        setToCookie(REGISTRATION_STATUS_COOKIE_KEY, user.registrationStatus ?? "");
         setToken(token);
         setUser(user);
         setRefreshToken(refreshToken ?? null);
@@ -55,13 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: user.email,
             name: user.fullName ?? user.email,
             membershipStatus: user.membershipStatus,
+            registrationStatus: user.registrationStatus,
         }));
     };
 
     const logout = () => {
         deleteFromCookie(TOKEN_KEY);
         deleteFromCookie("global-rt");
-        deleteFromCookie("global-ms");
+        deleteFromCookie(MEMBERSHIP_STATUS_COOKIE_KEY);
+        deleteFromCookie(REGISTRATION_STATUS_COOKIE_KEY);
         deleteFromStorage(USER_KEY);
         clearAuthSession();
         setUser(null);

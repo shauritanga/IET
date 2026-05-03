@@ -1,8 +1,9 @@
-import { LogOut } from "lucide-react";
+import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clearSession, getStoredUser } from "~/utils/auth";
 import { navGroups, pageLabels } from "~/data/admin-prototype";
+import { useThemeMode } from "~/providers/theme";
 
 function DashboardIcon() {
   return (
@@ -76,6 +77,26 @@ function SettingsIcon() {
   );
 }
 
+function CategoriesIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="9" cy="8" r="5" />
+      <path d="M12.5 12.5 19 19" />
+      <path d="M15.5 7.5 19 4" />
+      <path d="M9 13v8" />
+      <path d="M6 18h6" />
+    </svg>
+  );
+}
+
+function AdminUsersIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
 function ToggleIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -98,17 +119,34 @@ function navIcon(label: string) {
   if (label === "Dashboard") return <DashboardIcon />;
   if (label === "Applications") return <ApplicationsIcon />;
   if (label === "Members") return <MembersIcon />;
+  if (label === "Users") return <AdminUsersIcon />;
+  if (label === "Admin Users") return <AdminUsersIcon />;
+  if (label === "Categories") return <CategoriesIcon />;
+  if (label === "Profile") return <MembersIcon />;
   if (label === "Events") return <EventsIcon />;
   if (label === "Payments") return <PaymentsIcon />;
   if (label === "Reports") return <ReportsIcon />;
   return <SettingsIcon />;
 }
 
+function roleLabel(role?: string | null) {
+  if (!role) return "Admin";
+  return role
+    .toLowerCase()
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 export default function AdminShell() {
   const [collapsed, setCollapsed] = useState(false);
+  const [accountMenuAnchor, setAccountMenuAnchor] = useState<"header" | "sidebar" | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const headerAccountMenuRef = useRef<HTMLDivElement | null>(null);
+  const sidebarAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const user = getStoredUser();
+  const { theme, toggleTheme } = useThemeMode();
 
   const pageLabel = pageLabels[location.pathname] ?? "Dashboard";
   const userName = user?.fullName ?? "Admin";
@@ -118,16 +156,111 @@ export default function AdminShell() {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("") || "A";
-  const todayDate = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date()),
-    [],
-  );
+  const renderAvatar = () => user?.profilePhotoUrl ? (
+    <img src={user.profilePhotoUrl} alt="" className="h-full w-full rounded-full object-cover" />
+  ) : initials;
+  const closeAccountMenu = () => setAccountMenuAnchor(null);
+  const openAccountMenu = (anchor: "header" | "sidebar") => setAccountMenuAnchor(anchor);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const activeRef = accountMenuAnchor === "header" ? headerAccountMenuRef : sidebarAccountMenuRef;
+      if (activeRef.current?.contains(target)) return;
+      if (accountMenuAnchor) setAccountMenuAnchor(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountMenuAnchor(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [accountMenuAnchor]);
+
+  useEffect(() => {
+    setAccountMenuAnchor(null);
+  }, [location.pathname]);
+
+  function AccountMenuPanel({ placement }: { placement: "header" | "sidebar" }) {
+    return (
+      <div
+        role="menu"
+        aria-label="Account menu"
+        className={
+          placement === "header"
+            ? "absolute right-0 top-[calc(100%+10px)] z-[220] w-[250px] overflow-hidden rounded-[12px] border border-[var(--border)] bg-white shadow-[0_18px_48px_rgba(0,0,0,0.16)]"
+            : "absolute bottom-[calc(100%+10px)] left-3 right-3 z-[220] overflow-hidden rounded-[12px] border border-[var(--border)] bg-white shadow-[0_18px_48px_rgba(0,0,0,0.16)]"
+        }
+      >
+        <div className="border-b border-[var(--border)] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--red)] text-[11px] font-bold text-white">
+              {renderAvatar()}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[12px] font-semibold text-[var(--red-dark)]">{userName}</div>
+              <div className="truncate text-[10px] text-[var(--muted)]">{user?.email ?? ""}</div>
+              <div className="mt-1 inline-flex items-center rounded-full bg-[var(--red-light)] px-[7px] py-[2px] text-[9px] font-bold uppercase tracking-[0.4px] text-[var(--red)]">
+                {roleLabel(userRole)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-2">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeAccountMenu();
+              navigate("/dashboard/profile");
+            }}
+            className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors duration-150 hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+          >
+            <UserRound size={14} className="shrink-0 text-[var(--muted)]" />
+            <span>Profile</span>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeAccountMenu();
+              navigate("/dashboard/settings");
+            }}
+            className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors duration-150 hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+          >
+            <Settings2 size={14} className="shrink-0 text-[var(--muted)]" />
+            <span>Settings</span>
+          </button>
+
+          <div className="my-1 h-px bg-[var(--border)]" />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeAccountMenu();
+              clearSession();
+              navigate("/auth/login", { replace: true });
+            }}
+            className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--red)] transition-colors duration-150 hover:bg-[var(--red-pale)]"
+          >
+            <LogOut size={14} className="shrink-0" />
+            <span>Log out</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -175,33 +308,35 @@ export default function AdminShell() {
           ))}
         </nav>
 
-        <div className="border-t border-[var(--border)] px-4 py-3">
-          <div className="flex items-center gap-[9px]">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--red-light)] bg-[var(--red)] text-[11px] font-bold text-white">
-              {initials}
+        <div className="relative border-t border-[var(--border)] px-3 py-3" ref={sidebarAccountMenuRef}>
+          <button
+            type="button"
+            className="flex w-full items-center gap-[9px] rounded-[10px] border border-transparent px-[9px] py-[8px] text-left transition-all duration-150 hover:border-[var(--border)] hover:bg-[var(--red-pale)] focus-visible:border-[var(--red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(226,12,10,0.18)]"
+            onClick={() => openAccountMenu("sidebar")}
+            aria-haspopup="menu"
+            aria-expanded={accountMenuAnchor === "sidebar"}
+            aria-label="Open account menu"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--red-light)] bg-[var(--red)] text-[11px] font-bold text-white">
+              {renderAvatar()}
             </div>
-            <div>
-              <strong className="block text-[11px] text-[var(--red-dark)]">{userName}</strong>
-              <span className="text-[9.5px] text-[var(--muted)]">{userRole.replaceAll("_", " ")}</span>
+            <div className="min-w-0">
+              <strong className="block truncate text-[11px] text-[var(--red-dark)]">{userName}</strong>
+              <span className="block truncate text-[9.5px] text-[var(--muted)]">{roleLabel(userRole)}</span>
             </div>
-            <button
-              type="button"
-              className="ml-auto cursor-pointer text-[var(--muted)] transition-colors duration-150 hover:text-[var(--red)]"
-              onClick={() => {
-                clearSession();
-                navigate("/auth/login", { replace: true });
-              }}
-              aria-label="Log out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
+            <ChevronUp
+              size={14}
+              className={`ml-auto shrink-0 text-[var(--muted)] transition-transform duration-150 ${accountMenuAnchor === "sidebar" ? "" : "rotate-180"}`}
+            />
+          </button>
+
+          {accountMenuAnchor === "sidebar" && <AccountMenuPanel placement="sidebar" />}
         </div>
       </aside>
 
       <div className={`min-h-screen transition-[margin-left] duration-[240ms] [transition-timing-function:cubic-bezier(.4,0,.2,1)] ${collapsed ? "ml-0" : "ml-[260px]"}`}>
-        <div className="sticky top-0 z-[100] flex h-[50px] items-center justify-between border-b border-[var(--border)] bg-white px-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center gap-[11px]">
+        <div className="sticky top-0 z-[100] flex min-h-[54px] items-center justify-between gap-4 border-b border-[var(--border)] bg-white px-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+          <div className="flex min-w-0 flex-1 items-center gap-[11px]">
             <button
               type="button"
               className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border-[1.5px] border-transparent bg-transparent text-[var(--muted)] transition-all duration-150 hover:border-[var(--border)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
@@ -210,27 +345,51 @@ export default function AdminShell() {
             >
               <ToggleIcon />
             </button>
-            <div className="text-[11px] text-[var(--muted)]">
-              IET Tanzania Admin › <span className="text-[11.5px] font-bold text-[var(--red)]">{pageLabel}</span>
+            <div className="min-w-0 text-[11px] text-[var(--muted)]">
+              <span className="block truncate">
+                IET Tanzania Admin › <span className="text-[11.5px] font-bold text-[var(--red)]">{pageLabel}</span>
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-[11px]">
-            <div className="rounded-full border border-[var(--border)] bg-[var(--red-pale)] px-[11px] py-1 text-[10.5px] text-[var(--muted)]">
-              {todayDate}
-            </div>
-            <div className="relative flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-full border-[1.5px] border-transparent bg-transparent text-[var(--muted)] transition-all duration-150 hover:border-[var(--border)] hover:text-[var(--red)]">
+          <div className="flex items-center gap-[9px]">
+            <button
+              type="button"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-all duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
+              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? <SunMedium size={14} /> : <MoonStar size={14} />}
+            </button>
+
+            <button
+              type="button"
+              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-all duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
+              aria-label="Notifications"
+              title="Notifications"
+            >
               <BellIcon />
               <span className="absolute right-[7px] top-[6px] h-[6px] w-[6px] rounded-full bg-[var(--red)]" />
-            </div>
-            <div className="flex cursor-pointer items-center gap-2 rounded-[40px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[3px] pl-[3px] transition-[border-color,box-shadow] duration-[180ms] hover:border-[var(--red)] hover:shadow-[0_2px_8px_rgba(226,12,10,0.1)]">
-              <div className="flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[var(--red)] text-[9px] font-bold text-white">
-                {initials}
-              </div>
-              <span className="text-[11px] font-semibold text-[var(--red-dark)]">{userName}</span>
-              <span className="ml-1 rounded-full bg-[var(--red)] px-2 py-[2px] text-[9px] font-extrabold uppercase tracking-[0.4px] text-white">
-                {userRole.replaceAll("_", " ")}
-              </span>
+            </button>
+
+            <div className="relative" ref={headerAccountMenuRef}>
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg)] py-[3px] pl-[3px] pr-2 transition-[border-color,box-shadow] duration-[180ms] hover:border-[var(--red)] hover:shadow-[0_2px_8px_rgba(226,12,10,0.1)]"
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded={accountMenuAnchor === "header"}
+                onClick={() => openAccountMenu("header")}
+                title="Account"
+            >
+                <div className="flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[var(--red)] text-[9px] font-bold text-white">
+                  {renderAvatar()}
+                </div>
+                <ChevronDown size={13} className={`shrink-0 text-[var(--muted)] transition-transform duration-150 ${accountMenuAnchor === "header" ? "rotate-180" : ""}`} />
+              </button>
+
+              {accountMenuAnchor === "header" && <AccountMenuPanel placement="header" />}
             </div>
           </div>
         </div>

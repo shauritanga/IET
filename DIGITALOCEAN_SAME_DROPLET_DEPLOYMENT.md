@@ -21,6 +21,24 @@ This setup uses:
 - PM2 for keeping the three Node apps running
 - Certbot for free SSL
 
+## If you do not have a domain yet
+
+You can still deploy everything now by using your droplet public IP.
+
+Use this temporary layout:
+
+- `http://YOUR_DROPLET_IP:3000` -> API
+- `http://YOUR_DROPLET_IP:4000` -> engineer portal
+- `http://YOUR_DROPLET_IP:4100` -> admin portal
+
+Important limitations without a domain:
+
+- No normal SSL certificate for the IP-based setup with Certbot
+- The apps will be served over plain `http`
+- You should switch to domain-based hosting later for production use
+
+If you are deploying without a domain, follow the special IP-based path in sections `2A`, `11A`, `12A`, `13A`, `17`, and skip sections `18` and `19` for now.
+
 ## 1. Create the droplet
 
 In DigitalOcean, create:
@@ -41,6 +59,22 @@ Create DNS `A` records:
 - `admin.yourdomain.com` -> `YOUR_DROPLET_IP`
 
 Wait for DNS propagation before requesting SSL.
+
+## 2A. If you are using only the droplet IP for now
+
+Skip DNS setup completely.
+
+You will use:
+
+- `http://YOUR_DROPLET_IP:3000` for the API
+- `http://YOUR_DROPLET_IP:4000` for the engineer portal
+- `http://YOUR_DROPLET_IP:4100` for the admin portal
+
+In this mode:
+
+- Do not configure Nginx yet
+- Do not run Certbot
+- Make sure ports `3000`, `4000`, and `4100` are open in the firewall
 
 ## 3. SSH into the droplet
 
@@ -69,9 +103,14 @@ apt install -y git curl unzip build-essential nginx certbot python3-certbot-ngin
 ```bash
 ufw allow OpenSSH
 ufw allow 'Nginx Full'
+ufw allow 3000/tcp
+ufw allow 4000/tcp
+ufw allow 4100/tcp
 ufw --force enable
 ufw status
 ```
+
+If you later switch to Nginx with a domain, you can remove the direct app port access if you want.
 
 ## 7. Install Node.js 20
 
@@ -192,6 +231,34 @@ Notes:
 - `FRONTEND_ORIGINS` must match your real frontend domains exactly.
 - If you use payment callbacks, set them to your live API domain.
 
+## 11A. API environment for IP-only deployment
+
+If you do not have a domain yet, use values like:
+
+```env
+NODE_ENV=production
+PORT=3000
+APP_URL=http://YOUR_DROPLET_IP:3000
+API_URL=http://YOUR_DROPLET_IP:3000/api/v1
+FRONTEND_ORIGINS=http://YOUR_DROPLET_IP:4000,http://YOUR_DROPLET_IP:4100
+
+DATABASE_ENABLED=true
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USERNAME=iet_user
+DB_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
+DB_NAME=iet_db
+
+JWT_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
+JWT_EXPIRATION=15m
+JWT_REFRESH_SECRET=REPLACE_WITH_ANOTHER_LONG_RANDOM_SECRET
+JWT_REFRESH_EXPIRATION=7d
+
+ENCRYPTION_KEY=REPLACE_WITH_32_CHAR_SECRET_VALUE
+```
+
+For IP-only deployment, any external callback URL should also point to the droplet IP and API port.
+
 ## 12. Prepare the engineer portal environment file
 
 ```bash
@@ -207,6 +274,15 @@ VITE_API_BASE_URL=https://api.yourdomain.com/api/v1
 SESSION_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
 ```
 
+## 12A. Engineer portal environment for IP-only deployment
+
+Use:
+
+```env
+VITE_API_BASE_URL=http://YOUR_DROPLET_IP:3000/api/v1
+SESSION_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
+```
+
 ## 13. Prepare the admin portal environment file
 
 ```bash
@@ -219,6 +295,14 @@ Use:
 
 ```env
 VITE_API_BASE_URL=https://api.yourdomain.com/api/v1
+```
+
+## 13A. Admin portal environment for IP-only deployment
+
+Use:
+
+```env
+VITE_API_BASE_URL=http://YOUR_DROPLET_IP:3000/api/v1
 ```
 
 ## 14. Install dependencies
@@ -310,6 +394,12 @@ pm2 status
 pm2 logs --lines 100
 ```
 
+For IP-only deployment, access the apps directly on these URLs after PM2 starts them:
+
+- `http://YOUR_DROPLET_IP:3000/health`
+- `http://YOUR_DROPLET_IP:4000`
+- `http://YOUR_DROPLET_IP:4100`
+
 Make PM2 start on reboot:
 
 ```bash
@@ -323,6 +413,8 @@ pm2 save
 ```
 
 ## 18. Configure Nginx reverse proxy
+
+Skip this section if you do not have a domain yet.
 
 Create an Nginx config file:
 
@@ -384,6 +476,8 @@ systemctl reload nginx
 
 ## 19. Install SSL certificates
 
+Skip this section if you do not have a domain yet.
+
 Only do this after DNS records are pointing correctly.
 
 ```bash
@@ -414,6 +508,12 @@ Then verify public URLs in the browser:
 - `https://api.yourdomain.com/api/docs` if Swagger is enabled
 - `https://engineer.yourdomain.com`
 - `https://admin.yourdomain.com`
+
+If you are using the droplet IP only, verify:
+
+- `http://YOUR_DROPLET_IP:3000/health`
+- `http://YOUR_DROPLET_IP:4000`
+- `http://YOUR_DROPLET_IP:4100`
 
 ## 21. How to deploy updates later
 
@@ -500,3 +600,31 @@ If you want one main site instead of three subdomains, you can also use:
 - `https://yourdomain.com/api/v1` -> API through Nginx path proxy
 
 That layout needs a different Nginx config. The subdomain layout above is cleaner and simpler for this repo.
+
+## 25. Move from IP-only to domain later
+
+When you buy a domain later:
+
+1. Create DNS records for `api`, `engineer`, and `admin`.
+2. Update `.env` in all three apps from `http://YOUR_DROPLET_IP...` to the real domain URLs.
+3. Rebuild the two frontend apps:
+
+```bash
+cd /var/www/iet/engineer-portal
+npm run build
+pm2 restart iet-engineer
+
+cd /var/www/iet/admin-portal
+npm run build
+pm2 restart iet-admin
+```
+
+4. Restart the API:
+
+```bash
+cd /var/www/iet/api
+pm2 restart iet-api
+```
+
+5. Configure Nginx.
+6. Run Certbot.

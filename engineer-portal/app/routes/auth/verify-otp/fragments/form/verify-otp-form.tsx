@@ -7,7 +7,9 @@ import type { TErrorMessage } from "~/types"
 import {
     createAuthSession,
     clearOtpSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
     readOtpSession,
+    REGISTRATION_STATUS_COOKIE_KEY,
     writeAuthSession,
     type OtpSession,
 } from "~/utils/otp-session"
@@ -61,14 +63,14 @@ const VerifyOtpForm = () => {
     const completeAuth = (payload: { accessToken: string; refreshToken: string; user: any }) => {
         setToCookie(TOKEN_KEY, payload.accessToken)
         setToCookie("global-rt", payload.refreshToken)
-        if (payload.user.registrationStatus) {
-            setToCookie("global-ms", payload.user.registrationStatus)
-        }
+        setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, payload.user.membershipStatus ?? "")
+        setToCookie(REGISTRATION_STATUS_COOKIE_KEY, payload.user.registrationStatus ?? "")
         setToStorage(USER_KEY, payload.user)
         writeAuthSession(createAuthSession({
             email: payload.user.email,
             name: payload.user.fullName ?? payload.user.email,
             membershipStatus: payload.user.membershipStatus,
+            registrationStatus: payload.user.registrationStatus,
         }))
         clearOtpSession()
         navigate("/dashboard/home", { replace: true })

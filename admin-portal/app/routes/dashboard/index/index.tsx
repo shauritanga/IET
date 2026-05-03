@@ -1,10 +1,44 @@
+import type { AxiosError } from "axios";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import {
-  activityLog,
-  applications,
-  recentPayments,
-} from "~/data/admin-prototype";
+import http from "~/utils/http";
+import type { AdminStats, ApiEnvelope, MemberSummary } from "~/types";
 import { Avatar, Button, StatusBadge } from "~/components/prototype-ui";
+
+type DashboardApplicationRow = {
+  id: string;
+  referenceNumber?: string;
+  applicantName: string;
+  email: string;
+  appliedMembershipClass?: string | null;
+  engineeringDiscipline?: string | null;
+  status: string;
+  submittedAt?: string | null;
+  createdAt?: string | null;
+};
+
+type DashboardPaymentRow = {
+  id: string;
+  transactionRef: string;
+  memberName: string;
+  memberEmail?: string | null;
+  description: string;
+  amount: number;
+  currency: string;
+  paymentMethod?: string | null;
+  status: string;
+  createdAt: string;
+};
+
+const MEMBERSHIP_CLASS_LABELS: Record<string, string> = {
+  GRADUATE: "Graduate",
+  ASSOCIATE: "AMIET",
+  MIET: "MIET",
+  CORPORATE: "CMIET",
+  SENIOR: "SMIET",
+  FELLOW: "FIET",
+  HONORARY: "Honorary",
+};
 
 function MembersKpiIcon() {
   return (
@@ -51,8 +85,8 @@ function DashboardCard({
   bodyClassName,
 }: {
   title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
   bodyClassName?: string;
 }) {
   return (
@@ -74,7 +108,7 @@ function DashboardMetricCard({
   noteTone = "success",
   compactValue = false,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   value: string;
   label: string;
   note: string;
@@ -104,67 +138,193 @@ function DashboardMetricCard({
 
 function DashboardAvatar({
   initials,
-  bgClassName,
+  tone,
   small = false,
 }: {
   initials: string;
-  bgClassName: string;
+  tone: "red" | "blue" | "green" | "purple" | "pink" | "orange";
   small?: boolean;
 }) {
-  return (
-    <div
-      className={`${bgClassName} flex items-center justify-center rounded-full font-bold text-white ${small ? "h-6 w-6 text-[9px]" : "h-[30px] w-[30px] text-[10px]"}`}
-      aria-hidden="true"
-    >
-      {initials}
-    </div>
-  );
+  return <Avatar initials={initials} tone={tone} small={small} />;
 }
 
-const avatarColors: Record<string, string> = {
-  red: "bg-[var(--red)]",
-  blue: "bg-[#1565C0]",
-  green: "bg-[#2E7D32]",
-  pink: "bg-[#880E4F]",
-};
+function formatCurrency(value: number, currency = "TZS") {
+  return `${currency} ${new Intl.NumberFormat("en-US").format(value)}`;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function initialsFromName(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase() || "?";
+}
+
+function toneFromId(id: string) {
+  const tones: Array<"red" | "blue" | "green" | "purple" | "pink" | "orange"> = [
+    "red",
+    "blue",
+    "green",
+    "purple",
+    "pink",
+    "orange",
+  ];
+
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) & 0xff;
+  return tones[hash % tones.length];
+}
+
+function statusTone(status?: string | null): "pending" | "approved" | "rejected" | "warning" | "blue" {
+  switch ((status ?? "").toUpperCase()) {
+    case "APPROVED":
+    case "COMPLETED":
+    case "ACTIVE":
+      return "approved";
+    case "REJECTED":
+    case "FAILED":
+    case "CANCELLED":
+      return "rejected";
+    case "CHANGES_REQUESTED":
+      return "warning";
+    case "IN_REVIEW":
+    case "PENDING":
+      return "pending";
+    default:
+      return "blue";
+  }
+}
+
+function applicationActionLabel(status: string) {
+  return status.toUpperCase() === "IN_REVIEW" ? "Review" : "View";
+}
 
 export default function DashboardOverviewPage() {
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [recentApplications, setRecentApplications] = useState<DashboardApplicationRow[]>([]);
+  const [recentPayments, setRecentPayments] = useState<DashboardPaymentRow[]>([]);
+  const [recentMembers, setRecentMembers] = useState<MemberSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      setLoading(true);
+      setPageError(null);
+
+      try {
+        const [statsResponse, inReviewResponse, approvedResponse, rejectedResponse, changesResponse, paymentsResponse, membersResponse] =
+          await Promise.all([
+            http.get<ApiEnvelope<AdminStats>>("/admin/dashboard/stats"),
+            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=IN_REVIEW&limit=6"),
+            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=APPROVED&limit=6"),
+            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=REJECTED&limit=6"),
+            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=CHANGES_REQUESTED&limit=6"),
+            http.get<ApiEnvelope<DashboardPaymentRow[]>>("/admin/payments?limit=4"),
+            http.get<ApiEnvelope<MemberSummary[]>>("/admin/members?limit=4"),
+          ]);
+
+        const allApplications = [
+          ...(inReviewResponse.data.data ?? []),
+          ...(approvedResponse.data.data ?? []),
+          ...(rejectedResponse.data.data ?? []),
+          ...(changesResponse.data.data ?? []),
+        ];
+
+        const seenIds = new Set<string>();
+        const uniqueApplications = allApplications.filter((application) => {
+          if (seenIds.has(application.id)) return false;
+          seenIds.add(application.id);
+          return true;
+        });
+
+        uniqueApplications.sort((left, right) => {
+          const leftDate = new Date(left.submittedAt ?? left.createdAt ?? 0).getTime();
+          const rightDate = new Date(right.submittedAt ?? right.createdAt ?? 0).getTime();
+          return rightDate - leftDate;
+        });
+
+        setStats(statsResponse.data.data);
+        setRecentApplications(uniqueApplications.slice(0, 4));
+        setRecentPayments((paymentsResponse.data.data ?? []).slice(0, 4));
+        setRecentMembers((membersResponse.data.data ?? []).slice(0, 4));
+      } catch (error) {
+        const apiError = error as AxiosError<{ message?: string }>;
+        setPageError(apiError.response?.data?.message ?? "Failed to load dashboard data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadDashboard();
+  }, []);
+
+  const totalMembers = stats?.members.total ?? 0;
+  const activeMembers = stats?.members.active ?? 0;
+  const pendingApplications = stats?.applications.pending ?? 0;
+  const totalRevenue = stats?.payments.totalRevenue ?? 0;
+  const revenueThisMonth = stats?.payments.thisMonth ?? 0;
+  const upcomingEvents = stats?.events.upcoming ?? 0;
+  const totalRegistrations = stats?.events.totalRegistrations ?? 0;
+
+  function displayMemberName(member: MemberSummary) {
+    const fullName = member.fullName ?? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim();
+    return fullName || member.email;
+  }
+
   return (
     <section>
-      <div className="mb-[18px] flex items-center justify-between">
+      <div className="mb-[18px] flex items-center justify-between gap-4">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Dashboard Overview</h1>
-          <p className="mt-[2px] text-[11px] text-[var(--muted)]">Real-time snapshot of IET Tanzania operations</p>
+          <p className="mt-[2px] text-[11px] text-[var(--muted)]">Live snapshot of IET Tanzania operations</p>
         </div>
-        <Button>⬇ Export Report</Button>
+        <Button tone="outline">Export Report</Button>
       </div>
+
+      {pageError ? (
+        <div className="mb-[14px] rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-4 py-3 text-[11.5px] font-semibold text-[var(--red)]">
+          {pageError}
+        </div>
+      ) : null}
 
       <div className="mb-5 grid gap-[14px] md:grid-cols-2 xl:grid-cols-4">
         <DashboardMetricCard
           icon={<MembersKpiIcon />}
-          value="4,872"
+          value={loading ? "—" : formatNumber(totalMembers)}
           label="Total Members"
-          note="↑ 48 this month"
+          note={loading ? "" : `${activeMembers} currently active`}
         />
         <DashboardMetricCard
           icon={<ApplicationsKpiIcon />}
-          value="12"
+          value={loading ? "—" : String(pendingApplications)}
           label="Pending Applications"
-          note="⚠ Needs review"
+          note={loading ? "" : `${stats?.applications.totalThisYear ?? 0} this year`}
           noteTone="warn"
         />
         <DashboardMetricCard
           icon={<RevenueKpiIcon />}
-          value="TZS 28.4M"
+          value={loading ? "—" : formatCurrency(totalRevenue, stats?.payments.currency ?? "TZS")}
           label="Revenue (2025)"
-          note="↑ 12% vs last year"
+          note={loading ? "" : `TZS ${new Intl.NumberFormat("en-US").format(revenueThisMonth)} this month`}
           compactValue
         />
         <DashboardMetricCard
           icon={<EventsKpiIcon />}
-          value="6"
+          value={loading ? "—" : String(upcomingEvents)}
           label="Upcoming Events"
-          note="Next: Feb 22"
+          note={loading ? "" : `${totalRegistrations} registrations`}
           noteTone="neutral"
         />
       </div>
@@ -177,35 +337,62 @@ export default function DashboardOverviewPage() {
                 <tr>
                   <th>Applicant</th>
                   <th>Grade</th>
-                  <th>Date</th>
+                  <th>Submitted</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {applications.slice(0, 4).map((application) => (
-                  <tr key={application.email}>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <DashboardAvatar initials={application.initials} bgClassName={avatarColors[application.tone]} />
-                        <div>
-                          <div className="text-[12px] font-semibold">{application.name}</div>
-                          <div className="text-[10px] text-[var(--muted)]">{application.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="text-[11.5px]">{application.grade.replace(" Member", "")}</td>
-                    <td className="text-[11.5px]">{application.submitted.replace(", 2025", "")}</td>
-                    <td>
-                      <StatusBadge tone={application.badge}>{application.status}</StatusBadge>
-                    </td>
-                    <td>
-                      <Button tone={application.badge === "pending" ? "dark" : "outline"}>
-                        {application.badge === "pending" ? "Review" : "View"}
-                      </Button>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                      Loading applications...
                     </td>
                   </tr>
-                ))}
+                ) : recentApplications.length ? (
+                  recentApplications.map((application) => {
+                    const actionTone = application.status.toUpperCase() === "IN_REVIEW" ? "dark" : "outline";
+
+                    return (
+                      <tr key={application.id}>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <DashboardAvatar
+                              initials={initialsFromName(application.applicantName)}
+                              tone={toneFromId(application.id)}
+                            />
+                            <div>
+                              <div className="text-[12px] font-semibold">{application.applicantName}</div>
+                              <div className="text-[10px] text-[var(--muted)]">{application.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="text-[11.5px]">
+                          {application.appliedMembershipClass
+                            ? MEMBERSHIP_CLASS_LABELS[application.appliedMembershipClass] ?? application.appliedMembershipClass
+                            : "—"}
+                        </td>
+                        <td className="text-[11.5px]">
+                          {formatShortDate(application.submittedAt ?? application.createdAt)}
+                        </td>
+                        <td>
+                          <StatusBadge tone={statusTone(application.status)}>
+                            {application.status.replace(/_/g, " ")}
+                          </StatusBadge>
+                        </td>
+                        <td>
+                          <Button tone={actionTone}>{applicationActionLabel(application.status)}</Button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                      No applications found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -213,52 +400,97 @@ export default function DashboardOverviewPage() {
 
         <DashboardCard title="Recent Payments" action={<Link to="/dashboard/payments">View all</Link>} bodyClassName="p-0">
           <div className="flex flex-col">
-            {recentPayments.map((payment, index) => (
-              <div
-                key={`${payment.title}-${payment.detail}`}
-                className={`flex items-center justify-between px-4 py-[11px] ${index < recentPayments.length - 1 ? "border-b border-[var(--border)]" : ""}`}
-              >
-                <div>
-                  <div className="text-[12px] font-semibold">{payment.title}</div>
-                  <div className="text-[10px] text-[var(--muted)]">{payment.detail}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[12px] font-bold text-[var(--red-dark)]">{payment.amount}</div>
-                  <StatusBadge tone={payment.badge} className="mt-1 text-[9.5px]">
-                    {payment.status}
-                  </StatusBadge>
-                </div>
+            {loading ? (
+              <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                Loading payments...
               </div>
-            ))}
+            ) : recentPayments.length ? (
+              recentPayments.map((payment, index) => (
+                <div
+                  key={payment.id}
+                  className={`flex items-center justify-between px-4 py-[11px] ${index < recentPayments.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+                >
+                  <div>
+                    <div className="text-[12px] font-semibold">{payment.description}</div>
+                    <div className="text-[10px] text-[var(--muted)]">
+                      {payment.memberName}{payment.paymentMethod ? ` · ${payment.paymentMethod}` : ""}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[12px] font-bold text-[var(--red-dark)]">
+                      {formatCurrency(payment.amount, payment.currency)}
+                    </div>
+                    <StatusBadge tone={statusTone(payment.status)} className="mt-1 text-[9.5px]">
+                      {payment.status.replace(/_/g, " ")}
+                    </StatusBadge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                No payments found.
+              </div>
+            )}
           </div>
         </DashboardCard>
       </div>
 
-      <DashboardCard title="Recent Admin Activity Log" bodyClassName="p-0">
+      <DashboardCard title="Recent Members" action={<Link to="/dashboard/members">View all</Link>} bodyClassName="p-0">
         <div className="overflow-x-auto">
           <table className="table-proto min-w-full border-separate border-spacing-0">
             <thead>
               <tr>
-                <th>Admin</th>
-                <th>Action</th>
-                <th>Target</th>
-                <th>Time</th>
+                <th>Member</th>
+                <th>Membership No.</th>
+                <th>Grade</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {activityLog.map((item) => (
-                <tr key={`${item.admin}-${item.action}-${item.time}`}>
-                  <td>
-                    <div className="flex items-center gap-[7px]">
-                      <DashboardAvatar initials={item.initials} bgClassName={avatarColors[item.tone]} small />
-                      <span className="text-[11.5px]">{item.admin}</span>
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                    Loading members...
                   </td>
-                  <td className="text-[11.5px]">{item.action}</td>
-                  <td className="text-[11.5px]">{item.target}</td>
-                  <td className="text-[11.5px]">{item.time}</td>
                 </tr>
-              ))}
+              ) : recentMembers.length ? (
+                recentMembers.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <DashboardAvatar
+                          initials={initialsFromName(displayMemberName(member))}
+                          tone={toneFromId(member.id)}
+                          small
+                        />
+                        <div>
+                          <div className="text-[12px] font-semibold">{displayMemberName(member)}</div>
+                          <div className="text-[10px] text-[var(--muted)]">{member.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="font-mono text-[11.5px]">{member.membershipId ?? "—"}</td>
+                    <td className="text-[11.5px]">
+                      {member.membershipClass ? MEMBERSHIP_CLASS_LABELS[member.membershipClass] ?? member.membershipClass : "—"}
+                    </td>
+                    <td>
+                      <StatusBadge tone={statusTone(member.membershipStatus ?? "PENDING")}>
+                        {(member.membershipStatus ?? "PENDING").replace(/_/g, " ")}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <Button tone="outline">View</Button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                    No members found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

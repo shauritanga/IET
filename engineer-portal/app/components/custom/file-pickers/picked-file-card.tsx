@@ -57,7 +57,7 @@ const PickedFileCard: FC<PickedFileCardProps> = ({
 
     const handleClick = () => {
         if (!isUploading) {
-            onRemove(file?.key?.toString());
+            onRemove(isUploadMediaFile(file) ? file.key : file.id);
         }
     };
 

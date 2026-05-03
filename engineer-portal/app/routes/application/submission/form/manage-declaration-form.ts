@@ -5,7 +5,7 @@ import z from "zod";
 export const DeclarationFormSchema = z.object({
     declarationDate: z.string().min(1, "Declaration date is required"),
     declarationAgreed: z.literal(true, {
-        errorMap: () => ({ message: "You must agree to the declaration before submitting." }),
+        error: () => ({ message: "You must agree to the declaration before submitting." }),
     }),
 });
 

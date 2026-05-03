@@ -221,6 +221,9 @@ export class RegistrationService {
     registration.registeredWithStatutoryBoards = dto.registeredWithStatutoryBoard;
     registration.memberOfOtherInstitutions = dto.memberOfOtherInstitutions;
     registration.otherInstitutions = dto.institutions || [];
+    if (dto.supportingDocument) {
+      registration.supportingDocumentUrl = dto.supportingDocument;
+    }
     registration.currentStep = RegistrationStep.REGISTRATION_DETAILS;
 
     // Add to completed steps if not already there
@@ -264,11 +267,11 @@ export class RegistrationService {
       education.registrationId = registration.id;
       education.institutionName = ed.institutionName;
       education.qualification = ed.courseName;
-      education.fieldOfStudy = ed.country;
+      education.location = ed.country;
       education.startDate = new Date(ed.startDate);
       education.endDate = new Date(ed.endDate);
       education.sortOrder = i;
-      if (ed.attachment) education.location = ed.attachment;
+      if (ed.attachment) education.attachmentUrl = ed.attachment;
       await this.educationRepository.save(education);
     }
 
@@ -287,7 +290,7 @@ export class RegistrationService {
 
     // Store CV attachment on registration if provided
     if (dto.cvAttachment) {
-      (registration as any).cvAttachment = dto.cvAttachment;
+      registration.cvAttachment = dto.cvAttachment;
     }
 
     await this.updateStepProgress(registration, RegistrationStep.EDUCATION_EXPERIENCE);
@@ -528,6 +531,10 @@ export class RegistrationService {
     proposerRef.fullName = proposer.fullName;
     proposerRef.membershipCategory = proposer.membershipCategory as any;
     proposerRef.membershipNumber = proposer.membershipNumber;
+    proposerRef.organisation = proposer.organisation;
+    proposerRef.email = proposer.email;
+    proposerRef.phoneNumber = proposer.phoneNumber;
+    proposerRef.relationship = proposer.relationship;
 
     // Create supporter
     const supporterRef = new ReferenceEntity();
@@ -536,6 +543,10 @@ export class RegistrationService {
     supporterRef.fullName = supporter.fullName;
     supporterRef.membershipCategory = supporter.membershipCategory as any;
     supporterRef.membershipNumber = supporter.membershipNumber;
+    supporterRef.organisation = supporter.organisation;
+    supporterRef.email = supporter.email;
+    supporterRef.phoneNumber = supporter.phoneNumber;
+    supporterRef.relationship = supporter.relationship;
 
     const savedProposer = await this.referenceRepository.save(proposerRef);
     const savedSupporter = await this.referenceRepository.save(supporterRef);

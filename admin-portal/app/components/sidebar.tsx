@@ -1,15 +1,15 @@
 import { NavLink } from "react-router";
-import { CalendarRange, CreditCard, LayoutDashboard, PanelLeft, Settings2, Users } from "lucide-react";
+import { CalendarRange, CreditCard, LayoutDashboard, PanelLeft, Tags, Users } from "lucide-react";
 import { getStoredUser } from "~/utils/auth";
 
-type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "settings";
+type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories";
 
 const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: boolean }> = [
   { label: "Dashboard", icon: "dashboard", to: "/dashboard", end: true },
   { label: "Payments", icon: "payments", to: "/dashboard/applications" },
   { label: "Members", icon: "members", to: "/dashboard/members" },
+  { label: "Categories", icon: "categories", to: "/dashboard/membership-categories" },
   { label: "Event & Training", icon: "training", to: "/dashboard/events" },
-  { label: "Settings", icon: "settings", to: "/dashboard/settings" },
 ];
 
 function toRoleLabel(role?: string | null) {
@@ -43,7 +43,11 @@ function sidebarIcon(name: SidebarIconName) {
     return <CalendarRange aria-hidden="true" />;
   }
 
-  return <Settings2 aria-hidden="true" />;
+  if (name === "categories") {
+    return <Tags aria-hidden="true" />;
+  }
+
+  return null;
 }
 
 type SidebarProps = {

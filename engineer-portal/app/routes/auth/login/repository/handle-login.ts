@@ -7,7 +7,12 @@ import { setToCookie } from "~/utils/storage";
 import { TOKEN_KEY, USER_KEY } from "~/utils/http";
 import type { LoginResponse } from "~/routes/auth/types";
 import { loginUser } from "~/routes/auth/login/requests/login-user";
-import { createAuthSession, writeAuthSession } from "~/utils/otp-session";
+import {
+    createAuthSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
+    REGISTRATION_STATUS_COOKIE_KEY,
+    writeAuthSession,
+} from "~/utils/otp-session";
 
 export function useLoginUser(onSuccess?: TSuccess<LoginResponse>) {
     return useMutation<LoginResponse, TErrorMessage, LoginFormType>({
@@ -21,12 +26,14 @@ export function useLoginUser(onSuccess?: TSuccess<LoginResponse>) {
 
             setToCookie(TOKEN_KEY, data.accessToken);
             setToCookie("global-rt", data.refreshToken ?? "");
-            setToCookie("global-ms", data.user.registrationStatus);
+            setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, data.user.membershipStatus ?? "");
+            setToCookie(REGISTRATION_STATUS_COOKIE_KEY, data.user.registrationStatus ?? "");
             setToStorage(USER_KEY, data.user);
             writeAuthSession(createAuthSession({
                 email: data.user.email,
                 name: data.user.fullName ?? data.user.email,
                 membershipStatus: data.user.membershipStatus,
+                registrationStatus: data.user.registrationStatus,
             }));
             toast.success("Logged in successfully!");
             onSuccess?.(data);

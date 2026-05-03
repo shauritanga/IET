@@ -3,6 +3,8 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
+  Put,
   Body,
   Param,
   Query,
@@ -11,7 +13,12 @@ import {
   ParseUUIDPipe,
   Res,
   Header,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { Response } from 'express';
 import {
   ApiBearerAuth,
@@ -34,6 +41,14 @@ import {
   UpdateApplicationStageDto,
   UpdateMemberStatusDto,
   AnalyticsQueryDto,
+  PaymentQueryDto,
+  CreateMemberDto,
+  AdminUserQueryDto,
+  CreateAdminUserDto,
+  UpdateAdminUserDto,
+  MembershipCategoryQueryDto,
+  CreateMembershipCategoryDto,
+  UpdateMembershipCategoryDto,
 } from '../dto';
 import { GuestCheckInDto } from '../../guest/dto';
 import { CreateEventDto, UpdateEventDto } from '../../events/dto';
@@ -89,6 +104,103 @@ export class AdminController {
   }
 
   // ============================================
+  // ADMIN PORTAL USER MANAGEMENT
+  // ============================================
+
+  @Get('users')
+  @ApiOperation({ summary: 'List admin portal users' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'role', required: false, type: String })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  async listAdminUsers(
+    @GetUser() admin: UserEntity,
+    @Query() query: AdminUserQueryDto,
+  ) {
+    const result = await this.adminService.listAdminUsers(admin, query);
+    return {
+      success: true,
+      data: result.items,
+      meta: {
+        page: result.page,
+        limit: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+        hasNextPage: result.page < result.totalPages,
+        hasPreviousPage: result.page > 1,
+      },
+    };
+  }
+
+  @Post('users')
+  @ApiOperation({ summary: 'Create an admin portal user' })
+  async createAdminUser(
+    @GetUser() admin: UserEntity,
+    @Body() dto: CreateAdminUserDto,
+  ) {
+    const user = await this.adminService.createAdminUser(admin, dto);
+    return {
+      success: true,
+      data: user,
+      message: 'Admin user created successfully',
+    };
+  }
+
+  @Get('users/evaluators')
+  @ApiOperation({ summary: 'List active evaluator users' })
+  async listEvaluators() {
+    const users = await this.adminService.listEvaluators();
+    return {
+      success: true,
+      data: users,
+    };
+  }
+
+  @Patch('users/:userId')
+  @ApiOperation({ summary: 'Update an admin portal user' })
+  @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
+  async updateAdminUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: UpdateAdminUserDto,
+  ) {
+    const user = await this.adminService.updateAdminUser(admin, userId, dto);
+    return {
+      success: true,
+      data: user,
+      message: 'Admin user updated successfully',
+    };
+  }
+
+  @Get('users/:userId')
+  @ApiOperation({ summary: 'Get an admin portal user' })
+  @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
+  async getAdminUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    return {
+      success: true,
+      data: await this.adminService.getAdminUser(admin, userId),
+    };
+  }
+
+  @Delete('users/:userId')
+  @ApiOperation({ summary: 'Delete an admin portal user' })
+  @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
+  async deleteAdminUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    await this.adminService.deleteAdminUser(admin, userId);
+    return {
+      success: true,
+      message: 'Admin user deleted successfully',
+    };
+  }
+
+  // ============================================
   // MEMBER MANAGEMENT
   // ============================================
 
@@ -118,6 +230,14 @@ export class AdminController {
         hasPreviousPage: result.page > 1,
       },
     };
+  }
+
+  @Post('members')
+  @ApiOperation({ summary: 'Create a single member account' })
+  @ApiResponse({ status: HttpStatus.CREATED, description: 'Member created' })
+  async createMember(@Body() dto: CreateMemberDto) {
+    const member = await this.adminService.createMember(dto);
+    return { success: true, data: member, message: 'Member created successfully' };
   }
 
   @Get('members/:memberId')
@@ -179,8 +299,11 @@ export class AdminController {
     status: HttpStatus.OK,
     description: 'Applications list retrieved',
   })
-  async listApplications(@Query() query: ApplicationQueryDto) {
-    const result = await this.adminService.listApplications(query);
+  async listApplications(
+    @GetUser() admin: UserEntity,
+    @Query() query: ApplicationQueryDto,
+  ) {
+    const result = await this.adminService.listApplications(admin, query);
     return {
       success: true,
       data: result.items,
@@ -203,9 +326,13 @@ export class AdminController {
     description: 'Application details retrieved',
   })
   async getApplicationDetails(
+    @GetUser() admin: UserEntity,
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
   ) {
-    const result = await this.adminService.getApplicationDetails(applicationId);
+    const result = await this.adminService.getApplicationDetails(
+      admin,
+      applicationId,
+    );
     return {
       success: true,
       data: result,
@@ -240,13 +367,116 @@ export class AdminController {
   ) {
     const result = await this.adminService.updateApplicationStage(
       applicationId,
-      admin.id,
+      admin,
       dto,
     );
     return {
       success: true,
       data: result,
       message: 'Application workflow updated successfully',
+    };
+  }
+
+  // ============================================
+  // MEMBER IMPORT
+  // ============================================
+
+  @Post('members/import')
+  @ApiOperation({ summary: 'Bulk import members from CSV' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Import result' })
+  @UseInterceptors(FileInterceptor('file'))
+  async importMembers(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('CSV file is required');
+    if (!file.mimetype.includes('csv') && !file.originalname.endsWith('.csv')) {
+      throw new BadRequestException('Only CSV files are accepted');
+    }
+    const result = await this.adminService.importMembers(file.buffer.toString('utf-8'));
+    return {
+      success: true,
+      data: result,
+      message: `Import complete: ${result.created} created, ${result.skipped} skipped`,
+    };
+  }
+
+  // ============================================
+  // MAINTENANCE JOBS
+  // ============================================
+
+  @Post('maintenance/deactivate-inactive')
+  @ApiOperation({ summary: 'Soft-delete members inactive for 3+ years (EXPIRED status)' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Inactive members deactivated' })
+  async deactivateInactiveMembers() {
+    const result = await this.adminService.deactivateInactiveMembers();
+    return {
+      success: true,
+      data: result,
+      message: `Deactivated ${result.deactivated} inactive members`,
+    };
+  }
+
+  @Post('maintenance/expire-unpaid-memberships')
+  @ApiOperation({ summary: 'Mark overdue fees and expire unpaid memberships' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Memberships expired' })
+  async expireUnpaidMemberships() {
+    const result = await this.adminService.expireUnpaidMemberships();
+    return {
+      success: true,
+      data: result,
+      message: `${result.feesMarkedOverdue} fees overdue, ${result.membershipsExpired} memberships expired`,
+    };
+  }
+
+  // ============================================
+  // SETTINGS — FEE CONFIGURATION
+  // ============================================
+
+  @Get('settings/fees')
+  @ApiOperation({ summary: 'Get membership fee configuration' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Fee configuration retrieved' })
+  async getFeeConfig() {
+    const fees = await this.adminService.getFeeConfig();
+    return { success: true, data: fees };
+  }
+
+  @Put('settings/fees')
+  @ApiOperation({ summary: 'Update membership fee configuration' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Fee configuration updated' })
+  async updateFeeConfig(@Body() body: Record<string, number>) {
+    const fees = await this.adminService.updateFeeConfig(body);
+    return { success: true, data: fees, message: 'Fee configuration updated successfully' };
+  }
+
+  // ============================================
+  // PAYMENT MANAGEMENT
+  // ============================================
+
+  @Get('payments')
+  @ApiOperation({ summary: 'List all payments' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'type', required: false, type: String })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Payments list retrieved' })
+  async listPayments(@Query() query: PaymentQueryDto) {
+    const result = await this.adminService.listPayments(query);
+    return {
+      success: true,
+      data: result.items,
+      meta: {
+        page: result.page,
+        limit: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+        hasNextPage: result.page < result.totalPages,
+        hasPreviousPage: result.page > 1,
+      },
     };
   }
 
@@ -311,6 +541,14 @@ export class AdminController {
   // EVENT MANAGEMENT
   // ============================================
 
+  @Get('events/:eventId/registrations')
+  @ApiOperation({ summary: 'List registrations/attendees for a specific event' })
+  @ApiParam({ name: 'eventId', type: 'string', format: 'uuid' })
+  async getEventAttendees(@Param('eventId', ParseUUIDPipe) eventId: string) {
+    const result = await this.eventsService.getEventAttendees(eventId);
+    return { success: true, data: result };
+  }
+
   @Get('events')
   @ApiOperation({ summary: 'List all events for admin' })
   @ApiResponse({
@@ -358,5 +596,36 @@ export class AdminController {
       data: event,
       message: 'Event updated successfully',
     };
+  }
+
+  // ============================================
+  // MEMBERSHIP CATEGORIES
+  // ============================================
+
+  @Get('membership-categories')
+  @ApiOperation({ summary: 'List membership categories' })
+  async getMembershipCategories(@Query() query: MembershipCategoryQueryDto) {
+    return this.adminService.getMembershipCategories(query);
+  }
+
+  @Post('membership-categories')
+  @ApiOperation({ summary: 'Create a membership category' })
+  async createMembershipCategory(@Body() dto: CreateMembershipCategoryDto) {
+    return this.adminService.createMembershipCategory(dto);
+  }
+
+  @Patch('membership-categories/:id')
+  @ApiOperation({ summary: 'Update a membership category' })
+  async updateMembershipCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateMembershipCategoryDto,
+  ) {
+    return this.adminService.updateMembershipCategory(id, dto);
+  }
+
+  @Delete('membership-categories/:id')
+  @ApiOperation({ summary: 'Delete a membership category' })
+  async deleteMembershipCategory(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.deleteMembershipCategory(id);
   }
 }

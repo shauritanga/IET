@@ -8,6 +8,7 @@ import {
     PopoverTrigger,
 } from "~/components/ui/popover"
 import {useEffect} from "react";
+import { cn } from "~/lib/utils";
 
 interface Props {
     placeholder?: string
@@ -38,10 +39,15 @@ export function BirthDatePicker({ placeholder = "Select Date", value, onChange }
                     <Button
                         variant="outline"
                         id="date"
-                        className="w-full h-11 shadow-none justify-between font-normal"
+                        className={cn(
+                            "w-full h-auto justify-between font-normal rounded-lg border-[1.5px] border-[var(--iet-border)] bg-[var(--iet-bg)] px-3 py-2 text-[12.5px] shadow-none",
+                            "hover:bg-[var(--iet-bg)] hover:border-[var(--iet-border)] hover:text-inherit",
+                            "focus-visible:border-[var(--iet-red)] focus-visible:bg-white focus-visible:ring-0",
+                            !date && "text-[var(--iet-muted)]"
+                        )}
                     >
                         {date ? date.toLocaleDateString() : placeholder}
-                        <ChevronDownIcon />
+                        <ChevronDownIcon className="size-4 opacity-50" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto overflow-hidden p-0" align="start">

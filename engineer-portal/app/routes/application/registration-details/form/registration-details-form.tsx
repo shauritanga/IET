@@ -13,6 +13,17 @@ import {Separator} from "~/components/ui/separator";
 import {Button} from "~/components/ui/button";
 
 
+// ─── Grade Options ───────────────────────────────────────────────────────────
+
+const GRADE_OPTIONS = [
+    { value: "Student Member",   emoji: "🎓", subtitle: "Currently studying" },
+    { value: "Graduate Member",  emoji: "📋", subtitle: "Recent graduate" },
+    { value: "Associate Member", emoji: "⚙️", subtitle: "Technician level" },
+    { value: "Corporate Member", emoji: "🏗️", subtitle: "Chartered engineer" },
+    { value: "Fellow",           emoji: "🏆", subtitle: "Distinguished service" },
+    { value: "Honorary Fellow",  emoji: "⭐", subtitle: "Special recognition" },
+];
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type InstitutionsFieldArray = UseFieldArrayReturn<RegistrationDetailsFormType, "institutions">;
@@ -94,11 +105,16 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
     return (
         <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
+            {/* Section: Engineering Profile */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-1">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Engineering Profile</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
+
             {/* Engineering Discipline */}
             <Field className="md:col-span-2">
                 <FieldLabel>Engineering Discipline</FieldLabel>
                 <NativeSelect
-                    className="bg-white h-11 shadow-none!"
                     {...register("engineeringDiscipline")}
                 >
                     <NativeSelectOption value="">Select discipline</NativeSelectOption>
@@ -122,16 +138,46 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
                 )}
             </Field>
 
-            {/* Registration Category */}
+            {/* Membership Grade — visual cards */}
             <Field className="md:col-span-2">
-                <FieldLabel>Registration Category</FieldLabel>
-                <NativeSelect  {...register("appliedMembershipType")} className="bg-white h-11 shadow-none!">
-                    <NativeSelectOption value="">Select category</NativeSelectOption>
-                    <NativeSelectOption value="member">Member</NativeSelectOption>
-                    <NativeSelectOption value="fellow">Fellow</NativeSelectOption>
-                    <NativeSelectOption value="associate">Associate</NativeSelectOption>
-                </NativeSelect>
+                <FieldLabel>Membership Grade *</FieldLabel>
+                <Controller
+                    control={control}
+                    name="appliedMembershipType"
+                    render={({ field }) => (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-[10px] mt-1">
+                            {GRADE_OPTIONS.map((grade) => {
+                                const selected = field.value === grade.value;
+                                return (
+                                    <button
+                                        key={grade.value}
+                                        type="button"
+                                        onClick={() => field.onChange(grade.value)}
+                                        className={`rounded-[10px] px-[14px] py-[13px] text-center cursor-pointer transition-all border-2 ${
+                                            selected
+                                                ? "border-[#E20C0A] bg-[#FDF0F0]"
+                                                : "border-[var(--iet-border)] bg-white hover:border-[#E20C0A]/50"
+                                        }`}
+                                    >
+                                        <div className="text-[18px] mb-[5px]">{grade.emoji}</div>
+                                        <div className="text-[11.5px] font-bold text-[#390909]">{grade.value}</div>
+                                        <div className="text-[10px] text-[var(--iet-muted)] mt-[3px]">{grade.subtitle}</div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                />
+                {errors.appliedMembershipType && (
+                    <FieldError>{errors.appliedMembershipType.message}</FieldError>
+                )}
             </Field>
+
+            {/* Section: Professional Registrations */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Professional Registrations</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
 
             {/* Registered with Statutory Boards */}
             <Field className="md:col-span-2">
@@ -173,6 +219,12 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
                                 )}
                             </Field>
             )}
+
+            {/* Section: Other Memberships */}
+            <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Other Memberships</span>
+                <div className="flex-1 h-px bg-[#E8D5D5]" />
+            </div>
 
             {/* Member of Other Engineering Institutions */}
             <Field className="md:col-span-2">

@@ -10,6 +10,8 @@ import {
 import { MembershipFeeEntity } from '../membership/entities/membership-fee.entity';
 import { EventEntity, EventRegistrationEntity } from '../events/entities';
 import { PaymentEntity } from '../payments/entities/payment.entity';
+import { SystemSettingEntity } from './entities/system-setting.entity';
+import { MembershipCategoryEntity } from './entities/membership-category.entity';
 import { UserModule } from '../user/user.module';
 import { GuestModule } from '../guest/guest.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -25,6 +27,8 @@ import { EventsModule } from '../events/events.module';
       EventEntity,
       EventRegistrationEntity,
       PaymentEntity,
+      SystemSettingEntity,
+      MembershipCategoryEntity,
     ]),
     UserModule,
     EventsModule,

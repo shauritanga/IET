@@ -563,6 +563,56 @@ export class EventsService {
   }
 
   /**
+   * Get event attendees/registrations (Admin)
+   */
+  async getEventAttendees(eventId: string): Promise<{
+    eventId: string;
+    eventTitle: string;
+    total: number;
+    attendees: Array<{
+      id: string;
+      ticketNumber: string | undefined;
+      fullName: string;
+      email: string;
+      phoneNumber: string | undefined;
+      attendeeType: string;
+      status: string;
+      amountPaid: number;
+      checkedIn: boolean;
+      checkedInAt: Date | undefined;
+      registeredAt: Date;
+    }>;
+  }> {
+    const event = await this.eventRepository.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+
+    const registrations = await this.registrationRepository.find({
+      where: { eventId },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
+
+    return {
+      eventId,
+      eventTitle: event.title,
+      total: registrations.length,
+      attendees: registrations.map((r) => ({
+        id: r.id,
+        ticketNumber: r.ticketNumber,
+        fullName: r.user?.fullName ?? 'Unknown',
+        email: r.user?.email ?? '',
+        phoneNumber: r.user?.phoneNumber,
+        attendeeType: r.attendeeType,
+        status: r.status,
+        amountPaid: r.amountPaid,
+        checkedIn: Boolean(r.attendedAt),
+        checkedInAt: r.attendedAt,
+        registeredAt: r.createdAt,
+      })),
+    };
+  }
+
+  /**
    * Update event (Admin)
    */
   async updateEvent(

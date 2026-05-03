@@ -1002,7 +1002,7 @@ export class UserService {
    * Save a one-time login OTP for SMS 2FA
    */
   async saveLoginOtp(userId: string, code: string): Promise<void> {
-    const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await this.userRepository.update({ id: userId }, { loginOtpCode: code, loginOtpExpiry: expiry });
   }
 

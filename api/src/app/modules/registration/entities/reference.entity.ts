@@ -72,6 +72,20 @@ export class ReferenceEntity extends BaseEntity {
   phoneNumber?: string;
 
   @ApiProperty({
+    example: 'Tanzania Engineers Registration Board',
+    description: 'Organisation or employer of referee (optional)',
+  })
+  @Column({ nullable: true })
+  organisation?: string;
+
+  @ApiProperty({
+    example: 'Current Supervisor / Manager',
+    description: 'Relationship of referee to applicant (optional)',
+  })
+  @Column({ nullable: true })
+  relationship?: string;
+
+  @ApiProperty({
     description: 'Whether reference has been verified',
   })
   @Column({ default: false })

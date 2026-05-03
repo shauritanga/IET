@@ -22,6 +22,39 @@
   --sidebar-w: 260px;
 }
 
+.dark,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --red: #ff5a58;
+  --red-dark: #ffd9d8;
+  --red-light: #4c1a1a;
+  --red-pale: #2b1414;
+  --red-mid: #ff3e3b;
+  --white: #171414;
+  --bg: #0f0e0e;
+  --text: #f2ecec;
+  --muted: #b59d9d;
+  --border: #2d2626;
+  --success: #65b37c;
+  --warn: #e2a24b;
+}
+
+.dark {
+  color-scheme: dark;
+  --red: #ff5a58;
+  --red-dark: #ffd9d8;
+  --red-light: #4c1a1a;
+  --red-pale: #2b1414;
+  --red-mid: #ff3e3b;
+  --white: #171414;
+  --bg: #0f0e0e;
+  --text: #f2ecec;
+  --muted: #b59d9d;
+  --border: #2d2626;
+  --success: #65b37c;
+  --warn: #e2a24b;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -41,9 +74,18 @@
     line-height: 1.45;
   }
 
+  .dark body {
+    background: var(--bg);
+    color: var(--text);
+  }
+
   a {
     color: inherit;
     text-decoration: none;
+  }
+
+  .dark .bg-white {
+    background-color: var(--white) !important;
   }
 
   a[href],

@@ -5,16 +5,21 @@ import {
   IsEnum,
   IsOptional,
   IsNumber,
+  IsEmail,
   MaxLength,
   IsArray,
+  IsBoolean,
+  MinLength,
+  Matches,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   MembershipStatus,
   ApplicationStatus,
   ApplicationReviewStage,
   MembershipClass,
   EngineeringDiscipline,
+  UserRole,
 } from '../../../common/enums';
 
 export class MemberQueryDto {
@@ -173,6 +178,249 @@ export class BulkEmailDto {
   @IsArray()
   @IsString({ each: true })
   attachments?: string[];
+}
+
+export class PaymentQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'COMPLETED' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: 'MEMBERSHIP_FEE' })
+  @IsOptional()
+  @IsString()
+  type?: string;
+}
+
+export class CreateMemberDto {
+  @ApiProperty({ example: 'joram@example.co.tz' })
+  @IsEmail({}, { message: 'Valid email is required' })
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+
+  @ApiPropertyOptional({ example: 'Joram' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Jackson' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: '+255712345678' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'MIET', enum: MembershipClass })
+  @IsOptional()
+  @IsEnum(MembershipClass)
+  membershipClass?: MembershipClass;
+
+  @ApiPropertyOptional({ example: 'Civil', enum: EngineeringDiscipline })
+  @IsOptional()
+  @IsEnum(EngineeringDiscipline)
+  engineeringDiscipline?: EngineeringDiscipline;
+}
+
+export class AdminUserQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'ADMIN', enum: UserRole })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ example: 'joram' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
+export class CreateAdminUserDto {
+  @ApiProperty({ example: 'secretariat@iet.or.tz' })
+  @IsEmail({}, { message: 'Valid email is required' })
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+
+  @ApiProperty({ example: 'Secretariat' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  firstName: string;
+
+  @ApiProperty({ example: 'Officer' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  lastName: string;
+
+  @ApiPropertyOptional({ example: '+255712345678' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phoneNumber?: string;
+
+  @ApiProperty({ example: 'SECRETARIAT', enum: UserRole })
+  @IsNotEmpty()
+  @IsEnum(UserRole)
+  role: UserRole;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiProperty({ example: 'AdminPass123!' })
+  @IsNotEmpty()
+  @MinLength(8)
+  @MaxLength(50)
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+    {
+      message:
+        'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
+    },
+  )
+  password: string;
+}
+
+export class UpdateAdminUserDto {
+  @ApiPropertyOptional({ example: 'Secretariat' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Officer' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: '+255712345678' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'SECRETARIAT', enum: UserRole })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class MembershipCategoryQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
+}
+
+export class CreateMembershipCategoryDto {
+  @ApiProperty({ example: 'Fellow' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  name: string;
+
+  @ApiProperty({ example: 200000, description: 'Annual fee in TZS' })
+  @IsNotEmpty()
+  @IsNumber()
+  @Type(() => Number)
+  yearlyFee: number;
+
+  @ApiProperty({ example: 15, description: 'Minimum years of professional experience' })
+  @IsNotEmpty()
+  @IsNumber()
+  @Type(() => Number)
+  minYearsExperience: number;
+
+  @ApiPropertyOptional({ example: 'For distinguished engineers with 15+ years of experience' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+}
+
+export class UpdateMembershipCategoryDto {
+  @ApiPropertyOptional({ example: 'Fellow' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  name?: string;
+
+  @ApiPropertyOptional({ example: 200000 })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  yearlyFee?: number;
+
+  @ApiPropertyOptional({ example: 15 })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  minYearsExperience?: number;
+
+  @ApiPropertyOptional({ example: 'For distinguished engineers' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
 }
 
 export class AnalyticsQueryDto {

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { CalendarIcon, GridIcon, PaymentIcon, StarIcon, UserIcon } from "~/components/portal/icons"
+import { CalendarIcon, FileIcon, GridIcon, PaymentIcon, StarIcon, UserIcon } from "~/components/portal/icons"
 
 type NavItem = {
     title: string
@@ -26,12 +26,16 @@ export const navSections: NavSection[] = [
                 title: "Payment",
                 url: "/dashboard/memberships",
                 icon: <PaymentIcon />,
-                badge: 1,
             },
             {
                 title: "Membership",
                 url: "/dashboard/membership",
                 icon: <StarIcon />,
+            },
+            {
+                title: "My Application",
+                url: "/dashboard/status",
+                icon: <FileIcon />,
             },
         ],
     },
@@ -42,7 +46,6 @@ export const navSections: NavSection[] = [
                 title: "Events & Training",
                 url: "/dashboard/events",
                 icon: <CalendarIcon />,
-                badge: 3,
             },
         ],
     },

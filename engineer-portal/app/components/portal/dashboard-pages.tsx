@@ -2,10 +2,12 @@ import type { CSSProperties, ReactNode } from "react"
 import { useMemo, useState } from "react"
 import { Link } from "react-router"
 import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
-import { membershipBenefits, paymentHistory, profileDocumentItems, type KpiItem } from "~/components/portal/mock-data"
+import { membershipBenefits, profileDocumentItems, type KpiItem } from "~/components/portal/mock-data"
 import { useUpcomingEvents } from "~/routes/dashboard/home/repositories/useUpcomingEvents"
 import { useEvents } from "~/routes/dashboard/events/repositories/use-events"
 import { mapDashboardEventToCard, type PortalEventCard } from "~/routes/dashboard/events/utils"
+import { useGetUserProfile } from "~/routes/dashboard/profile/repositories/handle-get-user-profile"
+import { useMembershipFeeHistory } from "~/routes/dashboard/home/repositories/useMembershipFeeHistory"
 
 const EVENT_TYPE_FILTERS = [
     { value: "", label: "All Types" },
@@ -72,37 +74,54 @@ function cssTextToObject(text: string): CSSProperties {
 
 export const DashboardOverviewPage = () => {
     const { data, isLoading, isError } = useUpcomingEvents()
+    const { data: profileData } = useGetUserProfile()
+    const { data: feesData } = useMembershipFeeHistory()
+    const profile = profileData?.data
+
     const upcomingEvents = useMemo(
         () => (data?.data ?? []).map(mapDashboardEventToCard),
         [data],
     )
+
+    const memberSinceYear = profile?.joiningDate
+        ? new Date(profile.joiningDate).getFullYear()
+        : null
+
+    const yearsActive = memberSinceYear ? new Date().getFullYear() - memberSinceYear : null
+
+    const outstandingFees = useMemo(() => {
+        const fees = feesData?.data ?? []
+        return fees
+            .filter((f) => f.status === "PENDING" || f.status === "OVERDUE")
+            .reduce((sum, f) => sum + f.amount, 0)
+    }, [feesData])
 
     return (
         <div>
             <div className="kpi-grid">
                 <div className="kpi">
                     <div className="kpi-icon"><StarIcon width="17" height="17" /></div>
-                    <div className="kpi-val">2019</div>
+                    <div className="kpi-val">{memberSinceYear ?? "—"}</div>
                     <div className="kpi-lbl">Member Since</div>
-                    <div className="kpi-note ok">✓ 6 years active</div>
+                    <div className="kpi-note ok">{yearsActive != null ? `✓ ${yearsActive} year${yearsActive !== 1 ? "s" : ""} active` : ""}</div>
                 </div>
                 <div className="kpi">
                     <div className="kpi-icon"><ClockIcon width="17" height="17" /></div>
-                    <div className="kpi-val">36</div>
+                    <div className="kpi-val">—</div>
                     <div className="kpi-lbl">CPD Hours (2024)</div>
-                    <div className="kpi-note ok">↑ 12 hrs above target</div>
+                    <div className="kpi-note">Coming soon</div>
                 </div>
                 <div className="kpi">
                     <div className="kpi-icon"><CalendarIcon width="17" height="17" /></div>
-                    <div className="kpi-val">5</div>
+                    <div className="kpi-val">—</div>
                     <div className="kpi-lbl">Events Attended</div>
-                    <div className="kpi-note ok">↑ 2 this quarter</div>
+                    <div className="kpi-note">Coming soon</div>
                 </div>
                 <div className="kpi">
                     <div className="kpi-icon"><PaymentIcon width="17" height="17" /></div>
-                    <div className="kpi-val" style={{ fontSize: 20 }}>TZS 0</div>
+                    <div className="kpi-val" style={{ fontSize: 20 }}>TZS {outstandingFees.toLocaleString()}</div>
                     <div className="kpi-lbl">Outstanding Balance</div>
-                    <div className="kpi-note ok">✓ All dues cleared</div>
+                    <div className="kpi-note ok">{outstandingFees === 0 ? "✓ All dues cleared" : "⚠ Payment pending"}</div>
                 </div>
             </div>
 
@@ -181,91 +200,235 @@ export const DashboardOverviewPage = () => {
     )
 }
 
-export const DashboardPaymentPage = () => (
-    <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-            <div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--iet-red-dark)" }}>Payments</h3>
-                <p style={{ fontSize: 11.5, color: "var(--iet-muted)", marginTop: 2 }}>Manage your subscription and transaction history</p>
-            </div>
-            <button className="btn btn-red">+ Make Payment</button>
-        </div>
+const FEE_STATUS_CLASS: Record<string, string> = {
+    PAID: "b-green",
+    PENDING: "b-yellow",
+    OVERDUE: "b-red",
+    EXPIRING: "b-yellow",
+}
 
-        <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
-            <div className="kpi">
-                <div className="kpi-icon"><PaymentIcon width="17" height="17" /></div>
-                <div className="kpi-val">150,000</div>
-                <div className="kpi-lbl">Total Paid (2025) · TZS</div>
-                <div className="kpi-note ok">✓ Annual Subscription</div>
-            </div>
-            <div className="kpi">
-                <div className="kpi-icon" style={{ background: "#E8F5E9", color: "#1a6b3c" }}><CheckIcon width="17" height="17" /></div>
-                <div className="kpi-val" style={{ color: "#1a6b3c" }}>0</div>
-                <div className="kpi-lbl">Outstanding Balance · TZS</div>
-                <div className="kpi-note ok">✓ Fully settled</div>
-            </div>
-            <div className="kpi">
-                <div className="kpi-icon"><CalendarIcon width="17" height="17" /></div>
-                <div className="kpi-val" style={{ fontSize: 22 }}>May 2025</div>
-                <div className="kpi-lbl">Next Due Date</div>
-                <div className="kpi-note">Annual renewal reminder</div>
-            </div>
-        </div>
+export const DashboardPaymentPage = () => {
+    const { data: profileData } = useGetUserProfile()
+    const { data: feesData, isLoading: feesLoading } = useMembershipFeeHistory()
+    const profile = profileData?.data
+    const fees = feesData?.data ?? []
 
-        <div className="card">
-            <div className="card-head"><span className="card-title">Transaction History</span><button className="btn btn-outline btn-sm">⬇ Download PDF</button></div>
-            <table>
-                <thead><tr><th>Ref No.</th><th>Description</th><th>Date</th><th>Amount (TZS)</th><th>Method</th><th>Status</th></tr></thead>
-                <tbody>
-                    {paymentHistory.map((item) => (
-                        <tr key={item.ref}>
-                            <td><strong>{item.ref}</strong></td>
-                            <td>{item.description}</td>
-                            <td>{item.date}</td>
-                            <td>{item.amount}</td>
-                            <td>{item.method}</td>
-                            <td><span className="badge b-green">{item.status}</span></td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    </div>
-)
+    const currentYear = new Date().getFullYear()
+    const totalPaidThisYear = fees
+        .filter((f) => f.status === "PAID" && f.paidAt && new Date(f.paidAt).getFullYear() === currentYear)
+        .reduce((sum, f) => sum + f.amount, 0)
 
-export const DashboardMembershipPage = ({ onApplyForMembership }: { onApplyForMembership?: () => void }) => (
-    <div>
-        <PageHeader
-            title="Membership"
-            subtitle="Your IET Tanzania membership details and benefits"
-            action={<button className="btn btn-red" onClick={onApplyForMembership}>+ Apply for Membership</button>}
-        />
-        <div className="benefits-grid">
-            {membershipBenefits.map((benefit) => {
-                const Icon = iconMap[benefit.icon]
-                return (
-                    <div key={benefit.title} className="ben-card">
-                        <div className="ben-ico"><Icon width="16" height="16" /></div>
-                        <div><h4>{benefit.title}</h4><p>{benefit.description}</p></div>
-                    </div>
-                )
-            })}
-        </div>
-        <div className="card">
-            <div className="card-head">
-                <span className="card-title">CPD Progress – 2024</span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#1a6b3c" }}>36 / 24 hrs &nbsp;✓ Target Met</span>
-            </div>
-            <div className="card-body">
-                <p style={{ fontSize: 12, color: "var(--iet-muted)", marginBottom: 14 }}>You exceeded the minimum 24 CPD hours required for 2024.</p>
-                <div className="cpd-wrap">
-                    <div className="cpd-item"><h4>Technical Activities — 22 hrs</h4><div className="cpd-bar-bg"><div className="cpd-bar" style={{ width: "92%" }} /></div><div className="cpd-meta"><span>0</span><span>22 / 24 hrs</span></div></div>
-                    <div className="cpd-item"><h4>Managerial Activities — 14 hrs</h4><div className="cpd-bar-bg"><div className="cpd-bar" style={{ width: "58%" }} /></div><div className="cpd-meta"><span>0</span><span>14 / 24 hrs</span></div></div>
+    const outstanding = fees
+        .filter((f) => f.status === "PENDING" || f.status === "OVERDUE")
+        .reduce((sum, f) => sum + f.amount, 0)
+
+    const nextDue = fees.find((f) => f.status === "PENDING" || f.status === "OVERDUE")
+    const nextDueLabel = nextDue?.dueDate
+        ? new Date(nextDue.dueDate).toLocaleDateString("en-TZ", { month: "long", year: "numeric" })
+        : "—"
+
+    return (
+        <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--iet-red-dark)" }}>Payments</h3>
+                    <p style={{ fontSize: 11.5, color: "var(--iet-muted)", marginTop: 2 }}>Manage your subscription and transaction history</p>
                 </div>
             </div>
+
+            <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                <div className="kpi">
+                    <div className="kpi-icon"><PaymentIcon width="17" height="17" /></div>
+                    <div className="kpi-val">{totalPaidThisYear.toLocaleString()}</div>
+                    <div className="kpi-lbl">Total Paid ({currentYear}) · TZS</div>
+                    <div className="kpi-note ok">✓ Annual Subscription</div>
+                </div>
+                <div className="kpi">
+                    <div className="kpi-icon" style={{ background: "#E8F5E9", color: "#1a6b3c" }}><CheckIcon width="17" height="17" /></div>
+                    <div className="kpi-val" style={{ color: outstanding > 0 ? "var(--iet-red)" : "#1a6b3c" }}>{outstanding.toLocaleString()}</div>
+                    <div className="kpi-lbl">Outstanding Balance · TZS</div>
+                    <div className="kpi-note ok">{outstanding === 0 ? "✓ Fully settled" : "⚠ Payment pending"}</div>
+                </div>
+                <div className="kpi">
+                    <div className="kpi-icon"><CalendarIcon width="17" height="17" /></div>
+                    <div className="kpi-val" style={{ fontSize: 18 }}>{nextDueLabel}</div>
+                    <div className="kpi-lbl">Next Due Date</div>
+                    <div className="kpi-note">Annual renewal reminder</div>
+                </div>
+            </div>
+
+            <div className="card">
+                <div className="card-head"><span className="card-title">Fee History</span></div>
+                {feesLoading ? (
+                    <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "var(--iet-muted)" }}>Loading...</div>
+                ) : fees.length === 0 ? (
+                    <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "var(--iet-muted)" }}>No fee records found.</div>
+                ) : (
+                    <table>
+                        <thead><tr><th>Year</th><th>Class</th><th>Amount (TZS)</th><th>Due Date</th><th>Paid At</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {fees.map((fee, i) => (
+                                <tr key={fee.id ?? i}>
+                                    <td><strong>{fee.year}</strong></td>
+                                    <td>{fee.membershipClass}</td>
+                                    <td>{fee.amount.toLocaleString()}</td>
+                                    <td>{fee.dueDate ? new Date(fee.dueDate).toLocaleDateString("en-TZ") : "—"}</td>
+                                    <td>{fee.paidAt ? new Date(fee.paidAt).toLocaleDateString("en-TZ") : "—"}</td>
+                                    <td><span className={`badge ${FEE_STATUS_CLASS[fee.status] ?? ""}`}>{fee.status}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
         </div>
+    )
+}
+
+const BenefitsGrid = () => (
+    <div className="benefits-grid">
+        {membershipBenefits.map((benefit) => {
+            const Icon = iconMap[benefit.icon]
+            return (
+                <div key={benefit.title} className="ben-card">
+                    <div className="ben-ico"><Icon width="16" height="16" /></div>
+                    <div><h4>{benefit.title}</h4><p>{benefit.description}</p></div>
+                </div>
+            )
+        })}
     </div>
 )
+
+const StatusBanner = ({ tone, children }: { tone: "info" | "warning" | "success"; children: ReactNode }) => {
+    const colors: Record<string, { bg: string; border: string; color: string }> = {
+        info:    { bg: "#EFF6FF", border: "#BFDBFE", color: "#1D4ED8" },
+        warning: { bg: "#FFFBEB", border: "#FDE68A", color: "#92400E" },
+        success: { bg: "#F0FDF4", border: "#BBF7D0", color: "#166534" },
+    }
+    const c = colors[tone]
+    return (
+        <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: "14px 18px", marginBottom: 18, fontSize: 12.5, color: c.color, lineHeight: 1.6 }}>
+            {children}
+        </div>
+    )
+}
+
+export const DashboardMembershipPage = ({ onApplyForMembership }: { onApplyForMembership?: () => void }) => {
+    const { data: profileData, isPending } = useGetUserProfile()
+    const profile = profileData?.data
+    const regStatus = profile?.registrationStatus ?? null
+    const membershipStatus = (profile?.membershipStatus ?? "").toUpperCase()
+    const isActive = membershipStatus === "ACTIVE"
+    const isInReview = ["IN_REVIEW", "SUBMITTED", "PENDING_REVIEW"].includes((regStatus ?? "").toUpperCase())
+    const isChangesRequested = (regStatus ?? "").toUpperCase() === "CHANGES_REQUESTED"
+    const isApproved = (regStatus ?? "").toUpperCase() === "APPROVED" && !isActive
+
+    const formatDate = (d?: string | null) =>
+        d ? new Date(d).toLocaleDateString("en-TZ", { day: "numeric", month: "short", year: "numeric" }) : "—"
+
+    if (isPending) {
+        return (
+            <div>
+                <PageHeader title="Membership" subtitle="Your IET Tanzania membership details and benefits" />
+                <div style={{ padding: "48px 20px", textAlign: "center", fontSize: 12, color: "var(--iet-muted)" }}>Loading…</div>
+            </div>
+        )
+    }
+
+    // State E — Active member
+    if (isActive) {
+        return (
+            <div>
+                <PageHeader title="My Membership" subtitle="Your IET Tanzania membership details and benefits" />
+                <div className="card" style={{ marginBottom: 18 }}>
+                    <div className="card-head"><span className="card-title">Membership Details</span><span className="badge b-green">Active</span></div>
+                    <div className="card-body" style={{ padding: 0 }}>
+                        <table><tbody>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Grade</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.membershipClass ?? "—"}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Member No.</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.membershipId ?? "—"}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Discipline</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.engineeringDiscipline ?? "—"}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Joined</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{formatDate(profile?.joiningDate)}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Expires</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{formatDate(profile?.membershipExpiryDate)}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Annual Fee</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.annualMembershipFee ? `TZS ${Number(profile.annualMembershipFee).toLocaleString()}` : "—"}</td></tr>
+                            <tr><td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Days Until Expiry</td><td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px", color: (profile?.daysUntilExpiry ?? 999) <= 30 ? "var(--iet-red)" : "#1a6b3c" }}>{profile?.daysUntilExpiry != null ? `${profile.daysUntilExpiry} days` : "—"}</td></tr>
+                        </tbody></table>
+                    </div>
+                </div>
+                <BenefitsGrid />
+                <div className="card">
+                    <div className="card-head">
+                        <span className="card-title">CPD Progress – 2024</span>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#1a6b3c" }}>36 / 24 hrs &nbsp;✓ Target Met</span>
+                    </div>
+                    <div className="card-body">
+                        <p style={{ fontSize: 12, color: "var(--iet-muted)", marginBottom: 14 }}>You exceeded the minimum 24 CPD hours required for 2024.</p>
+                        <div className="cpd-wrap">
+                            <div className="cpd-item"><h4>Technical Activities — 22 hrs</h4><div className="cpd-bar-bg"><div className="cpd-bar" style={{ width: "92%" }} /></div><div className="cpd-meta"><span>0</span><span>22 / 24 hrs</span></div></div>
+                            <div className="cpd-item"><h4>Managerial Activities — 14 hrs</h4><div className="cpd-bar-bg"><div className="cpd-bar" style={{ width: "58%" }} /></div><div className="cpd-meta"><span>0</span><span>14 / 24 hrs</span></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // State B — Application in review
+    if (isInReview) {
+        return (
+            <div>
+                <PageHeader title="Membership" subtitle="Your IET Tanzania membership details and benefits" />
+                <StatusBanner tone="info">
+                    <strong>Application under review</strong> — Your membership application has been submitted and is currently being reviewed by the IET secretariat. You will be notified once a decision is made.
+                    <div style={{ marginTop: 10 }}>
+                        <Link to="/dashboard/status" style={{ fontWeight: 700, color: "inherit", textDecoration: "underline" }}>View application status →</Link>
+                    </div>
+                </StatusBanner>
+                <BenefitsGrid />
+            </div>
+        )
+    }
+
+    // State C — Changes requested
+    if (isChangesRequested) {
+        return (
+            <div>
+                <PageHeader title="Membership" subtitle="Your IET Tanzania membership details and benefits" />
+                <StatusBanner tone="warning">
+                    <strong>Action required</strong> — The review committee has requested changes to your application. Please review their feedback and update your application to continue.
+                    <div style={{ marginTop: 10 }}>
+                        <button className="btn btn-outline btn-sm" onClick={onApplyForMembership}>Continue Application →</button>
+                    </div>
+                </StatusBanner>
+                <BenefitsGrid />
+            </div>
+        )
+    }
+
+    // State D — Approved, awaiting activation
+    if (isApproved) {
+        return (
+            <div>
+                <PageHeader title="Membership" subtitle="Your IET Tanzania membership details and benefits" />
+                <StatusBanner tone="success">
+                    <strong>Congratulations! Your application has been approved.</strong> Your membership is being activated. You will receive a confirmation email with your member number and certificate shortly.
+                </StatusBanner>
+                <BenefitsGrid />
+            </div>
+        )
+    }
+
+    // State A — No application or DRAFT/REJECTED
+    return (
+        <div>
+            <PageHeader
+                title="Membership"
+                subtitle="Your IET Tanzania membership details and benefits"
+                action={<button className="btn btn-red" onClick={onApplyForMembership}>+ Apply for Membership</button>}
+            />
+            <BenefitsGrid />
+        </div>
+    )
+}
 
 export const DashboardProfilePage = () => (
     <div>
@@ -339,10 +502,12 @@ export const DashboardEventsPage = () => {
     const [drawerVisible, setDrawerVisible] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
 
-    const today = new Date().toISOString().slice(0, 10)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const fromDateStr = thirtyDaysAgo.toISOString().slice(0, 10)
     const { data, isLoading, isError } = useEvents({
         limit: 100,
-        fromDate: today,
+        fromDate: fromDateStr,
         category: type || undefined,
         location: location || undefined,
         search: query || undefined,
@@ -529,8 +694,11 @@ export const DashboardEventsPage = () => {
                             <button onClick={closeDrawer} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--iet-muted)", background: "white", transition: "all .15s" }}><CloseIcon width="13" height="13" /></button>
                         </div>
                         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 24px" }}>
-                            <div style={{ width: "100%", height: 200, background: selectedEvent.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <CalendarIcon width="64" height="64" stroke="rgba(255,255,255,.2)" strokeWidth="1.5" />
+                            <div style={{ width: "100%", height: 200, background: selectedEvent.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                                {selectedEvent.coverImage
+                                    ? <img src={selectedEvent.coverImage} alt={selectedEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    : <CalendarIcon width="64" height="64" stroke="rgba(255,255,255,.2)" strokeWidth="1.5" />
+                                }
                             </div>
                             <div style={{ padding: "22px 22px 0" }}>
                                 <div style={{ fontFamily: "'Source Serif 4',serif", fontSize: 18, fontWeight: 700, color: "var(--iet-text)", marginBottom: 18, lineHeight: 1.35 }}>{selectedEvent.title}</div>

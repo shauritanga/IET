@@ -19,6 +19,7 @@ export type PortalEventCard = {
   region: string;
   highlights: string[];
   speaker: string | null;
+  coverImage?: string | null;
   registeredCount?: number;
   availableSlots?: number | null;
   isFull?: boolean;
@@ -117,6 +118,7 @@ export function mapDashboardEventToCard(event: DashboardEvent): PortalEventCard 
     region: event.isOnline ? "Online" : event.location || "—",
     highlights: event.speaker ? [event.speaker] : [],
     speaker: event.speaker ?? null,
+    coverImage: event.coverImage ?? null,
     registeredCount: event.registeredCount,
     availableSlots: event.availableSlots ?? null,
     isFull: event.isFull,

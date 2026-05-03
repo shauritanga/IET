@@ -69,6 +69,13 @@ export class EducationEntity extends BaseEntity {
   location?: string;
 
   @ApiProperty({
+    example: 'https://storage.example.com/docs/cert.pdf',
+    description: 'URL of uploaded certificate or transcript',
+  })
+  @Column({ nullable: true })
+  attachmentUrl?: string;
+
+  @ApiProperty({
     description: 'Sort order for display',
   })
   @Column({ default: 0 })

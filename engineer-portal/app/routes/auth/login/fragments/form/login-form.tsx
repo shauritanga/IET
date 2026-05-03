@@ -1,6 +1,12 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router"
-import { createAuthSession, createOtpSession, writeAuthSession } from "~/utils/otp-session"
+import {
+    createAuthSession,
+    createOtpSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
+    REGISTRATION_STATUS_COOKIE_KEY,
+    writeAuthSession,
+} from "~/utils/otp-session"
 import { loginUser } from "~/routes/auth/login/requests/login-user"
 import { setToCookie, setToStorage } from "~/utils/storage"
 import { TOKEN_KEY, USER_KEY } from "~/utils/http"
@@ -63,14 +69,14 @@ const LoginForm = () => {
 
             setToCookie(TOKEN_KEY, result.accessToken)
             setToCookie("global-rt", result.refreshToken)
-            if (result.user.registrationStatus) {
-                setToCookie("global-ms", result.user.registrationStatus)
-            }
+            setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, result.user.membershipStatus ?? "")
+            setToCookie(REGISTRATION_STATUS_COOKIE_KEY, result.user.registrationStatus ?? "")
             setToStorage(USER_KEY, result.user)
             writeAuthSession(createAuthSession({
                 email: result.user.email,
                 name: result.user.fullName ?? result.user.email,
                 membershipStatus: result.user.membershipStatus,
+                registrationStatus: result.user.registrationStatus,
             }))
             navigate("/dashboard/home", { replace: true })
         } catch (error) {

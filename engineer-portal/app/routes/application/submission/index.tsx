@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Controller } from "react-hook-form";
 import toast from "react-hot-toast";
-import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldError } from "~/components/ui/field";
 import { BirthDatePicker } from "~/components/custom/birth-date-picker";
@@ -120,17 +119,21 @@ const Submission = () => {
     };
 
     return (
-        <div className="flex flex-col justify-between w-full h-full max-w-3xl space-y-10">
+        <div className="flex flex-col gap-6 w-full">
             {!paymentCompleted ? (
-                <section className="space-y-6">
-                    <div>
-                        <h2 className="text-2xl font-semibold text-[#390909]">Complete Payment to Continue</h2>
-                        <p className="text-sm text-neutral-500">
+                <section className="flex flex-col gap-6">
+                    <div className="flex flex-col gap-2">
+                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[#390909] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
+                            Step 5 of 5
+                        </div>
+                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[#390909] leading-tight">Complete Payment to Continue</h2>
+                        <p className="text-[13px] text-[var(--iet-muted)]">
                             Complete payment to submit your application.
                         </p>
                     </div>
 
-                    <div className="space-y-6 rounded-2xl bg-[#F8F4F4] p-5 lg:p-8">
+                    <div className="bg-white rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8">
+                    <div className="space-y-6">
                         <div className="space-y-3">
                             <p className="text-sm font-semibold text-[#390909]">Select Application Type</p>
                             <div className="inline-flex rounded-xl bg-[#ECE3E3] p-1">
@@ -209,7 +212,7 @@ const Submission = () => {
                             </button>
                         </div>
 
-                        <div className="rounded-2xl bg-white p-5 shadow-sm">
+                        <div className="rounded-2xl bg-[#F8F4F4] p-5">
                             <p className="text-sm text-neutral-500">
                                 {mobileMethods.includes(paymentMethod)
                                     ? "Pay directly from the website and you will receive a payment verification prompt to complete the transaction."
@@ -232,13 +235,13 @@ const Submission = () => {
 
                             {mobileMethods.includes(paymentMethod) && (
                                 <div className="mt-4 space-y-2">
-                                    <label className="text-sm font-medium text-[#390909]">Phone Number</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.7px] text-[var(--iet-muted)]">Phone Number</label>
                                     <input
                                         type="tel"
                                         value={phoneNumber}
                                         onChange={(event) => setPhoneNumber(event.target.value)}
                                         placeholder="e.g. 255712000000"
-                                        className="w-full rounded-xl border border-[#E5DCDC] px-4 py-3 outline-none transition focus:border-[#E44C3C]"
+                                        className="w-full rounded-lg border-[1.5px] border-[var(--iet-border)] bg-[var(--iet-bg)] px-3 py-2 text-[12.5px] text-foreground outline-none transition-[border-color,background] placeholder:text-[var(--iet-muted)] focus:border-[var(--iet-red)] focus:bg-white"
                                     />
                                     <p className="text-xs text-neutral-500">
                                         Use the format <span className="font-medium">255XXXXXXXXX</span>.
@@ -253,84 +256,92 @@ const Submission = () => {
                             )}
 
                             <div className="mt-5 flex justify-end">
-                                <Button
+                                <button
                                     type="button"
-                                    size="lg"
                                     onClick={handlePayNow}
                                     disabled={paymentMutation.isPending || paymentQuery.isFetching}
+                                    className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                                 >
-                                    {paymentMutation.isPending ? <Spinner /> : "Pay Now"}
-                                </Button>
+                                    {paymentMutation.isPending ? <Spinner className="size-4" /> : "Pay Now"}
+                                </button>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </section>
             ) : (
-                <form className="space-y-10" onSubmit={handleSubmit(submitDeclaration)}>
-                    <div className="space-y-4">
-                        <div>
-                            <h2 className="text-2xl font-semibold text-[#390909]">Declaration & Submission</h2>
-                            <p className="text-sm text-neutral-500">Review and complete your final submission.</p>
+                <form className="flex flex-col gap-6" onSubmit={handleSubmit(submitDeclaration)}>
+                    {/* Header */}
+                    <div className="flex flex-col gap-2">
+                        <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[#390909] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
+                            Step 5 of 5
+                        </div>
+                        <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[#390909] leading-tight">Declaration & Submission</h2>
+                        <p className="text-[13px] text-[var(--iet-muted)]">Review and complete your final submission.</p>
+                    </div>
+
+                    {/* White Card */}
+                    <div className="bg-white rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8 space-y-6">
+                        <div className="rounded-xl border border-[var(--iet-border)] bg-[#F8F4F4] p-5">
+                            <p className="text-sm text-[var(--iet-muted)] leading-relaxed">
+                                I, the undersigned, agree that in the event of election as a Member of the Institution
+                                of Engineers Tanzania (IET), I will abide by the Constitution and Bye-laws of the Institution
+                                and will promote its objectives. I also certify that the information provided is true and
+                                correct to the best of my knowledge.
+                            </p>
                         </div>
 
-                        <div className="space-y-6 pt-6">
-                            <div className="rounded-2xl border border-[#EFE6E6] bg-white p-5">
-                                <p className="text-sm text-neutral-500">
-                                    I, the undersigned, agree that in the event of election as a Member of the Institution
-                                    of Engineers Tanzania (IET), I will abide by the Constitution and Bye-laws of the Institution
-                                    and will promote its objectives. I also certify that the information provided is true and
-                                    correct to the best of my knowledge.
-                                </p>
-                            </div>
-
-                            <div className="space-y-4 rounded-2xl bg-white p-5">
-                                <Field className="max-w-md">
-                                    <span>Applicant Signature</span>
-                                    <Controller
-                                        name="declarationAgreed"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <div className="text-sm flex items-center gap-2">
-                                                <Checkbox
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                                <span>I agree to adhere to these precautions</span>
-                                            </div>
-                                        )}
-                                    />
-                                    {errors.declarationAgreed && (
-                                        <FieldError>{errors.declarationAgreed.message}</FieldError>
-                                    )}
-                                </Field>
-
-                                <Field>
-                                    <Controller
-                                        name="declarationDate"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <BirthDatePicker
-                                                placeholder="MM-DD-YYYY"
-                                                value={field.value ? new Date(field.value) : undefined}
-                                                onChange={(date) => field.onChange(date?.toISOString() ?? "")}
+                        <div className="space-y-4">
+                            <p className="text-[10px] font-black uppercase tracking-[1.2px] text-[#7A6060]">Applicant Signature</p>
+                            <Field className="max-w-md">
+                                <Controller
+                                    name="declarationAgreed"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <div className="text-sm flex items-center gap-2">
+                                            <Checkbox
+                                                checked={field.value === true}
+                                                onCheckedChange={(checked) => field.onChange(checked === true ? true : null)}
                                             />
-                                        )}
-                                    />
-                                    {errors.declarationDate && (
-                                        <FieldError>{errors.declarationDate.message}</FieldError>
+                                            <span>I agree to adhere to these precautions</span>
+                                        </div>
                                     )}
-                                </Field>
-                            </div>
+                                />
+                                {errors.declarationAgreed && (
+                                    <FieldError>{errors.declarationAgreed.message}</FieldError>
+                                )}
+                            </Field>
+
+                            <Field>
+                                <Controller
+                                    name="declarationDate"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <BirthDatePicker
+                                            placeholder="MM-DD-YYYY"
+                                            value={field.value ? new Date(field.value) : undefined}
+                                            onChange={(date) => field.onChange(date?.toISOString() ?? "")}
+                                        />
+                                    )}
+                                />
+                                {errors.declarationDate && (
+                                    <FieldError>{errors.declarationDate.message}</FieldError>
+                                )}
+                            </Field>
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    {/* Footer */}
+                    <div className="flex justify-between items-center pt-2">
                         <Link to="/application/references">
-                            <Button size="lg" type="button">Back</Button>
+                            <button type="button" className="inline-flex items-center gap-2 border border-[var(--iet-border)] bg-white text-[#390909] px-5 py-2.5 rounded-xl text-sm font-semibold hover:border-[var(--iet-red)] hover:text-[var(--iet-red)] transition-colors">
+                                ← Back
+                            </button>
                         </Link>
-                        <Button type="submit" size="lg" disabled={declarationMutation.isPending}>
-                            {declarationMutation.isPending ? <Spinner /> : "Complete Application"}
-                        </Button>
+                        <button type="submit" disabled={declarationMutation.isPending} className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
+                            {declarationMutation.isPending ? <Spinner className="size-4" /> : null}
+                            Complete Application →
+                        </button>
                     </div>
                 </form>
             )}

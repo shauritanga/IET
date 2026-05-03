@@ -1,5 +1,7 @@
 export const AUTH_STORAGE_KEY = "iet-demo-auth";
 export const OTP_SESSION_KEY = "iet-demo-otp-session";
+export const MEMBERSHIP_STATUS_COOKIE_KEY = "global-ms";
+export const REGISTRATION_STATUS_COOKIE_KEY = "global-rs";
 
 export type OtpFlow = "email-verification" | "login-2fa";
 
@@ -14,6 +16,8 @@ export type OtpSession = {
 export type AuthSession = {
     email: string;
     name: string;
+    membershipStatus?: string | null;
+    registrationStatus?: string | null;
     showMembershipPrompt?: boolean;
 };
 
@@ -21,6 +25,7 @@ export type AuthSessionSource = {
     email: string;
     name: string;
     membershipStatus?: string | null;
+    registrationStatus?: string | null;
 };
 
 export function normalizePhoneNumber(value: string) {
@@ -76,10 +81,17 @@ export function writeAuthSession(session: AuthSession) {
 }
 
 export function createAuthSession(payload: AuthSessionSource): AuthSession {
+    const membershipActive = (payload.membershipStatus ?? "").toUpperCase() === "ACTIVE";
+    const hasInflightApplication = [
+        "IN_REVIEW", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "APPROVED_BY_COUNCIL", "CHANGES_REQUESTED", "RESUBMITTED",
+    ].includes((payload.registrationStatus ?? "").toUpperCase());
+
     return {
         email: payload.email.trim(),
         name: payload.name.trim(),
-        showMembershipPrompt: (payload.membershipStatus ?? "").toUpperCase() !== "ACTIVE",
+        membershipStatus: payload.membershipStatus ?? null,
+        registrationStatus: payload.registrationStatus ?? null,
+        showMembershipPrompt: !membershipActive && !hasInflightApplication,
     };
 }
 

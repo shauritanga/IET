@@ -58,13 +58,13 @@ export class SeedService implements OnApplicationBootstrap {
           firstName,
           lastName,
           phoneNumber,
-          role: UserRole.ADMIN,
+          role: UserRole.SUPER_ADMIN,
           membershipStatus: MembershipStatus.ACTIVE,
           emailVerified: true,
           isActive: true,
         }),
       );
-      this.logger.log(`Admin user updated from seed: ${email}`);
+      this.logger.log(`Super admin user updated from seed: ${email}`);
       return;
     }
 
@@ -74,14 +74,14 @@ export class SeedService implements OnApplicationBootstrap {
       firstName,
       lastName,
       phoneNumber,
-      role: UserRole.ADMIN,
+      role: UserRole.SUPER_ADMIN,
       membershipStatus: MembershipStatus.ACTIVE,
       emailVerified: true,
       isActive: true,
     });
 
     await this.userRepository.save(admin);
-    this.logger.log(`Admin user seeded: ${email}`);
+    this.logger.log(`Super admin user seeded: ${email}`);
   }
 
   private async provisionAdminTwoFactor() {

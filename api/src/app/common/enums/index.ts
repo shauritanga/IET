@@ -26,6 +26,10 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   SUPER_ADMIN = 'SUPER_ADMIN',
   REVIEWER = 'REVIEWER',
+  SECRETARIAT = 'SECRETARIAT',
+  EVALUATOR = 'EVALUATOR',
+  MPDC = 'MPDC',
+  COUNCIL = 'COUNCIL',
 }
 
 // ============================================

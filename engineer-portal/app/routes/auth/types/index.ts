@@ -70,3 +70,8 @@ export type ResendOtpResponse = {
     success?: boolean;
     message: string;
 };
+
+export type ResetPasswordResponse = {
+    success: boolean;
+    message: string;
+};

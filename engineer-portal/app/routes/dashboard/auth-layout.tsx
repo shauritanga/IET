@@ -1,17 +1,28 @@
 import { useEffect, useMemo, useState } from "react"
 import { Outlet, useLocation, NavLink, useNavigate } from "react-router"
-import ApplicationModal from "~/components/custom/application-modal"
 import { BellIcon } from "~/components/portal/icons"
 import MembershipRequiredModal from "~/components/custom/membership-modal"
 import { AppSidebar } from "~/routes/dashboard/layouts/sidebar"
+import http from "~/utils/http"
+import {
+    AUTH_STORAGE_KEY,
+    createAuthSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
+    REGISTRATION_STATUS_COOKIE_KEY,
+    writeAuthSession,
+    type AuthSession,
+} from "~/utils/otp-session"
+import { setToCookie } from "~/utils/storage"
+import { MoonStar, SunMedium } from "lucide-react"
+import { useThemeMode } from "~/providers/theme"
 
-const AUTH_STORAGE_KEY = "iet-demo-auth"
-const APPLICATION_MODAL_FLAG_KEY = "iet-demo-open-application-modal"
-
-type AuthSession = {
+type UserProfileSessionSource = {
     email: string
-    name: string
-    showMembershipPrompt?: boolean
+    fullName?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    membershipStatus?: string | null
+    registrationStatus?: string | null
 }
 
 export type DashboardLayoutContext = {
@@ -52,9 +63,9 @@ export default function AuthLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [authSession, setAuthSession] = useState<AuthSession | null>(null)
     const [membershipPromptOpen, setMembershipPromptOpen] = useState(false)
-    const [applicationModalOpen, setApplicationModalOpen] = useState(false)
     const location = useLocation()
     const navigate = useNavigate()
+    const { theme, toggleTheme } = useThemeMode()
     const pageLabel = getPageLabel(location.pathname)
     const userName = authSession?.name ?? "IET Member"
     const userInitials = useMemo(() => getUserInitials(userName), [userName])
@@ -77,6 +88,43 @@ export default function AuthLayout() {
     }, [navigate])
 
     useEffect(() => {
+        if (!authSession) return
+
+        let cancelled = false
+
+        const refreshPromptState = async () => {
+            try {
+                const response = await http.get<{ data: UserProfileSessionSource }>("/users/profile")
+                const profile = response.data.data
+                if (cancelled || !profile) return
+
+                const name = profile.fullName?.trim()
+                    || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim()
+                    || profile.email
+                const nextSession = createAuthSession({
+                    email: profile.email,
+                    name,
+                    membershipStatus: profile.membershipStatus,
+                    registrationStatus: profile.registrationStatus,
+                })
+
+                setAuthSession(nextSession)
+                writeAuthSession(nextSession)
+                setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, profile.membershipStatus ?? "")
+                setToCookie(REGISTRATION_STATUS_COOKIE_KEY, profile.registrationStatus ?? "")
+            } catch {
+                // Keep the locally restored session if the profile refresh fails.
+            }
+        }
+
+        void refreshPromptState()
+
+        return () => {
+            cancelled = true
+        }
+    }, [authSession?.email])
+
+    useEffect(() => {
         if (!authSession?.showMembershipPrompt) {
             setMembershipPromptOpen(false)
             return
@@ -89,23 +137,6 @@ export default function AuthLayout() {
         return () => window.clearTimeout(timer)
     }, [authSession?.showMembershipPrompt])
 
-    useEffect(() => {
-        if (typeof window === "undefined") return
-        if (!location.pathname.startsWith("/dashboard/membership")) return
-
-        const shouldOpenFromStorage = window.sessionStorage.getItem(APPLICATION_MODAL_FLAG_KEY) === "true"
-        const shouldOpenFromState = Boolean(location.state && typeof location.state === "object" && "openApplicationModal" in location.state && location.state.openApplicationModal)
-
-        if (!shouldOpenFromStorage && !shouldOpenFromState) return
-
-        setApplicationModalOpen(true)
-        window.sessionStorage.removeItem(APPLICATION_MODAL_FLAG_KEY)
-
-        if (shouldOpenFromState) {
-            navigate(location.pathname, { replace: true, state: null })
-        }
-    }, [location.pathname, location.state, navigate])
-
     const handleMembershipPromptClose = () => {
         setMembershipPromptOpen(false)
 
@@ -117,21 +148,7 @@ export default function AuthLayout() {
     }
 
     const openApplicationModal = () => {
-        if (typeof window !== "undefined") {
-            window.sessionStorage.setItem(APPLICATION_MODAL_FLAG_KEY, "true")
-        }
-
-        if (location.pathname.startsWith("/dashboard/membership")) {
-            setApplicationModalOpen(true)
-            if (typeof window !== "undefined") {
-                window.sessionStorage.removeItem(APPLICATION_MODAL_FLAG_KEY)
-            }
-            return
-        }
-
-        navigate("/dashboard/membership", {
-            state: { openApplicationModal: true },
-        })
+        navigate("/application")
     }
 
     return (
@@ -172,6 +189,20 @@ export default function AuthLayout() {
                         <div className="top-date">{getTodayString()}</div>
 
                         <button
+                            type="button"
+                            className="topbar-bell"
+                            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                            onClick={toggleTheme}
+                        >
+                            {theme === "dark" ? (
+                                <SunMedium className="h-[14px] w-[14px] stroke-[1.8]" />
+                            ) : (
+                                <MoonStar className="h-[14px] w-[14px] stroke-[1.8]" />
+                            )}
+                        </button>
+
+                        <button
                             className="topbar-bell"
                             title="Notifications"
                         >
@@ -194,12 +225,6 @@ export default function AuthLayout() {
                         open={membershipPromptOpen}
                         onClose={handleMembershipPromptClose}
                         onApply={openApplicationModal}
-                    />
-                    <ApplicationModal
-                        open={applicationModalOpen}
-                        onClose={() => setApplicationModalOpen(false)}
-                        userName={userName}
-                        userInitials={userInitials}
                     />
                 </div>
             </div>
