@@ -16,6 +16,7 @@ export type OtpSession = {
 export type AuthSession = {
     email: string;
     name: string;
+    profilePhotoUrl?: string | null;
     membershipStatus?: string | null;
     registrationStatus?: string | null;
     showMembershipPrompt?: boolean;
@@ -24,6 +25,7 @@ export type AuthSession = {
 export type AuthSessionSource = {
     email: string;
     name: string;
+    profilePhotoUrl?: string | null;
     membershipStatus?: string | null;
     registrationStatus?: string | null;
 };
@@ -89,6 +91,7 @@ export function createAuthSession(payload: AuthSessionSource): AuthSession {
     return {
         email: payload.email.trim(),
         name: payload.name.trim(),
+        profilePhotoUrl: payload.profilePhotoUrl ?? null,
         membershipStatus: payload.membershipStatus ?? null,
         registrationStatus: payload.registrationStatus ?? null,
         showMembershipPrompt: !membershipActive && !hasInflightApplication,

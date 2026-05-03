@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
-import { Outlet, useLocation, NavLink, useNavigate } from "react-router"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Outlet, useLocation, useNavigate } from "react-router"
+import { MoonStar, SunMedium, ChevronDown, LogOut, UserRound } from "lucide-react"
 import { BellIcon } from "~/components/portal/icons"
 import MembershipRequiredModal from "~/components/custom/membership-modal"
 import { AppSidebar } from "~/routes/dashboard/layouts/sidebar"
+import { useLogout } from "~/routes/auth/logout/index"
 import http from "~/utils/http"
 import {
     AUTH_STORAGE_KEY,
@@ -13,7 +15,6 @@ import {
     type AuthSession,
 } from "~/utils/otp-session"
 import { setToCookie } from "~/utils/storage"
-import { MoonStar, SunMedium } from "lucide-react"
 import { useThemeMode } from "~/providers/theme"
 
 type UserProfileSessionSource = {
@@ -21,6 +22,7 @@ type UserProfileSessionSource = {
     fullName?: string | null
     firstName?: string | null
     lastName?: string | null
+    profilePhotoUrl?: string | null
     membershipStatus?: string | null
     registrationStatus?: string | null
 }
@@ -44,12 +46,6 @@ function getPageLabel(pathname: string): string {
     return "Overview"
 }
 
-function getTodayString(): string {
-    return new Date().toLocaleDateString("en-US", {
-        weekday: "short", month: "short", day: "numeric", year: "numeric",
-    })
-}
-
 function getUserInitials(name: string): string {
     return name
         .split(" ")
@@ -63,11 +59,16 @@ export default function AuthLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [authSession, setAuthSession] = useState<AuthSession | null>(null)
     const [membershipPromptOpen, setMembershipPromptOpen] = useState(false)
+    const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+    const headerMenuRef = useRef<HTMLDivElement | null>(null)
     const location = useLocation()
     const navigate = useNavigate()
+    const logout = useLogout()
     const { theme, toggleTheme } = useThemeMode()
     const pageLabel = getPageLabel(location.pathname)
     const userName = authSession?.name ?? "IET Member"
+    const userEmail = authSession?.email ?? ""
+    const userPhotoUrl = authSession?.profilePhotoUrl ?? null
     const userInitials = useMemo(() => getUserInitials(userName), [userName])
 
     useEffect(() => {
@@ -77,7 +78,6 @@ export default function AuthLayout() {
             navigate("/auth/login", { replace: true })
             return
         }
-
         try {
             const session = JSON.parse(auth) as AuthSession
             setAuthSession(session)
@@ -89,39 +89,32 @@ export default function AuthLayout() {
 
     useEffect(() => {
         if (!authSession) return
-
         let cancelled = false
-
-        const refreshPromptState = async () => {
+        const refresh = async () => {
             try {
                 const response = await http.get<{ data: UserProfileSessionSource }>("/users/profile")
                 const profile = response.data.data
                 if (cancelled || !profile) return
-
                 const name = profile.fullName?.trim()
                     || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim()
                     || profile.email
                 const nextSession = createAuthSession({
                     email: profile.email,
                     name,
+                    profilePhotoUrl: profile.profilePhotoUrl,
                     membershipStatus: profile.membershipStatus,
                     registrationStatus: profile.registrationStatus,
                 })
-
                 setAuthSession(nextSession)
                 writeAuthSession(nextSession)
                 setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, profile.membershipStatus ?? "")
                 setToCookie(REGISTRATION_STATUS_COOKIE_KEY, profile.registrationStatus ?? "")
             } catch {
-                // Keep the locally restored session if the profile refresh fails.
+                // Keep locally restored session if profile refresh fails.
             }
         }
-
-        void refreshPromptState()
-
-        return () => {
-            cancelled = true
-        }
+        void refresh()
+        return () => { cancelled = true }
     }, [authSession?.email])
 
     useEffect(() => {
@@ -129,34 +122,44 @@ export default function AuthLayout() {
             setMembershipPromptOpen(false)
             return
         }
-
-        const timer = window.setTimeout(() => {
-            setMembershipPromptOpen(true)
-        }, 600)
-
+        const timer = window.setTimeout(() => setMembershipPromptOpen(true), 600)
         return () => window.clearTimeout(timer)
     }, [authSession?.showMembershipPrompt])
 
+    // Close header menu on outside click or route change
+    useEffect(() => {
+        const handle = (e: MouseEvent) => {
+            if (!headerMenuRef.current?.contains(e.target as Node)) setHeaderMenuOpen(false)
+        }
+        const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setHeaderMenuOpen(false) }
+        document.addEventListener("mousedown", handle)
+        document.addEventListener("keydown", handleKey)
+        return () => {
+            document.removeEventListener("mousedown", handle)
+            document.removeEventListener("keydown", handleKey)
+        }
+    }, [])
+
+    useEffect(() => { setHeaderMenuOpen(false) }, [location.pathname])
+
     const handleMembershipPromptClose = () => {
         setMembershipPromptOpen(false)
-
         if (typeof window === "undefined" || !authSession) return
-
         const nextSession = { ...authSession, showMembershipPrompt: false }
         setAuthSession(nextSession)
         window.sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession))
     }
 
-    const openApplicationModal = () => {
-        navigate("/application")
-    }
+    const openApplicationModal = () => navigate("/application")
 
     return (
         <div className="portal-shell">
             <AppSidebar
                 open={sidebarOpen}
                 userName={userName}
+                userEmail={userEmail}
                 userInitials={userInitials}
+                userPhotoUrl={userPhotoUrl}
             />
 
             {sidebarOpen && (
@@ -166,9 +169,7 @@ export default function AuthLayout() {
                 />
             )}
 
-            <div
-                className={`main ${sidebarOpen ? "" : "expanded"}`}
-            >
+            <div className={`main ${sidebarOpen ? "" : "expanded"}`}>
                 <div className="topbar">
                     <div className="topbar-left">
                         <button
@@ -182,12 +183,13 @@ export default function AuthLayout() {
                                 {!sidebarOpen && <polyline points="13 8 17 12 13 16" />}
                             </svg>
                         </button>
-                        <div className="topbar-crumb">IET Tanzania &rsaquo; <span>{pageLabel}</span></div>
+                        <div className="topbar-crumb">
+                            IET Tanzania &rsaquo; <span>{pageLabel}</span>
+                        </div>
                     </div>
 
                     <div className="topbar-right">
-                        <div className="top-date">{getTodayString()}</div>
-
+                        {/* Theme toggle */}
                         <button
                             type="button"
                             className="topbar-bell"
@@ -195,27 +197,108 @@ export default function AuthLayout() {
                             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                             onClick={toggleTheme}
                         >
-                            {theme === "dark" ? (
-                                <SunMedium className="h-[14px] w-[14px] stroke-[1.8]" />
-                            ) : (
-                                <MoonStar className="h-[14px] w-[14px] stroke-[1.8]" />
-                            )}
+                            {theme === "dark"
+                                ? <SunMedium className="h-[14px] w-[14px] stroke-[1.8]" />
+                                : <MoonStar className="h-[14px] w-[14px] stroke-[1.8]" />}
                         </button>
 
-                        <button
-                            className="topbar-bell"
-                            title="Notifications"
-                        >
+                        {/* Notification bell with red dot */}
+                        <button className="topbar-bell" title="Notifications" style={{ position: "relative" }}>
                             <BellIcon className="h-[14px] w-[14px] stroke-[1.8]" />
+                            <span style={{ position: "absolute", right: 7, top: 6, width: 6, height: 6, borderRadius: "50%", background: "var(--iet-red)" }} />
                         </button>
 
-                        <NavLink
-                            to="/dashboard/profile"
-                            className="user-pill"
-                        >
-                            <div className="user-pill-avatar">{userInitials}</div>
-                            <span className="user-pill-name">{userName}</span>
-                        </NavLink>
+                        {/* User pill → dropdown */}
+                        <div style={{ position: "relative" }} ref={headerMenuRef}>
+                            <button
+                                type="button"
+                                className="user-pill"
+                                onClick={() => setHeaderMenuOpen((v) => !v)}
+                                aria-label="Open account menu"
+                                aria-haspopup="menu"
+                                aria-expanded={headerMenuOpen}
+                            >
+                                <div className="user-pill-avatar">
+                                    {userPhotoUrl
+                                        ? <img src={userPhotoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                                        : userInitials}
+                                </div>
+                                <ChevronDown
+                                    size={13}
+                                    style={{
+                                        color: "var(--iet-muted)",
+                                        transition: "transform 150ms",
+                                        transform: headerMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                        flexShrink: 0,
+                                    }}
+                                />
+                            </button>
+
+                            {headerMenuOpen && (
+                                <div
+                                    role="menu"
+                                    style={{
+                                        position: "absolute",
+                                        right: 0,
+                                        top: "calc(100% + 10px)",
+                                        zIndex: 220,
+                                        width: 240,
+                                        borderRadius: 12,
+                                        border: "1px solid var(--iet-border)",
+                                        background: "var(--iet-white)",
+                                        boxShadow: "0 18px 48px rgba(0,0,0,0.16)",
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    {/* User info header */}
+                                    <div style={{ borderBottom: "1px solid var(--iet-border)", padding: "12px 16px" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--iet-red)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "white", flexShrink: 0, overflow: "hidden" }}>
+                                                {userPhotoUrl
+                                                    ? <img src={userPhotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                    : userInitials}
+                                            </div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-red-dark)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userName}</div>
+                                                <div style={{ fontSize: 10, color: "var(--iet-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
+                                                <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", borderRadius: 999, background: "var(--iet-red-light)", padding: "2px 8px", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--iet-red)" }}>
+                                                    Member
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Menu items */}
+                                    <div style={{ padding: 8 }}>
+                                        <button
+                                            role="menuitem"
+                                            type="button"
+                                            onClick={() => { setHeaderMenuOpen(false); navigate("/dashboard/profile") }}
+                                            style={{ display: "flex", width: "100%", alignItems: "center", gap: 12, borderRadius: 9, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "var(--iet-text)", textAlign: "left", transition: "background .15s" }}
+                                            onMouseOver={(e) => { e.currentTarget.style.background = "var(--iet-red-pale)"; e.currentTarget.style.color = "var(--iet-red-dark)" }}
+                                            onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--iet-text)" }}
+                                        >
+                                            <UserRound size={14} style={{ color: "var(--iet-muted)", flexShrink: 0 }} />
+                                            <span>Profile</span>
+                                        </button>
+
+                                        <div style={{ height: 1, background: "var(--iet-border)", margin: "4px 0" }} />
+
+                                        <button
+                                            role="menuitem"
+                                            type="button"
+                                            onClick={() => { setHeaderMenuOpen(false); logout() }}
+                                            style={{ display: "flex", width: "100%", alignItems: "center", gap: 12, borderRadius: 9, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: "var(--iet-red)", textAlign: "left", transition: "background .15s" }}
+                                            onMouseOver={(e) => { e.currentTarget.style.background = "var(--iet-red-pale)" }}
+                                            onMouseOut={(e) => { e.currentTarget.style.background = "transparent" }}
+                                        >
+                                            <LogOut size={14} style={{ flexShrink: 0 }} />
+                                            <span>Log out</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
