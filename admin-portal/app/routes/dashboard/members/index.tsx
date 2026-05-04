@@ -1,6 +1,7 @@
 import type { AxiosError } from "axios";
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import http from "~/utils/http";
 import type { ApiEnvelope, MemberSummary } from "~/types";
 
@@ -15,8 +16,12 @@ type MemberRow = MemberSummary & {
 
 type ImportResult = {
   created: number;
+  updated: number;
   skipped: number;
-  errors: Array<{ row: number; email: string; reason: string }>;
+  feesCreated: number;
+  feesUpdated: number;
+  errors: Array<{ row: number; membershipId?: string; email?: string; reason: string }>;
+  warnings: Array<{ row: number; field: string; value: string; reason: string }>;
 };
 
 type CreateMemberForm = {
@@ -76,6 +81,12 @@ function initials(m: MemberRow) {
 function displayName(m: MemberRow) {
   if (m.fullName) return m.fullName;
   return `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || m.email;
+}
+
+function formatMoney(amount: number | string) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return "TZS 0";
+  return `TZS ${value.toLocaleString()}`;
 }
 
 // ── Icon Components ────────────────────────────────────────────────
@@ -158,6 +169,44 @@ function UsersIcon() {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+function MoreVerticalIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="5" r="1" fill="currentColor" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+      <circle cx="12" cy="19" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+function ViewIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+function RenewIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+      <path d="M3 21v-5h5" />
+      <path d="M3 12A9 9 0 0 1 18.3 5.6L21 8" />
+      <path d="M21 3v5h-5" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4h6v2" />
     </svg>
   );
 }
@@ -245,6 +294,112 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
   );
 }
 
+function MemberActionMenu({
+  onView,
+  onRenew,
+  onDelete,
+}: {
+  onView: () => void;
+  onRenew: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setOpenUp(window.innerHeight - rect.bottom < 150);
+    }
+    setOpen((value) => !value);
+  }
+
+  const itemStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "9px 14px",
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text)",
+    textAlign: "left",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="Member actions"
+        onClick={toggle}
+        style={{
+          width: 30,
+          height: 30,
+          border: "1.5px solid var(--border)",
+          borderRadius: 7,
+          background: open ? "var(--bg)" : "var(--white)",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: open ? "var(--red-dark)" : "var(--muted)",
+        }}
+      >
+        <MoreVerticalIcon />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            zIndex: 200,
+            ...(openUp ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
+            background: "var(--white)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            boxShadow: "0 10px 28px rgba(0,0,0,.16)",
+            minWidth: 150,
+            overflow: "hidden",
+          }}
+        >
+          <button type="button" onClick={() => { setOpen(false); onView(); }} style={itemStyle}
+            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+            <ViewIcon /> View
+          </button>
+          <button type="button" onClick={() => { setOpen(false); onRenew(); }} style={itemStyle}
+            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+            <RenewIcon /> Renew
+          </button>
+          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
+          <button type="button" onClick={() => { setOpen(false); onDelete(); }} style={{ ...itemStyle, color: "var(--red)" }}
+            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-pale)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+            <TrashIcon /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -288,6 +443,7 @@ function GridViewIcon({ active }: { active: boolean }) {
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function MembersPage() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -310,6 +466,19 @@ export default function MembersPage() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // action state
+  const [feeConfig, setFeeConfig] = useState<Record<string, number>>({});
+  const [renewTarget, setRenewTarget] = useState<MemberRow | null>(null);
+  const [renewForm, setRenewForm] = useState({
+    year: String(new Date().getFullYear()),
+    amount: "",
+  });
+  const [renewing, setRenewing] = useState(false);
+  const [renewError, setRenewError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // stats derived from members list
   const stats = {
@@ -344,6 +513,18 @@ export default function MembersPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, classFilter]);
+
+  useEffect(() => {
+    async function loadFeeConfig() {
+      try {
+        const { data } = await http.get<ApiEnvelope<Record<string, number>>>("/admin/settings/fees");
+        setFeeConfig(data.data ?? {});
+      } catch {
+        setFeeConfig({});
+      }
+    }
+    void loadFeeConfig();
+  }, []);
 
   // ── Create member ──────────────────────────────────────────────
 
@@ -382,7 +563,7 @@ export default function MembersPage() {
       setCreateForm((prev) => ({ ...prev, [field]: e.target.value }));
   }
 
-  // ── Import CSV ─────────────────────────────────────────────────
+  // ── Import members ─────────────────────────────────────────────
 
   function openImport() {
     setImportResult(null);
@@ -410,6 +591,66 @@ export default function MembersPage() {
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function openRenew(member: MemberRow) {
+    const configuredAmount = member.membershipClass ? feeConfig[member.membershipClass] : undefined;
+    setRenewTarget(member);
+    setRenewForm({
+      year: String(new Date().getFullYear()),
+      amount: String(configuredAmount ?? ""),
+    });
+    setRenewError(null);
+  }
+
+  async function handleRenew(e: React.FormEvent) {
+    e.preventDefault();
+    if (!renewTarget) return;
+
+    const year = Number(renewForm.year);
+    const amount = Number(renewForm.amount);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      setRenewError("Enter a valid renewal year.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      setRenewError("Enter a valid paid amount.");
+      return;
+    }
+
+    setRenewing(true);
+    setRenewError(null);
+    try {
+      await http.post(`/admin/members/${renewTarget.id}/renew`, { year, amount });
+      setRenewTarget(null);
+      void loadMembers();
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string }>;
+      setRenewError(e.response?.data?.message ?? "Failed to renew member.");
+    } finally {
+      setRenewing(false);
+    }
+  }
+
+  function openDelete(member: MemberRow) {
+    setDeleteTarget(member);
+    setDeleteError(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await http.delete(`/admin/members/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      void loadMembers();
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string }>;
+      setDeleteError(e.response?.data?.message ?? "Failed to delete member.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -441,7 +682,7 @@ export default function MembersPage() {
             onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
             onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
           >
-            <UploadIcon /> Import CSV
+            <UploadIcon /> Import Members
           </button>
         </div>
       </div>
@@ -553,14 +794,11 @@ export default function MembersPage() {
         const to = Math.min(safePage * PAGE_SIZE, members.length);
 
         const ActionButtons = ({ member }: { member: MemberRow }) => (
-          <div style={{ display: "flex", gap: 6 }}>
-            <button style={{ fontSize: 11.5, fontWeight: 600, color: "var(--red-dark)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 7, padding: "5px 12px", cursor: "pointer", transition: "border-color .15s" }}
-              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
-              onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}>View</button>
-            {member.membershipStatus === "EXPIRED" && (
-              <button style={{ fontSize: 11.5, fontWeight: 600, color: "#15803d", background: "#f0fdf4", border: "1.5px solid #bbf7d0", borderRadius: 7, padding: "5px 12px", cursor: "pointer" }}>Renew</button>
-            )}
-          </div>
+          <MemberActionMenu
+            onView={() => navigate(`/dashboard/members/${member.id}`)}
+            onRenew={() => openRenew(member)}
+            onDelete={() => openDelete(member)}
+          />
         );
 
         return (
@@ -753,13 +991,13 @@ export default function MembersPage() {
         </form>
       </Modal>
 
-      {/* Import CSV Modal */}
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Import Members from CSV">
+      {/* Import members modal */}
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Import Members">
         <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px", marginBottom: 16, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.7 }}>
-          <p style={{ fontWeight: 700, color: "var(--red-dark)", marginBottom: 4 }}>CSV Format</p>
-          <p>Required: <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>email</code></p>
-          <p>Optional: <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>firstName, lastName, membershipClass, engineeringDiscipline, phone</code></p>
-          <p style={{ fontSize: 10.5, marginTop: 4 }}>Classes: GRADUATE, ASSOCIATE, MIET, CORPORATE, SENIOR, FELLOW, HONORARY</p>
+          <p style={{ fontWeight: 700, color: "var(--red-dark)", marginBottom: 4 }}>Excel or CSV Format</p>
+          <p>Use <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>Reg.No.</code> as the legacy membership number and <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>email</code> for portal access.</p>
+          <p>Year columns such as <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2012</code>, <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2024</code> are imported as paid yearly subscriptions when they contain an amount.</p>
+          <p style={{ fontSize: 10.5, marginTop: 4 }}>Accepted files: .xlsx and .csv. Save old .xls files as .xlsx before importing.</p>
         </div>
 
         {importError && (
@@ -769,18 +1007,31 @@ export default function MembersPage() {
         )}
 
         {importResult && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>Import Complete</p>
-            <div style={{ display: "flex", gap: 20, fontSize: 12 }}>
+          <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderLeft: "4px solid var(--success)", borderRadius: 10, padding: "14px 16px", marginBottom: 12, color: "var(--text)" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--success)", marginBottom: 8 }}>Import Complete</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "var(--text)" }}>
               <span><strong>{importResult.created}</strong> created</span>
+              <span><strong>{importResult.updated}</strong> updated</span>
               <span><strong>{importResult.skipped}</strong> skipped</span>
+              <span><strong>{importResult.feesCreated}</strong> fees created</span>
+              <span><strong>{importResult.feesUpdated}</strong> fees updated</span>
               <span style={{ color: importResult.errors.length ? "var(--red)" : "inherit" }}><strong>{importResult.errors.length}</strong> errors</span>
+              <span style={{ color: importResult.warnings.length ? "var(--warn)" : "inherit" }}><strong>{importResult.warnings.length}</strong> warnings</span>
             </div>
             {importResult.errors.length > 0 && (
               <div style={{ marginTop: 8, maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
                 {importResult.errors.map((e) => (
-                  <div key={`${e.row}-${e.email}`} style={{ fontSize: 10.5, color: "var(--red)" }}>
-                    Row {e.row} ({e.email}): {e.reason}
+                  <div key={`${e.row}-${e.membershipId ?? e.email ?? e.reason}`} style={{ fontSize: 10.5, color: "var(--red)" }}>
+                    Row {e.row} ({e.membershipId ?? e.email ?? "unknown"}): {e.reason}
+                  </div>
+                ))}
+              </div>
+            )}
+            {importResult.warnings.length > 0 && (
+              <div style={{ marginTop: 8, maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                {importResult.warnings.slice(0, 20).map((warning) => (
+                  <div key={`${warning.row}-${warning.field}-${warning.value}`} style={{ fontSize: 10.5, color: "var(--warn)" }}>
+                    Row {warning.row} {warning.field}: {warning.reason}
                   </div>
                 ))}
               </div>
@@ -793,9 +1044,9 @@ export default function MembersPage() {
           onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}>
           <span style={{ color: "var(--muted)" }}><UploadIcon /></span>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)" }}>
-            {importing ? "Importing…" : "Click to select CSV file"}
+            {importing ? "Importing…" : "Click to select Excel or CSV file"}
           </span>
-          <input ref={fileInputRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} disabled={importing} onChange={(e) => void handleImport(e)} />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style={{ display: "none" }} disabled={importing} onChange={(e) => void handleImport(e)} />
         </label>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
@@ -803,6 +1054,95 @@ export default function MembersPage() {
             style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>
             Close
           </button>
+        </div>
+      </Modal>
+
+      <Modal open={!!renewTarget} onClose={() => setRenewTarget(null)} title="Renew Membership">
+        <form onSubmit={(e) => void handleRenew(e)}>
+          {renewTarget && (
+            <div style={{ marginBottom: 16, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg)" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{displayName(renewTarget)}</div>
+              <div style={{ marginTop: 3, fontSize: 11.5, color: "var(--muted)" }}>
+                {renewTarget.membershipId ?? "No membership number"} · {renewTarget.membershipClass ? CLASS_LABELS[renewTarget.membershipClass] ?? renewTarget.membershipClass : "No grade"}
+              </div>
+              {renewForm.amount && (
+                <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--muted)" }}>
+                  Default amount: <strong style={{ color: "var(--text)" }}>{formatMoney(renewForm.amount)}</strong>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
+            <FormField label="Renewal Year" required>
+              <input
+                style={inputStyle}
+                type="number"
+                min={2000}
+                max={2100}
+                value={renewForm.year}
+                onChange={(e) => setRenewForm((prev) => ({ ...prev, year: e.target.value }))}
+                required
+              />
+            </FormField>
+            <FormField label="Paid Amount" required>
+              <input
+                style={inputStyle}
+                type="number"
+                min={0}
+                step={1}
+                value={renewForm.amount}
+                onChange={(e) => setRenewForm((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="150000"
+                required
+              />
+            </FormField>
+          </div>
+
+          {renewError && (
+            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
+              {renewError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+            <button type="button" onClick={() => setRenewTarget(null)}
+              style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={renewing}
+              style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: renewing ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: renewing ? "not-allowed" : "pointer" }}>
+              {renewing ? "Renewing…" : "Renew Member"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Member">
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
+            Delete {deleteTarget ? displayName(deleteTarget) : "this member"}?
+          </p>
+          <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 14 }}>
+            This will hide the member from the directory and deactivate portal access. Existing payments, fees, applications, and event history will remain available in the database.
+          </p>
+
+          {deleteError && (
+            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
+              {deleteError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+            <button type="button" onClick={() => setDeleteTarget(null)}
+              style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button type="button" onClick={() => void handleDelete()} disabled={deleting}
+              style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: deleting ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: deleting ? "not-allowed" : "pointer" }}>
+              {deleting ? "Deleting…" : "Delete Member"}
+            </button>
+          </div>
         </div>
       </Modal>
     </section>

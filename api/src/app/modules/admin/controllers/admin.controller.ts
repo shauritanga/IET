@@ -50,6 +50,7 @@ import {
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
+  RenewMemberDto,
 } from '../dto';
 import { GuestCheckInDto } from '../../guest/dto';
 import { CreateEventDto, UpdateEventDto } from '../../events/dto';
@@ -275,6 +276,44 @@ export class AdminController {
     };
   }
 
+  @Post('members/:memberId/renew')
+  @ApiOperation({ summary: 'Renew member on behalf of the member' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Member renewed successfully',
+  })
+  async renewMember(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: RenewMemberDto,
+  ) {
+    const result = await this.adminService.renewMember(memberId, admin.id, dto);
+    return {
+      success: true,
+      data: result,
+      message: 'Member renewed successfully',
+    };
+  }
+
+  @Delete('members/:memberId')
+  @ApiOperation({ summary: 'Soft delete a member' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Member deleted successfully',
+  })
+  async deleteMember(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    await this.adminService.deleteMember(memberId, admin.id);
+    return {
+      success: true,
+      message: 'Member deleted successfully',
+    };
+  }
+
   @Get('members/export')
   @ApiOperation({ summary: 'Export members to CSV' })
   @ApiQuery({ name: 'status', required: false, type: String })
@@ -383,7 +422,7 @@ export class AdminController {
   // ============================================
 
   @Post('members/import')
-  @ApiOperation({ summary: 'Bulk import members from CSV' })
+  @ApiOperation({ summary: 'Bulk import members from Excel or CSV' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -394,15 +433,22 @@ export class AdminController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Import result' })
   @UseInterceptors(FileInterceptor('file'))
   async importMembers(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('CSV file is required');
-    if (!file.mimetype.includes('csv') && !file.originalname.endsWith('.csv')) {
-      throw new BadRequestException('Only CSV files are accepted');
+    if (!file) throw new BadRequestException('Import file is required');
+    const lowerName = file.originalname.toLowerCase();
+    const allowed =
+      lowerName.endsWith('.csv') ||
+      lowerName.endsWith('.xlsx') ||
+      lowerName.endsWith('.xls') ||
+      file.mimetype.includes('csv') ||
+      file.mimetype.includes('spreadsheet');
+    if (!allowed) {
+      throw new BadRequestException('Only .xlsx, .xls, and .csv files are accepted');
     }
-    const result = await this.adminService.importMembers(file.buffer.toString('utf-8'));
+    const result = await this.adminService.importMembers(file);
     return {
       success: true,
       data: result,
-      message: `Import complete: ${result.created} created, ${result.skipped} skipped`,
+      message: `Import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated`,
     };
   }
 

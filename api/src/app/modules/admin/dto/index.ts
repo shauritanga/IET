@@ -148,6 +148,21 @@ export class UpdateMemberStatusDto {
   reason?: string;
 }
 
+export class RenewMemberDto {
+  @ApiProperty({ example: 2026 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(2000)
+  @Max(2100)
+  year: number;
+
+  @ApiProperty({ example: 150000 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  amount: number;
+}
+
 export class BulkEmailDto {
   @ApiProperty({
     example: 'ALL_MEMBERS',

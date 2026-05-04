@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as XLSX from 'xlsx';
 import { UserEntity } from '../../user/entities/user.entity';
 import {
   RegistrationEntity,
@@ -34,15 +35,44 @@ import {
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
+  RenewMemberDto,
 } from '../dto';
 import {
   MembershipStatus,
+  MembershipClass,
+  EngineeringDiscipline,
+  Gender,
   ApplicationStatus,
   ApplicationReviewStage,
   PaymentStatus,
   FeeStatus,
   UserRole,
 } from '../../../common/enums';
+
+type LegacyMemberImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  feesCreated: number;
+  feesUpdated: number;
+  errors: Array<{
+    row: number;
+    membershipId?: string;
+    email?: string;
+    reason: string;
+  }>;
+  warnings: Array<{
+    row: number;
+    field: string;
+    value: string;
+    reason: string;
+  }>;
+};
+
+type LegacyMemberImportRow = {
+  rowNumber: number;
+  values: Record<string, string>;
+};
 
 const PORTAL_ROLES = [
   UserRole.ADMIN,
@@ -950,6 +980,80 @@ export class AdminService {
     // TODO: Send notification and log activity
   }
 
+  async renewMember(
+    memberId: string,
+    adminId: string,
+    dto: RenewMemberDto,
+  ): Promise<{
+    memberId: string;
+    feeId: string;
+    status: MembershipStatus;
+    expiryDate: Date;
+  }> {
+    const user = await this.userRepository.findOneBy({ id: memberId });
+    if (!user) {
+      throw new NotFoundException('Member not found');
+    }
+
+    if (!user.membershipClass) {
+      throw new BadRequestException('Member does not have a membership class');
+    }
+
+    let fee = await this.feeRepository.findOne({
+      where: { userId: memberId, year: dto.year },
+    });
+    const expiryDate = await this.getFiscalYearEndDate(dto.year);
+
+    if (!fee) {
+      fee = this.feeRepository.create({
+        userId: memberId,
+        year: dto.year,
+        membershipClass: user.membershipClass,
+        currency: 'TZS',
+        remindersSent: 0,
+      });
+    }
+
+    fee.membershipClass = user.membershipClass;
+    fee.amount = dto.amount;
+    fee.status = FeeStatus.PAID;
+    fee.dueDate = expiryDate;
+    fee.paidAt = new Date();
+    fee.notes = `Renewed by admin ${adminId}`;
+    fee = await this.feeRepository.save(fee);
+
+    user.membershipStatus = MembershipStatus.ACTIVE;
+    user.membershipExpiryDate = expiryDate;
+    user.annualMembershipFee = dto.amount;
+    user.isActive = true;
+    await this.userRepository.save(user);
+
+    this.logger.log(
+      `Member ${memberId} renewed for ${dto.year} by admin ${adminId}`,
+    );
+
+    return {
+      memberId,
+      feeId: fee.id,
+      status: user.membershipStatus,
+      expiryDate,
+    };
+  }
+
+  async deleteMember(memberId: string, adminId: string): Promise<void> {
+    const user = await this.userRepository.findOneBy({ id: memberId });
+    if (!user) {
+      throw new NotFoundException('Member not found');
+    }
+
+    user.isActive = false;
+    user.membershipStatus = MembershipStatus.REVOKED;
+    await this.userRepository.save(user);
+    await this.userRepository.softDelete(memberId);
+
+    this.logger.log(`Member ${memberId} soft deleted by admin ${adminId}`);
+  }
+
   /**
    * Get member analytics
    */
@@ -1228,62 +1332,445 @@ export class AdminService {
     };
   }
 
-  async importMembers(csvContent: string): Promise<{
-    created: number;
-    skipped: number;
-    errors: Array<{ row: number; email: string; reason: string }>;
-  }> {
-    const lines = csvContent.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) return { created: 0, skipped: 0, errors: [] };
+  async importMembers(file: Express.Multer.File): Promise<LegacyMemberImportResult> {
+    const rows = await this.parseMemberImportRows(file);
+    const result: LegacyMemberImportResult = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      feesCreated: 0,
+      feesUpdated: 0,
+      errors: [],
+      warnings: [],
+    };
 
-    const header = lines[0].toLowerCase().split(',').map((h) => h.trim());
-    const emailIdx = header.indexOf('email');
-    const firstIdx = header.indexOf('firstname');
-    const lastIdx = header.indexOf('lastname');
-    const classIdx = header.indexOf('membershipclass');
-    const disciplineIdx = header.indexOf('engineeringdiscipline');
-    const phoneIdx = header.indexOf('phone');
+    for (const row of rows) {
+      const values = row.values;
+      const membershipId = this.cleanImportValue(
+        values.regno ?? values.membershipid,
+      );
+      const email = this.normalizeImportEmail(values.email);
 
-    if (emailIdx === -1) throw new BadRequestException('CSV must include an "email" column');
+      if (!membershipId && !email) {
+        result.skipped++;
+        result.errors.push({
+          row: row.rowNumber,
+          reason: 'Missing both Reg.No. and email',
+        });
+        continue;
+      }
 
-    let created = 0;
-    let skipped = 0;
-    const errors: Array<{ row: number; email: string; reason: string }> = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-      const email = cols[emailIdx]?.toLowerCase();
-      if (!email) continue;
+      if (!email) {
+        result.skipped++;
+        result.errors.push({
+          row: row.rowNumber,
+          membershipId,
+          reason: 'Email is required to create a portal account',
+        });
+        continue;
+      }
 
       try {
-        const existing = await this.userRepository.findOneBy({ email });
-        if (existing) { skipped++; continue; }
+        let user = membershipId
+          ? await this.userRepository.findOneBy({ membershipId })
+          : null;
 
-        const bcrypt = await import('bcrypt');
-        const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
-        const hashed = await bcrypt.hash(tempPassword, 10);
+        if (!user) {
+          user = await this.userRepository.findOneBy({ email });
+        }
 
-        const user = this.userRepository.create({
-          email,
-          password: hashed,
-          firstName: firstIdx >= 0 ? cols[firstIdx] : email.split('@')[0],
-          lastName: lastIdx >= 0 ? cols[lastIdx] : '',
-          membershipClass: classIdx >= 0 ? (cols[classIdx] as any) : undefined,
-          engineeringDiscipline: disciplineIdx >= 0 ? (cols[disciplineIdx] as any) : undefined,
-          phoneNumber: phoneIdx >= 0 ? cols[phoneIdx] : undefined,
-          membershipStatus: MembershipStatus.ACTIVE,
-          emailVerified: false,
-          isActive: true,
-        });
-        await this.userRepository.save(user);
-        created++;
+        const membershipClass = this.normalizeLegacyMembershipClass(
+          values.membertype ?? values.membershipclass,
+          row.rowNumber,
+          result,
+        );
+        const engineeringDiscipline = this.normalizeLegacyDiscipline(
+          values.discipline ?? values.engineeringdiscipline,
+          row.rowNumber,
+          result,
+        );
+        const gender = this.normalizeLegacyGender(
+          values.gender,
+          row.rowNumber,
+          result,
+        );
+        const joiningDate = this.parseLegacyDate(
+          values.yearofadmission ?? values.joiningdate,
+          row.rowNumber,
+          result,
+        );
+        const location = [values.pobox, values.address]
+          .map((value) => this.cleanImportValue(value))
+          .filter(Boolean)
+          .join(', ');
+        const paidFees = this.extractLegacyPaidFees(values);
+        const latestPaidFee = paidFees[paidFees.length - 1];
+        const membershipExpiryDate = latestPaidFee
+          ? new Date(latestPaidFee.year, 11, 31, 23, 59, 59, 999)
+          : undefined;
+        const membershipStatus =
+          membershipExpiryDate && membershipExpiryDate >= new Date()
+            ? MembershipStatus.ACTIVE
+            : MembershipStatus.EXPIRED;
+
+        if (user) {
+          user = this.userRepository.merge(user, {
+            email,
+            membershipId: membershipId || user.membershipId,
+            firstName: this.cleanImportValue(values.firstname) || user.firstName,
+            middleName:
+              this.cleanImportValue(values.middlename) || user.middleName,
+            lastName: this.cleanImportValue(values.lastname) || user.lastName,
+            phoneNumber: this.cleanImportValue(values.phone) || user.phoneNumber,
+            gender: gender ?? user.gender,
+            employer:
+              this.cleanImportValue(values.organisation) || user.employer,
+            location: location || user.location,
+            membershipClass: membershipClass ?? user.membershipClass,
+            engineeringDiscipline:
+              engineeringDiscipline ?? user.engineeringDiscipline,
+            joiningDate: joiningDate ?? user.joiningDate,
+            membershipStatus,
+            membershipExpiryDate:
+              membershipExpiryDate ?? user.membershipExpiryDate,
+            annualMembershipFee: latestPaidFee?.amount ?? user.annualMembershipFee,
+            role: UserRole.MEMBER,
+            isActive: true,
+          });
+          await this.userRepository.save(user);
+          result.updated++;
+        } else {
+          const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
+          const hashed = await bcrypt.hash(tempPassword, 10);
+          user = this.userRepository.create({
+            email,
+            password: hashed,
+            membershipId,
+            firstName: this.cleanImportValue(values.firstname) || email.split('@')[0],
+            middleName: this.cleanImportValue(values.middlename),
+            lastName: this.cleanImportValue(values.lastname),
+            phoneNumber: this.cleanImportValue(values.phone),
+            gender,
+            employer: this.cleanImportValue(values.organisation),
+            location: location || undefined,
+            membershipClass,
+            engineeringDiscipline,
+            joiningDate,
+            membershipStatus,
+            membershipExpiryDate,
+            annualMembershipFee: latestPaidFee?.amount,
+            role: UserRole.MEMBER,
+            emailVerified: true,
+            isActive: true,
+          });
+          await this.userRepository.save(user);
+          result.created++;
+        }
+
+        for (const paidFee of paidFees) {
+          const existingFee = await this.feeRepository.findOne({
+            where: { userId: user.id, year: paidFee.year },
+          });
+          const feePayload = {
+            userId: user.id,
+            year: paidFee.year,
+            membershipClass:
+              user.membershipClass ?? membershipClass ?? MembershipClass.CORPORATE,
+            amount: paidFee.amount,
+            currency: 'TZS',
+            status: FeeStatus.PAID,
+            dueDate: new Date(paidFee.year, 6, 10, 23, 59, 59, 999),
+            paidAt: new Date(paidFee.year, 11, 31, 12, 0, 0, 0),
+            notes: 'Imported from legacy spreadsheet; exact payment date unknown',
+          };
+
+          if (existingFee) {
+            await this.feeRepository.save(
+              this.feeRepository.merge(existingFee, feePayload),
+            );
+            result.feesUpdated++;
+          } else {
+            await this.feeRepository.save(this.feeRepository.create(feePayload));
+            result.feesCreated++;
+          }
+        }
       } catch (err) {
-        errors.push({ row: i + 1, email, reason: (err as Error).message });
+        result.errors.push({
+          row: row.rowNumber,
+          membershipId,
+          email,
+          reason: (err as Error).message,
+        });
       }
     }
 
-    this.logger.log(`Import complete: ${created} created, ${skipped} skipped, ${errors.length} errors`);
-    return { created, skipped, errors };
+    this.logger.log(
+      `Member import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated, ${result.errors.length} errors`,
+    );
+    return result;
+  }
+
+  private async parseMemberImportRows(
+    file: Express.Multer.File,
+  ): Promise<LegacyMemberImportRow[]> {
+    const lowerName = file.originalname.toLowerCase();
+
+    if (lowerName.endsWith('.csv') || file.mimetype.includes('csv')) {
+      return this.parseMemberCsvRows(file.buffer.toString('utf-8'));
+    }
+
+    if (
+      !lowerName.endsWith('.xlsx') &&
+      !lowerName.endsWith('.xls') &&
+      !file.mimetype.includes('spreadsheetml')
+    ) {
+      throw new BadRequestException('Only .xlsx, .xls, and .csv files are accepted');
+    }
+
+    const workbook = XLSX.read(file.buffer, {
+      type: 'buffer',
+      cellDates: true,
+    });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      throw new BadRequestException('Spreadsheet does not contain a worksheet');
+    }
+    const worksheet = workbook.Sheets[sheetName];
+    const sheetRows = XLSX.utils.sheet_to_json<Array<string | number | Date>>(
+      worksheet,
+      {
+        header: 1,
+        raw: false,
+        defval: '',
+      },
+    );
+    const headers = (sheetRows[0] ?? []).map((header) =>
+      this.normalizeImportHeader(this.cleanImportValue(header)),
+    );
+
+    return this.assertAndTrimImportRows(
+      sheetRows.slice(1).map((row, rowIndex) => {
+        const values: Record<string, string> = {};
+        headers.forEach((header, index) => {
+          if (!header) return;
+          values[header] = this.cleanImportValue(row[index]);
+        });
+        return { rowNumber: rowIndex + 2, values };
+      }),
+    );
+  }
+
+  private parseMemberCsvRows(csvContent: string): LegacyMemberImportRow[] {
+    const lines = csvContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!lines.length) return [];
+
+    const headers = this.parseCsvLine(lines[0]).map((header) =>
+      this.normalizeImportHeader(header),
+    );
+
+    return this.assertAndTrimImportRows(
+      lines.slice(1).map((line, index) => {
+        const columns = this.parseCsvLine(line);
+        const values: Record<string, string> = {};
+        headers.forEach((header, columnIndex) => {
+          if (!header) return;
+          values[header] = columns[columnIndex] ?? '';
+        });
+        return { rowNumber: index + 2, values };
+      }),
+    );
+  }
+
+  private assertAndTrimImportRows(
+    rows: LegacyMemberImportRow[],
+  ): LegacyMemberImportRow[] {
+    if (!rows.length) return [];
+    const hasEmail = rows.some((row) => 'email' in row.values);
+    const hasRegNo = rows.some(
+      (row) => 'regno' in row.values || 'membershipid' in row.values,
+    );
+    if (!hasEmail && !hasRegNo) {
+      throw new BadRequestException(
+        'Import file must include either "Reg.No." or "email" columns',
+      );
+    }
+    return rows.filter((row) =>
+      Object.values(row.values).some((value) => this.cleanImportValue(value)),
+    );
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const cells: string[] = [];
+    let current = '';
+    let quoted = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const next = line[i + 1];
+      if (char === '"' && quoted && next === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === ',' && !quoted) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    cells.push(current.trim());
+    return cells.map((cell) => cell.replace(/^"|"$/g, '').trim());
+  }
+
+  private normalizeImportHeader(header: string): string {
+    return header.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  private cleanImportValue(value?: string | number | Date | null): string {
+    if (value instanceof Date) return value.toISOString();
+    return String(value ?? '').trim();
+  }
+
+  private normalizeImportEmail(value?: string | null): string {
+    return this.cleanImportValue(value).toLowerCase();
+  }
+
+  private normalizeLegacyMembershipClass(
+    value: string | undefined,
+    row: number,
+    result: LegacyMemberImportResult,
+  ): MembershipClass | undefined {
+    const normalized = this.cleanImportValue(value).toUpperCase();
+    if (!normalized) return undefined;
+    const map: Record<string, MembershipClass> = {
+      GRADUATE: MembershipClass.GRADUATE,
+      ASSOCIATE: MembershipClass.ASSOCIATE,
+      AMIET: MembershipClass.ASSOCIATE,
+      MEMBER: MembershipClass.MEMBER,
+      MIET: MembershipClass.MEMBER,
+      CORPORATE: MembershipClass.CORPORATE,
+      CMIET: MembershipClass.CORPORATE,
+      SENIOR: MembershipClass.SENIOR,
+      SMIET: MembershipClass.SENIOR,
+      FELLOW: MembershipClass.FELLOW,
+      FIET: MembershipClass.FELLOW,
+      HONORARY: MembershipClass.HONORARY,
+    };
+    const mapped = map[normalized];
+    if (!mapped) {
+      result.warnings.push({
+        row,
+        field: 'MEMBER_TYPE',
+        value: value ?? '',
+        reason: 'Unknown member type; membership class left blank',
+      });
+    }
+    return mapped;
+  }
+
+  private normalizeLegacyDiscipline(
+    value: string | undefined,
+    row: number,
+    result: LegacyMemberImportResult,
+  ): EngineeringDiscipline | undefined {
+    const normalized = this.cleanImportValue(value).toUpperCase();
+    if (!normalized) return undefined;
+    const map: Record<string, EngineeringDiscipline> = {
+      CIVIL: EngineeringDiscipline.CIVIL,
+      MECH: EngineeringDiscipline.MECHANICAL,
+      MECHANICAL: EngineeringDiscipline.MECHANICAL,
+      ELEC: EngineeringDiscipline.ELECTRICAL,
+      ELECT: EngineeringDiscipline.ELECTRICAL,
+      ELECTRICAL: EngineeringDiscipline.ELECTRICAL,
+      ELECTRONICS: EngineeringDiscipline.ELECTRONICS,
+      'ELECTRONICSANDIT': EngineeringDiscipline.ELECTRONICS,
+      CPE: EngineeringDiscipline.COMPUTER,
+      COMPUTER: EngineeringDiscipline.COMPUTER,
+      PETROLEUM: EngineeringDiscipline.PETROLEUM,
+      METTALUGICAL: EngineeringDiscipline.OTHER,
+      METALLURGICAL: EngineeringDiscipline.OTHER,
+    };
+    const mapped = map[normalized.replace(/[^A-Z0-9]/g, '')] ?? map[normalized];
+    if (!mapped) {
+      result.warnings.push({
+        row,
+        field: 'Discipline',
+        value: value ?? '',
+        reason: 'Unknown discipline; imported as Other',
+      });
+      return EngineeringDiscipline.OTHER;
+    }
+    return mapped;
+  }
+
+  private normalizeLegacyGender(
+    value: string | undefined,
+    row: number,
+    result: LegacyMemberImportResult,
+  ): Gender | undefined {
+    const normalized = this.cleanImportValue(value).toUpperCase();
+    if (!normalized) return undefined;
+    if (normalized === 'M' || normalized === 'MALE') return Gender.MALE;
+    if (normalized === 'F' || normalized === 'FEMALE') return Gender.FEMALE;
+    result.warnings.push({
+      row,
+      field: 'Gender',
+      value: value ?? '',
+      reason: 'Unknown gender; value not imported',
+    });
+    return undefined;
+  }
+
+  private parseLegacyDate(
+    value: string | undefined,
+    row: number,
+    result: LegacyMemberImportResult,
+  ): Date | undefined {
+    const raw = this.cleanImportValue(value);
+    if (!raw) return undefined;
+
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const serial = Number(raw);
+      if (serial > 20000) {
+        return new Date(Date.UTC(1899, 11, 30 + serial));
+      }
+    }
+
+    const parts = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (parts) {
+      const year =
+        parts[3].length === 2 ? Number(`20${parts[3]}`) : Number(parts[3]);
+      return new Date(Date.UTC(year, Number(parts[2]) - 1, Number(parts[1])));
+    }
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+
+    result.warnings.push({
+      row,
+      field: 'Year of Admission',
+      value: raw,
+      reason: 'Unable to parse date; joining date left blank',
+    });
+    return undefined;
+  }
+
+  private extractLegacyPaidFees(
+    values: Record<string, string>,
+  ): Array<{ year: number; amount: number }> {
+    return Object.entries(values)
+      .filter(([key, value]) => /^\d{4}$/.test(key) && this.cleanImportValue(value))
+      .map(([key, value]) => ({
+        year: Number(key),
+        amount: Number(this.cleanImportValue(value).replace(/,/g, '')),
+      }))
+      .filter((fee) => Number.isFinite(fee.year) && Number.isFinite(fee.amount))
+      .sort((a, b) => a.year - b.year);
   }
 
   async deactivateInactiveMembers(): Promise<{ deactivated: number }> {
@@ -1459,6 +1946,13 @@ export class AdminService {
     );
     nextYearEnd.setHours(23, 59, 59, 999);
     return nextYearEnd;
+  }
+
+  private async getFiscalYearEndDate(year: number): Promise<Date> {
+    const settings = await this.getFiscalYearSettings();
+    const endDate = new Date(year, settings.endMonth - 1, settings.endDay);
+    endDate.setHours(23, 59, 59, 999);
+    return endDate;
   }
 
   private async recordStageHistory(
