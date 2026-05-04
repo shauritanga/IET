@@ -28,7 +28,6 @@ export class SeedService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     await this.seedAdmin();
     await this.provisionAdminTwoFactor();
-    await this.seedEngineerPortalUser();
   }
 
   private async seedAdmin() {
@@ -114,40 +113,4 @@ export class SeedService implements OnApplicationBootstrap {
     }
   }
 
-  private async seedEngineerPortalUser() {
-    const email = this.configService.get<string>(
-      'ENGINEER_PORTAL_EMAIL',
-      'daudiramadhani79@rgmail.com',
-    );
-    const password = this.configService.get<string>(
-      'ENGINEER_PORTAL_PASSWORD',
-      'mpando@20002',
-    );
-
-    const existing = await this.userRepository.findOneBy({ email });
-    if (existing) {
-      this.logger.log(`Engineer portal user already exists: ${email}`);
-      return;
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const engineerUser = this.userRepository.create({
-      email,
-      password: hashed,
-      title: Title.ENG,
-      firstName: 'Daudi',
-      lastName: 'Ramadhani',
-      role: UserRole.MEMBER,
-      membershipId: 'IET-ENG-2023-001',
-      membershipClass: MembershipClass.MEMBER,
-      membershipStatus: MembershipStatus.ACTIVE,
-      engineeringDiscipline: EngineeringDiscipline.CIVIL,
-      emailVerified: true,
-      isActive: true,
-    });
-
-    await this.userRepository.save(engineerUser);
-    this.logger.log(`Engineer portal user seeded: ${email}`);
-  }
 }
