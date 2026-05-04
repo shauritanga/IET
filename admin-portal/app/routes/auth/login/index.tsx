@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { redirect, useNavigate, type LoaderFunctionArgs } from "react-router";
+import { Link, redirect, useNavigate, type LoaderFunctionArgs } from "react-router";
 import type { AxiosError } from "axios";
 import type { ApiEnvelope, AuthResponse } from "~/types";
 import { getCookieValue } from "~/utils/cookies";
@@ -144,9 +144,9 @@ export default function AdminLoginPage() {
             />
             <span>Remember me</span>
           </label>
-          <a href="#" className="text-[12px] font-semibold text-[var(--red)]">
+          <Link to="/auth/forgot-password" className="text-[12px] font-semibold text-[var(--red)] hover:underline">
             Forgot Password?
-          </a>
+          </Link>
         </div>
 
         {error ? (

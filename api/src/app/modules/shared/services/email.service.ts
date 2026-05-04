@@ -131,8 +131,10 @@ export class EmailService implements OnModuleInit {
     email: string,
     firstName: string,
     resetToken: string,
+    portalUrl?: string,
   ): Promise<EmailResult> {
-    const resetUrl = `${this.configService.get('APP_URL')}/reset-password?token=${resetToken}`;
+    const baseUrl = portalUrl ?? this.configService.get('ENGINEER_PORTAL_URL') ?? this.configService.get('APP_URL');
+    const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
     const html = this.getTemplate('password-reset', { firstName, resetUrl });
     return this.send({
       to: email,

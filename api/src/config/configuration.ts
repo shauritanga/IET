@@ -40,6 +40,8 @@ export default () => ({
   SMTP_USER: process.env.SMTP_USER || '',
   SMTP_PASS: process.env.SMTP_PASS || '',
   APP_URL: process.env.APP_URL || 'http://localhost:3000',
+  ENGINEER_PORTAL_URL: process.env.ENGINEER_PORTAL_URL || 'http://localhost:4000',
+  ADMIN_PORTAL_URL: process.env.ADMIN_PORTAL_URL || 'http://localhost:4100',
   EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@iet.or.tz',
   EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME || 'IET Tanzania',
 

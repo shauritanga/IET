@@ -28,11 +28,21 @@ function Rings() {
 export default function AuthLayout() {
   const location = useLocation();
   const isOtp = location.pathname.includes("/auth/otp");
+  const isForgotPassword = location.pathname.includes("/auth/forgot-password");
+  const isResetPassword = location.pathname.includes("/auth/reset-password");
+  const isPasswordFlow = isForgotPassword || isResetPassword;
 
-  const rightTitle = isOtp ? "Secure Admin Access" : "Welcome to IET Admin";
+  const rightTitle = isOtp
+    ? "Secure Admin Access"
+    : isPasswordFlow
+      ? "Account Recovery"
+      : "Welcome to IET Admin";
+
   const rightDescription = isOtp
     ? "Two-factor authentication protects IET Tanzania admin access. All admin actions are logged and audited."
-    : "Manage membership applications, members, events, payments, reports and system settings from one secure administrative portal.";
+    : isPasswordFlow
+      ? "Password reset links are sent to your registered email and expire after 1 hour. Contact your system administrator if you continue to experience issues."
+      : "Manage membership applications, members, events, payments, reports and system settings from one secure administrative portal.";
 
   return (
     <section className="fixed inset-0 z-[9000] flex bg-white">
@@ -71,6 +81,11 @@ export default function AuthLayout() {
                 <span className="text-base">🔐</span>
                 <span>{rightTitle}</span>
               </>
+            ) : isPasswordFlow ? (
+              <>
+                <span className="text-base">🔑</span>
+                <span>{rightTitle}</span>
+              </>
             ) : (
               <>
                 <CheckCircle2 size={16} className="text-white/80" />
@@ -78,7 +93,7 @@ export default function AuthLayout() {
               </>
             )}
           </div>
-          {!isOtp ? (
+          {!isOtp && !isPasswordFlow ? (
             <div className="mb-4 space-y-3 text-[12px] text-white/85">
               {[
                 "Review & Approve Membership Applications",

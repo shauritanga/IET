@@ -42,6 +42,7 @@ export class EventsController {
 
   @Get()
   @Public()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'List events with filtering' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -79,6 +80,7 @@ export class EventsController {
 
   @Get(':eventId')
   @Public()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get event details' })
   @ApiParam({ name: 'eventId', type: 'string', format: 'uuid' })
   @ApiResponse({

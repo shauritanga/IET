@@ -263,79 +263,56 @@ export class PaymentsService {
       order: { createdAt: 'DESC' },
     });
 
-    if (
+    let completedPayment: PaymentEntity;
+
+    if (reusablePayment?.status === PaymentStatus.COMPLETED) {
+      completedPayment = reusablePayment;
+      await this.updateRegistrationPaymentStatus(completedPayment);
+    } else if (
       reusablePayment &&
       [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
         reusablePayment.status,
-      )
+      ) &&
+      !this.isOutdatedApplicationPaymentAmount(reusablePayment, amount)
     ) {
-      const syncedPayment = await this.syncPaymentState(reusablePayment);
-      const hasOutdatedAmount = this.isOutdatedApplicationPaymentAmount(
-        syncedPayment,
+      completedPayment = await this.completeApplicationPaymentLocally(
+        reusablePayment,
+      );
+    } else {
+      if (
+        reusablePayment &&
+        [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
+          reusablePayment.status,
+        )
+      ) {
+        await this.markPaymentFailed(
+          reusablePayment.id,
+          `Superseded by locally completed application fee amount ${amount}`,
+        );
+      }
+
+      completedPayment = await this.createCompletedApplicationPayment(
+        userId,
+        registration.id,
+        dto,
         amount,
       );
-
-      if (this.canRetryApplicationPayment(syncedPayment) || hasOutdatedAmount) {
-        await this.markPaymentFailed(
-          syncedPayment.id,
-          hasOutdatedAmount
-            ? `Retrying application payment with updated fee amount ${amount}`
-            : 'Retrying application payment after stale or incomplete provider initiation',
-        );
-      } else {
-        return {
-          applicationId: registration.id,
-          paymentCompleted: syncedPayment.status === PaymentStatus.COMPLETED,
-          paymentId: syncedPayment.id,
-          paymentStatus: syncedPayment.status,
-          amount: syncedPayment.amount,
-          currency: syncedPayment.currency,
-          paymentMethod: syncedPayment.paymentMethod,
-          paymentUrl: syncedPayment.paymentUrl,
-          mobileMoneyRef: syncedPayment.mobileMoneyRef,
-          phoneNumber: syncedPayment.phoneNumber,
-          transactionRef: syncedPayment.transactionRef,
-          applicationType: dto.applicationType,
-          message:
-            syncedPayment.status === PaymentStatus.COMPLETED
-              ? 'Application fee payment already completed'
-              : 'An application payment is already in progress',
-        };
-      }
     }
 
-    const payment = await this.initiatePayment(userId, {
-      paymentType: PaymentType.APPLICATION_FEE,
-      amount,
-      paymentMethod: dto.paymentMethod,
-      phoneNumber: dto.phoneNumber,
-      description: `${this.getApplicationCategoryLabel(dto.applicationType)} Application Fee`,
-      referenceId: registration.id,
-      referenceType: 'registration',
-      metadata: {
-        applicationId: registration.id,
-        applicationType: dto.applicationType,
-      },
-    });
-
-    registration.paymentId = payment.paymentId;
-    registration.paymentCompleted = payment.status === PaymentStatus.COMPLETED;
-    await this.registrationRepository.save(registration);
-
     return {
-      paymentCompleted: registration.paymentCompleted,
+      paymentCompleted: true,
       applicationId: registration.id,
-      paymentId: payment.paymentId,
-      paymentStatus: payment.status,
-      amount: payment.amount,
-      currency: payment.currency,
-      paymentMethod: payment.paymentMethod,
-      paymentUrl: payment.paymentUrl,
-      mobileMoneyRef: payment.mobileMoneyRef,
-      phoneNumber: dto.phoneNumber,
-      transactionRef: undefined,
+      paymentId: completedPayment.id,
+      paymentStatus: completedPayment.status,
+      amount: completedPayment.amount,
+      currency: completedPayment.currency,
+      paymentMethod: completedPayment.paymentMethod,
+      paymentUrl: completedPayment.paymentUrl,
+      mobileMoneyRef: completedPayment.mobileMoneyRef,
+      phoneNumber: completedPayment.phoneNumber,
+      transactionRef: completedPayment.transactionRef,
       applicationType: dto.applicationType,
-      message: payment.message,
+      message: 'Application fee payment completed',
     };
   }
 
@@ -756,6 +733,68 @@ export class PaymentsService {
     const payment = await this.getPaymentById(paymentId);
     payment.status = PaymentStatus.FAILED;
     payment.errorMessage = reason;
+    const savedPayment = await this.paymentRepository.save(payment);
+    await this.updateRegistrationPaymentStatus(savedPayment);
+    return savedPayment;
+  }
+
+  private async createCompletedApplicationPayment(
+    userId: string,
+    registrationId: string,
+    dto: InitiateApplicationPaymentDto,
+    amount: number,
+  ): Promise<PaymentEntity> {
+    const payment = new PaymentEntity();
+    payment.userId = userId;
+    payment.paymentType = PaymentType.APPLICATION_FEE;
+    payment.amount = amount;
+    payment.currency = 'TZS';
+    payment.status = PaymentStatus.COMPLETED;
+    payment.paymentMethod = dto.paymentMethod;
+    payment.description = `${this.getApplicationCategoryLabel(dto.applicationType)} Application Fee`;
+    payment.phoneNumber = dto.phoneNumber;
+    payment.referenceId = registrationId;
+    payment.referenceType = 'registration';
+    payment.providerResponse = {
+      mockPayment: true,
+      message: 'Application fee locally completed; payment gateway not integrated',
+    };
+    payment.metadata = {
+      applicationId: registrationId,
+      applicationType: dto.applicationType,
+      locallyCompleted: true,
+    };
+    payment.completedAt = new Date();
+    payment.receiptNumber = await this.generateReceiptNumber();
+    payment.idempotencyKey = uuid4();
+
+    const savedPayment = await this.paymentRepository.save(payment);
+    return this.completeApplicationPaymentLocally(savedPayment);
+  }
+
+  private async completeApplicationPaymentLocally(
+    payment: PaymentEntity,
+  ): Promise<PaymentEntity> {
+    if (payment.status !== PaymentStatus.COMPLETED) {
+      payment.status = PaymentStatus.COMPLETED;
+      payment.completedAt = new Date();
+    }
+
+    payment.transactionRef =
+      payment.transactionRef || `MOCK-APPLICATION-${payment.id}`;
+    payment.receiptNumber =
+      payment.receiptNumber || (await this.generateReceiptNumber());
+    payment.errorMessage = null;
+    payment.providerResponse = {
+      ...payment.providerResponse,
+      mockPayment: true,
+      message: 'Application fee locally completed; payment gateway not integrated',
+    };
+    payment.metadata = {
+      ...payment.metadata,
+      locallyCompleted: true,
+    };
+
     const savedPayment = await this.paymentRepository.save(payment);
     await this.updateRegistrationPaymentStatus(savedPayment);
     return savedPayment;
