@@ -5,7 +5,6 @@ import { useNavigate } from "react-router";
 import { getApplicationDraft } from "~/routes/application/requests/handle-resume";
 import type { ApplicationDraftData, ApplicationStep } from "~/routes/application/type";
 import type { APIResponse, TErrorMessage } from "~/types/types";
-import { getApplicationId } from "~/utils/appplication";
 
 const orderedApplicationSteps: ApplicationStep[] = [
     "PERSONAL_DETAILS",
@@ -57,12 +56,10 @@ export const getApplicationRoute = (
 export const useResumeApplication = () => {
     const navigate = useNavigate();
     const hasRedirected = useRef(false);
-    const applicationId = getApplicationId();
 
     const query = useQuery<APIResponse<ApplicationDraftData>, TErrorMessage>({
         queryKey: ["application-draft"],
         queryFn: getApplicationDraft,
-        enabled: !!applicationId,
         staleTime: 0,
         refetchOnWindowFocus: false,
         refetchOnMount: true,
@@ -82,12 +79,9 @@ export const useResumeApplication = () => {
 
 // ── Separate hook just for reading draft data (no redirect) ──────────────────
 export const useGetApplicationDraft = () => {
-    const applicationId = getApplicationId();
-
     return useQuery<APIResponse<ApplicationDraftData>, TErrorMessage>({
-        queryKey: ["application-draft"], // same key — reads from cache, no refetch
+        queryKey: ["application-draft"],
         queryFn: getApplicationDraft,
-        enabled: !!applicationId,
         staleTime: 0,
         refetchOnWindowFocus: false,
         refetchOnMount: true,

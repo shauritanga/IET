@@ -6,7 +6,6 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Spinner } from "~/components/ui/spinner";
 import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
-import { useInitializeApplication } from "~/routes/application/repository/useInitializeApplication";
 import { getApplicationRoute } from "~/routes/application/repository/useResumeApplication";
 import { useThemeMode } from "~/providers/theme";
 
@@ -16,11 +15,7 @@ const RegisterLayout = () => {
     const hasAutoRedirected = useRef(false);
     const { theme, toggleTheme } = useThemeMode();
 
-    // 1️⃣ Auto-create draft if no applicationId cookie exists (runs once on mount)
-    const { isInitializing, isError } = useInitializeApplication();
-
-    // 2️⃣ Fetch the draft data (only meaningful once we have an applicationId)
-    const { isLoading: isDraftLoading, data: draft } = useGetApplicationDraft();
+    const { isLoading: isDraftLoading, isError, data: draft } = useGetApplicationDraft();
 
     const steps = [
         {
@@ -83,8 +78,7 @@ const RegisterLayout = () => {
         }
     }, [draft, navigate, path.pathname]);
 
-    // Block render while either initializing the draft OR loading existing draft data
-    if (isInitializing || isDraftLoading) {
+    if (isDraftLoading) {
         return (
             <div className="flex items-center justify-center min-h-dvh">
                 <Spinner className="size-8" />
@@ -92,7 +86,6 @@ const RegisterLayout = () => {
         );
     }
 
-    // Surface draft creation errors gracefully
     if (isError) {
         return (
             <div className="flex flex-col items-center justify-center min-h-dvh gap-4">
