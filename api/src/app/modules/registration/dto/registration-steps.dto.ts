@@ -98,6 +98,11 @@ export class RegistrationDetailsDto {
 // ============================================
 
 export class EducationDetailDto {
+  @ApiPropertyOptional({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  @IsOptional()
+  @IsString()
+  institutionId?: string;
+
   @ApiProperty({ example: 'University of Dar es Salaam' })
   @IsNotEmpty()
   @IsString()

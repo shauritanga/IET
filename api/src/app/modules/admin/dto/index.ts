@@ -476,6 +476,114 @@ export class UpdateMembershipCategoryDto {
   description?: string;
 }
 
+export class EngineeringInstitutionQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number;
+
+  @ApiPropertyOptional({ example: 'Dar es Salaam' })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  search?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  activeOnly?: boolean;
+}
+
+export class CreateEngineeringInstitutionDto {
+  @ApiProperty({ example: 'University of Dar es Salaam' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(255)
+  @Transform(({ value }) => value?.trim())
+  name: string;
+
+  @ApiPropertyOptional({ example: 'Tanzania' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  country?: string;
+
+  @ApiPropertyOptional({ example: 'UNIVERSITY' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Transform(({ value }) => value?.trim())
+  institutionType?: string;
+
+  @ApiPropertyOptional({ example: 'RECOGNIZED' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Transform(({ value }) => value?.trim())
+  recognitionStatus?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ example: 'Accredited engineering programmes' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+export class UpdateEngineeringInstitutionDto {
+  @ApiPropertyOptional({ example: 'University of Dar es Salaam' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  @Transform(({ value }) => value?.trim())
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Tanzania' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  country?: string;
+
+  @ApiPropertyOptional({ example: 'UNIVERSITY' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Transform(({ value }) => value?.trim())
+  institutionType?: string;
+
+  @ApiPropertyOptional({ example: 'RECOGNIZED' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Transform(({ value }) => value?.trim())
+  recognitionStatus?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ example: 'Accredited engineering programmes' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
 export class AnalyticsQueryDto {
   @ApiPropertyOptional({ example: '2024-01-01' })
   @IsOptional()

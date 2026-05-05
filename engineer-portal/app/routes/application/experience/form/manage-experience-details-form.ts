@@ -7,6 +7,7 @@ import {useGetApplicationDraft} from "~/routes/application/repository/useResumeA
 
 
 export const EducationDetailSchema = z.object({
+    institutionId: z.string().optional(),
     institutionName: z.string(),
     country: z.string(),
     startDate: z.string(),
@@ -31,6 +32,7 @@ export const ExperienceDetailsFormSchema = z.object({
 export type ExperienceDetailsFormType = z.infer<typeof ExperienceDetailsFormSchema>;
 
 const defaultEducation = {
+    institutionId: "",
     institutionName: "",
     country: "",
     startDate: "",
@@ -79,6 +81,7 @@ export const useManageExperienceForm = () => {
 
         const education = registration.educations?.length
             ? registration.educations.map((item) => ({
+                institutionId: item.institutionId ?? "",
                 institutionName: item.institutionName ?? "",
                 country: item.fieldOfStudy ?? "",
                 startDate: item.startDate ?? "",

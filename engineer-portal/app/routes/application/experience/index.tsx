@@ -26,7 +26,10 @@ const Experience = () => {
     const submit = (value: ExperienceDetailsFormType) => {
         const payload = {
             ...value,
-            education: value.education?.slice(0, savedEducationCount),
+            education: value.education?.slice(0, savedEducationCount).map((item) => ({
+                ...item,
+                institutionId: item.institutionId === "OTHER" ? undefined : item.institutionId || undefined,
+            })),
             workExperience: value.workExperience?.slice(0, savedWorkCount),
         };
         mutation.mutate(payload);

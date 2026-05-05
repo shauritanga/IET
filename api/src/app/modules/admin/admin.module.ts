@@ -12,6 +12,7 @@ import { EventEntity, EventRegistrationEntity } from '../events/entities';
 import { PaymentEntity } from '../payments/entities/payment.entity';
 import { SystemSettingEntity } from './entities/system-setting.entity';
 import { MembershipCategoryEntity } from './entities/membership-category.entity';
+import { EngineeringInstitutionEntity } from './entities/engineering-institution.entity';
 import { UserModule } from '../user/user.module';
 import { GuestModule } from '../guest/guest.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -29,6 +30,7 @@ import { EventsModule } from '../events/events.module';
       PaymentEntity,
       SystemSettingEntity,
       MembershipCategoryEntity,
+      EngineeringInstitutionEntity,
     ]),
     UserModule,
     EventsModule,

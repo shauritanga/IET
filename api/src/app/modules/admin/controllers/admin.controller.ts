@@ -50,6 +50,9 @@ import {
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
+  EngineeringInstitutionQueryDto,
+  CreateEngineeringInstitutionDto,
+  UpdateEngineeringInstitutionDto,
   RenewMemberDto,
 } from '../dto';
 import { GuestCheckInDto } from '../../guest/dto';
@@ -690,5 +693,36 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete a membership category' })
   async deleteMembershipCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteMembershipCategory(id);
+  }
+
+  // ============================================
+  // ENGINEERING INSTITUTIONS
+  // ============================================
+
+  @Get('engineering-institutions')
+  @ApiOperation({ summary: 'List engineering institutions' })
+  async getEngineeringInstitutions(@Query() query: EngineeringInstitutionQueryDto) {
+    return this.adminService.getEngineeringInstitutions(query);
+  }
+
+  @Post('engineering-institutions')
+  @ApiOperation({ summary: 'Create an engineering institution' })
+  async createEngineeringInstitution(@Body() dto: CreateEngineeringInstitutionDto) {
+    return this.adminService.createEngineeringInstitution(dto);
+  }
+
+  @Patch('engineering-institutions/:id')
+  @ApiOperation({ summary: 'Update an engineering institution' })
+  async updateEngineeringInstitution(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEngineeringInstitutionDto,
+  ) {
+    return this.adminService.updateEngineeringInstitution(id, dto);
+  }
+
+  @Delete('engineering-institutions/:id')
+  @ApiOperation({ summary: 'Delete an engineering institution' })
+  async deleteEngineeringInstitution(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.deleteEngineeringInstitution(id);
   }
 }

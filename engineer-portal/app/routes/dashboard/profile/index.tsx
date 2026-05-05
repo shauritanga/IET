@@ -336,29 +336,32 @@ const Profile = () => {
                         </div>
                     </div>
 
-                    <div className="card">
-                        <div className="card-head"><span className="card-title">Application Documents</span></div>
-                        <div className="card-body">
-                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                {(latestApplication?.documents?.length ?? 0) > 0 ? latestApplication?.documents.map((item) => (
-                                    <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontSize: 12, fontWeight: 700 }}>{formatLabel(item.documentType)}</div>
-                                            <div style={{ color: "var(--iet-muted)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {item.fileName}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                                            <span className={getStatusBadgeClass(item.status)}>{formatLabel(item.status)}</span>
-                                            <a className="card-action" href={item.fileUrl} target="_blank" rel="noreferrer">View</a>
+                </div>
+            </div>
+
+            <div className="card" style={{ marginTop: 16 }}>
+                <div className="card-head"><span className="card-title">Documents</span></div>
+                <div className="card-body">
+                    {(latestApplication?.documents?.length ?? 0) > 0 ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+                            {latestApplication?.documents.map((item) => (
+                                <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, border: "1px solid var(--iet-border)", borderRadius: 8, padding: 12 }}>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700 }}>{formatLabel(item.documentType)}</div>
+                                        <div style={{ color: "var(--iet-muted)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {item.fileName}
                                         </div>
                                     </div>
-                                )) : (
-                                    <div style={{ color: "var(--iet-muted)", fontSize: 12 }}>No application documents found.</div>
-                                )}
-                            </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                                        <span className={getStatusBadgeClass(item.status)}>{formatLabel(item.status)}</span>
+                                        <a className="card-action" href={item.fileUrl} target="_blank" rel="noreferrer">View</a>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </div>
+                    ) : (
+                        <div style={{ color: "var(--iet-muted)", fontSize: 12 }}>No documents found.</div>
+                    )}
                 </div>
             </div>
         </div>

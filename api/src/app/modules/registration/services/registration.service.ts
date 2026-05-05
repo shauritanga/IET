@@ -18,6 +18,7 @@ import {
 import { UserEntity } from '../../user/entities/user.entity';
 import { EmailService } from '../../shared/services/email.service';
 import { StorageService } from '../../shared/services/storage.service';
+import { EngineeringInstitutionEntity } from '../../admin/entities/engineering-institution.entity';
 import { CreateRegistrationDto } from '../dto/create-registration.dto';
 import { UpdatePersonalDetailsDto } from '../dto/update-registration.dto';
 import {
@@ -56,6 +57,8 @@ export class RegistrationService {
     private referenceRepository: Repository<ReferenceEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(EngineeringInstitutionEntity)
+    private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
     private emailService: EmailService,
     private storageService: StorageService,
   ) {}
@@ -183,6 +186,7 @@ export class RegistrationService {
       educations: (registration.educations ?? []).map((education) => ({
         ...education,
         attachment: education.attachmentUrl ?? null,
+        institution: education.institution ?? null,
       })),
       documents,
     };
@@ -391,11 +395,21 @@ export class RegistrationService {
     // Save education entries
     for (let i = 0; i < dto.education.length; i++) {
       const ed = dto.education[i];
+      let selectedInstitution: EngineeringInstitutionEntity | null = null;
+      if (ed.institutionId) {
+        selectedInstitution = await this.engineeringInstitutionRepository.findOne({
+          where: { id: ed.institutionId, isActive: true },
+        });
+        if (!selectedInstitution) {
+          throw new BadRequestException('Selected institution is not available');
+        }
+      }
       const education = new EducationEntity();
       education.registrationId = registration.id;
-      education.institutionName = ed.institutionName;
+      education.institutionId = selectedInstitution?.id ?? null;
+      education.institutionName = selectedInstitution?.name ?? ed.institutionName;
       education.qualification = ed.courseName;
-      education.location = ed.country;
+      education.location = selectedInstitution?.country ?? ed.country;
       education.startDate = new Date(ed.startDate);
       education.endDate = new Date(ed.endDate);
       education.sortOrder = i;
@@ -885,6 +899,7 @@ export class RegistrationService {
       relations: [
         'user',
         'educations',
+        'educations.institution',
         'experiences',
         'documents',
         'references',
@@ -910,13 +925,30 @@ export class RegistrationService {
   async getUserRegistrations(userId: string): Promise<any[]> {
     const registrations = await this.registrationRepository.find({
       where: { userId },
-      relations: ['user', 'educations', 'experiences', 'documents', 'references', 'stageHistory'],
+      relations: ['user', 'educations', 'educations.institution', 'experiences', 'documents', 'references', 'stageHistory'],
       order: { createdAt: 'DESC' },
     });
 
     return registrations.map((registration) =>
       this.toApplicationResponse(registration),
     );
+  }
+
+  async getActiveEngineeringInstitutions(search?: string): Promise<EngineeringInstitutionEntity[]> {
+    const queryBuilder = this.engineeringInstitutionRepository
+      .createQueryBuilder('institution')
+      .where('institution.isActive = true')
+      .orderBy('institution.name', 'ASC')
+      .take(100);
+
+    if (search?.trim()) {
+      queryBuilder.andWhere(
+        '(institution.name ILIKE :search OR institution.country ILIKE :search)',
+        { search: `%${search.trim()}%` },
+      );
+    }
+
+    return queryBuilder.getMany();
   }
 
   /**

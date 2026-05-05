@@ -1,14 +1,15 @@
 import { NavLink } from "react-router";
-import { CalendarRange, CreditCard, LayoutDashboard, PanelLeft, Tags, Users } from "lucide-react";
+import { Building2, CalendarRange, CreditCard, LayoutDashboard, PanelLeft, Tags, Users } from "lucide-react";
 import { getStoredUser } from "~/utils/auth";
 
-type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories";
+type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories" | "institutions";
 
 const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: boolean }> = [
   { label: "Dashboard", icon: "dashboard", to: "/dashboard", end: true },
   { label: "Payments", icon: "payments", to: "/dashboard/applications" },
   { label: "Members", icon: "members", to: "/dashboard/members" },
   { label: "Categories", icon: "categories", to: "/dashboard/membership-categories" },
+  { label: "Institutions", icon: "institutions", to: "/dashboard/engineering-institutions" },
   { label: "Event & Training", icon: "training", to: "/dashboard/events" },
 ];
 
@@ -45,6 +46,10 @@ function sidebarIcon(name: SidebarIconName) {
 
   if (name === "categories") {
     return <Tags aria-hidden="true" />;
+  }
+
+  if (name === "institutions") {
+    return <Building2 aria-hidden="true" />;
   }
 
   return null;

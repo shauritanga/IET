@@ -11,6 +11,7 @@ import {
   ReferenceEntity,
 } from './entities';
 import { UserEntity } from '../user/entities/user.entity';
+import { EngineeringInstitutionEntity } from '../admin/entities/engineering-institution.entity';
 import { UserModule } from '../user/user.module';
 import { PaymentsModule } from '../payments/payments.module';
 
@@ -24,6 +25,7 @@ import { PaymentsModule } from '../payments/payments.module';
       DocumentEntity,
       ReferenceEntity,
       UserEntity,
+      EngineeringInstitutionEntity,
     ]),
     UserModule,
     PaymentsModule,

@@ -158,6 +158,7 @@ export interface OtherInstitution {
 
 export interface Education {
     id: string;
+    institutionId?: string | null;
     institutionName: string;
     qualification: string;
     fieldOfStudy: string;

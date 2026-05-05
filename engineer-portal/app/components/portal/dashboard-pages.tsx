@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import toast from "react-hot-toast"
 import { Link } from "react-router"
 import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
@@ -25,6 +25,16 @@ const EVENT_TYPE_FILTERS = [
 ] as const
 
 type EventPaymentMethod = "AIRTEL_MONEY" | "TIGO_PESA" | "HALOPESA" | "MPESA" | "SELCOM"
+
+type DashboardNotification = {
+    id: string
+    type: string
+    title: string
+    message: string
+    isRead: boolean
+    createdAt: string
+    actionUrl?: string | null
+}
 
 const EVENT_PAYMENT_METHOD_LABELS: Record<EventPaymentMethod, string> = {
     TIGO_PESA: "Mixx by Yas",
@@ -66,6 +76,40 @@ const iconMap = {
     users: UsersIcon,
     dollar: DollarIcon,
 } as const
+
+const fetchRecentActivity = async () => {
+    const response = await http.get<{ data: DashboardNotification[] }>("/notifications", {
+        params: { page: 1, limit: 5 },
+    })
+    return response.data.data ?? []
+}
+
+const formatActivityTime = (value?: string | null) => {
+    if (!value) return "—"
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "—"
+    return date.toLocaleDateString("en-TZ", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+    })
+}
+
+const getActivityIcon = (type: string) => {
+    switch (type) {
+        case "PAYMENT_REMINDER":
+        case "MEMBERSHIP_EXPIRY":
+            return { Icon: PaymentIcon, bg: "#FADCDC", color: "#E20C0A" }
+        case "EVENT_REMINDER":
+            return { Icon: CalendarIcon, bg: "#E8F5E9", color: "#1a6b3c" }
+        case "APPLICATION_UPDATE":
+        case "WELCOME":
+        case "EMAIL_VERIFICATION":
+            return { Icon: CheckIcon, bg: "#E8F5E9", color: "#1a6b3c" }
+        default:
+            return { Icon: FileIcon, bg: "#FFF8E1", color: "#F57F17" }
+    }
+}
 
 
 const PageHeader = ({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) => (
@@ -110,6 +154,14 @@ export const DashboardOverviewPage = () => {
     const { data, isLoading, isError } = useUpcomingEvents()
     const { data: profileData } = useGetUserProfile()
     const { data: feesData } = useMembershipFeeHistory()
+    const {
+        data: recentActivity = [],
+        isLoading: activityLoading,
+        isError: activityError,
+    } = useQuery({
+        queryKey: ["dashboard-recent-activity"],
+        queryFn: fetchRecentActivity,
+    })
     const profile = profileData?.data
 
     const upcomingEvents = useMemo(
@@ -161,43 +213,41 @@ export const DashboardOverviewPage = () => {
 
             <div className="dash-grid">
                 <div className="card">
-                    <div className="card-head"><span className="card-title">Recent Activity</span><span className="card-action">View all</span></div>
+                    <div className="card-head"><span className="card-title">Recent Activity</span></div>
                     <div className="card-body">
-                        <div className="activity-row">
-                            <div className="a-icon"><PaymentIcon width="14" height="14" /></div>
-                            <div>
-                                <div className="a-text">Annual subscription paid — <strong>TZS 150,000</strong></div>
-                                <div className="a-time">Jan 10, 2025 · M-Pesa</div>
-                            </div>
-                        </div>
-                        <div className="activity-row">
-                            <div className="a-icon" style={{ background: "#E8F5E9", color: "#1a6b3c" }}><CalendarIcon width="14" height="14" /></div>
-                            <div>
-                                <div className="a-text">Attended "Sustainable Infrastructure" Seminar — <strong>6 CPD hrs</strong></div>
-                                <div className="a-time">Dec 14, 2024 · Dar es Salaam</div>
-                            </div>
-                        </div>
-                        <div className="activity-row">
-                            <div className="a-icon" style={{ background: "#FFF8E1", color: "#F57F17" }}><FileIcon width="14" height="14" /></div>
-                            <div>
-                                <div className="a-text">Uploaded CPD Activity Record for Q4 2024</div>
-                                <div className="a-time">Dec 8, 2024</div>
-                            </div>
-                        </div>
-                        <div className="activity-row">
-                            <div className="a-icon"><CheckIcon width="14" height="14" /></div>
-                            <div>
-                                <div className="a-text">Registered for Construction Innovation Workshop</div>
-                                <div className="a-time">Nov 29, 2024</div>
-                            </div>
-                        </div>
-                        <div className="activity-row">
-                            <div className="a-icon" style={{ background: "#E8F5E9", color: "#1a6b3c" }}><UserIcon width="14" height="14" /></div>
-                            <div>
-                                <div className="a-text">Profile information updated</div>
-                                <div className="a-time">Nov 22, 2024</div>
-                            </div>
-                        </div>
+                        {activityLoading ? (
+                            <div className="py-4 text-[11.5px] text-[#7A6060]">Loading recent activity...</div>
+                        ) : activityError ? (
+                            <div className="py-4 text-[11.5px] text-[#B3261E]">Unable to load recent activity right now.</div>
+                        ) : recentActivity.length === 0 ? (
+                            <div className="py-4 text-[11.5px] text-[#7A6060]">No recent activity found.</div>
+                        ) : (
+                            recentActivity.map((activity) => {
+                                const { Icon, bg, color } = getActivityIcon(activity.type)
+                                const content = (
+                                    <div className="activity-row">
+                                        <div className="a-icon" style={{ background: bg, color }}>
+                                            <Icon width="14" height="14" />
+                                        </div>
+                                        <div>
+                                            <div className="a-text">
+                                                <strong>{activity.title}</strong>
+                                                {activity.message ? ` — ${activity.message}` : ""}
+                                            </div>
+                                            <div className="a-time">{formatActivityTime(activity.createdAt)}</div>
+                                        </div>
+                                    </div>
+                                )
+
+                                return activity.actionUrl ? (
+                                    <Link key={activity.id} to={activity.actionUrl} style={{ display: "block", textDecoration: "none" }}>
+                                        {content}
+                                    </Link>
+                                ) : (
+                                    <div key={activity.id}>{content}</div>
+                                )
+                            })
+                        )}
                     </div>
                 </div>
 

@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpStatus,
   HttpCode,
@@ -690,6 +691,19 @@ export class RegistrationController {
   // ============================================
   // GET REGISTRATION STATUS
   // ============================================
+
+  @Get('engineering-institutions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List active engineering institutions' })
+  async getEngineeringInstitutions(@Query('search') search?: string) {
+    const result =
+      await this.registrationService.getActiveEngineeringInstitutions(search);
+    return {
+      success: true,
+      data: result,
+    };
+  }
 
   @Get(':applicationId')
   @UseGuards(JwtAuthGuard)

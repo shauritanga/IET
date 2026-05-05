@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import type { RegistrationEntity } from './registration.entity';
+import { EngineeringInstitutionEntity } from '../../admin/entities/engineering-institution.entity';
 
 @Entity('registration_educations')
 @Index(['registrationId'])
@@ -18,6 +19,17 @@ export class EducationEntity extends BaseEntity {
   )
   @JoinColumn({ name: 'registrationId' })
   registration: RegistrationEntity;
+
+  @ApiProperty({
+    description: 'Selected engineering institution ID when chosen from directory',
+    required: false,
+  })
+  @Column({ type: 'uuid', nullable: true })
+  institutionId?: string | null;
+
+  @ManyToOne(() => EngineeringInstitutionEntity, { nullable: true })
+  @JoinColumn({ name: 'institutionId' })
+  institution?: EngineeringInstitutionEntity | null;
 
   @ApiProperty({
     example: 'University of Dar es Salaam',

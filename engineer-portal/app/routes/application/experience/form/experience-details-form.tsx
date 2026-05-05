@@ -8,6 +8,21 @@ import {Controller, useFormContext} from "react-hook-form";
 import type {UseFieldArrayReturn} from "react-hook-form";
 import type {ExperienceDetailsFormType} from "./manage-experience-details-form";
 import {FilePickerCard} from '~/components/custom/file-pickers/file-picker-card';
+import {useQuery} from "@tanstack/react-query";
+import http from "~/utils/http";
+
+type EngineeringInstitution = {
+    id: string;
+    name: string;
+    country: string;
+    institutionType?: string;
+    recognitionStatus?: string;
+};
+
+async function getEngineeringInstitutions() {
+    const response = await http.get<{ data: EngineeringInstitution[] }>("/registrations/engineering-institutions");
+    return response.data.data ?? [];
+}
 
 type Props = {
     educationFieldArray: UseFieldArrayReturn<ExperienceDetailsFormType, "education">;
@@ -82,12 +97,20 @@ const ExperienceDetailsForm = ({
                                    saveAndAddEducation,
                                    removeEducation,
                                    saveAndAddWorkExperience,
-                                   removeWorkExperience,
-                               }: Props) => {
-    const {register, control, formState: {errors}} = useFormContext<ExperienceDetailsFormType>();
+                               removeWorkExperience,
+                           }: Props) => {
+    const {register, control, setValue, watch, formState: {errors}} = useFormContext<ExperienceDetailsFormType>();
+    const {data: institutions = []} = useQuery({
+        queryKey: ["engineering-institutions"],
+        queryFn: getEngineeringInstitutions,
+    });
 
     const {fields: educationFields} = educationFieldArray;
     const {fields: workFields} = workExperienceFieldArray;
+    const selectedInstitutionId = watch(`education.${savedEducationCount}.institutionId`);
+    const selectedInstitutionName = watch(`education.${savedEducationCount}.institutionName`);
+    const selectedInstitutionValue = selectedInstitutionId || (selectedInstitutionName ? "OTHER" : "");
+    const isOtherInstitution = selectedInstitutionValue === "OTHER";
 
     return (
         <div className="flex flex-col gap-8">
@@ -110,18 +133,54 @@ const ExperienceDetailsForm = ({
 
                 {/* Active education form — always bound to savedEducationCount */}
                 <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Field>
+                    <Field className={isOtherInstitution ? "" : "md:col-span-2"}>
                         <FieldLabel>Institution Name</FieldLabel>
-                        <Input
-                            placeholder="Enter institution name"
-                            {...register(`education.${savedEducationCount}.institutionName`)}
-                        />
+                        <select
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={selectedInstitutionValue}
+                            onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === "OTHER") {
+                                    setValue(`education.${savedEducationCount}.institutionId`, "OTHER", {shouldDirty: true});
+                                    setValue(`education.${savedEducationCount}.institutionName`, "", {shouldDirty: true});
+                                    setValue(`education.${savedEducationCount}.country`, "", {shouldDirty: true});
+                                    return;
+                                }
+
+                                const institution = institutions.find((item) => item.id === value);
+                                setValue(`education.${savedEducationCount}.institutionId`, value, {shouldDirty: true});
+                                setValue(`education.${savedEducationCount}.institutionName`, institution?.name ?? "", {shouldDirty: true});
+                                setValue(`education.${savedEducationCount}.country`, institution?.country ?? "", {shouldDirty: true});
+                            }}
+                        >
+                            <option value="">Select institution</option>
+                            {institutions.map((institution) => (
+                                <option key={institution.id} value={institution.id}>
+                                    {institution.name} ({institution.country})
+                                </option>
+                            ))}
+                            <option value="OTHER">Other institution</option>
+                        </select>
+                        <input type="hidden" {...register(`education.${savedEducationCount}.institutionId`)} />
+                        {!isOtherInstitution && (
+                            <input type="hidden" {...register(`education.${savedEducationCount}.institutionName`)} />
+                        )}
                     </Field>
+                    {isOtherInstitution && (
+                        <Field>
+                            <FieldLabel>Other Institution Name</FieldLabel>
+                            <Input
+                                placeholder="Enter institution name"
+                                {...register(`education.${savedEducationCount}.institutionName`)}
+                            />
+                        </Field>
+                    )}
                     <Field>
                         <FieldLabel>Country</FieldLabel>
                         <Input
                             placeholder="Enter country"
                             {...register(`education.${savedEducationCount}.country`)}
+                            readOnly={!isOtherInstitution && !!selectedInstitutionId}
                         />
                     </Field>
                     <Field>

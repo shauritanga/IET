@@ -30,6 +30,7 @@ export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
       logging: configService.get<string>('NODE_ENV') === 'development',
       migrations: [__dirname + '/migrations/**/*{.ts,.js}'],
       migrationsRun: false,
+      migrationsTransactionMode: 'each',
     };
   },
 };
@@ -49,6 +50,7 @@ export const dataSourceOptions: DataSourceOptions = {
   synchronize: false, // Should be false in production
   logging: process.env.NODE_ENV === 'development',
   migrations: ['dist/database/migrations/*.js'],
+  migrationsTransactionMode: 'each',
 };
 
 // Data source instance for TypeORM CLI

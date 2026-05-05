@@ -89,6 +89,19 @@ function CategoriesIcon() {
   );
 }
 
+function InstitutionsIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 21h18" />
+      <path d="M5 21V8l7-4 7 4v13" />
+      <path d="M9 21v-6h6v6" />
+      <path d="M9 10h.01" />
+      <path d="M12 10h.01" />
+      <path d="M15 10h.01" />
+    </svg>
+  );
+}
+
 function AdminUsersIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -122,6 +135,7 @@ function navIcon(label: string) {
   if (label === "Users") return <AdminUsersIcon />;
   if (label === "Admin Users") return <AdminUsersIcon />;
   if (label === "Categories") return <CategoriesIcon />;
+  if (label === "Institutions") return <InstitutionsIcon />;
   if (label === "Profile") return <MembersIcon />;
   if (label === "Events") return <EventsIcon />;
   if (label === "Payments") return <PaymentsIcon />;

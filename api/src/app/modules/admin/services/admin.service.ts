@@ -19,6 +19,7 @@ import { EventEntity, EventRegistrationEntity } from '../../events/entities';
 import { PaymentEntity } from '../../payments/entities/payment.entity';
 import { SystemSettingEntity } from '../entities/system-setting.entity';
 import { MembershipCategoryEntity } from '../entities/membership-category.entity';
+import { EngineeringInstitutionEntity } from '../entities/engineering-institution.entity';
 import { UserService } from '../../user/services/user.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import {
@@ -35,6 +36,9 @@ import {
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
+  EngineeringInstitutionQueryDto,
+  CreateEngineeringInstitutionDto,
+  UpdateEngineeringInstitutionDto,
   RenewMemberDto,
 } from '../dto';
 import {
@@ -117,6 +121,8 @@ export class AdminService {
     private settingRepository: Repository<SystemSettingEntity>,
     @InjectRepository(MembershipCategoryEntity)
     private membershipCategoryRepository: Repository<MembershipCategoryEntity>,
+    @InjectRepository(EngineeringInstitutionEntity)
+    private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
     private userService: UserService,
     private notificationsService: NotificationsService,
   ) {}
@@ -2210,5 +2216,98 @@ export class AdminService {
     }
     await this.membershipCategoryRepository.remove(category);
     return { success: true, message: 'Category deleted successfully' };
+  }
+
+  async getEngineeringInstitutions(query: EngineeringInstitutionQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.engineeringInstitutionRepository
+      .createQueryBuilder('institution')
+      .orderBy('institution.name', 'ASC')
+      .skip(skip)
+      .take(limit);
+
+    if (query.activeOnly) {
+      queryBuilder.andWhere('institution.isActive = true');
+    }
+
+    if (query.search) {
+      queryBuilder.andWhere(
+        '(institution.name ILIKE :search OR institution.country ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    const [institutions, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      success: true,
+      data: institutions,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      },
+    };
+  }
+
+  async createEngineeringInstitution(dto: CreateEngineeringInstitutionDto) {
+    const existing = await this.engineeringInstitutionRepository.findOne({
+      where: { name: dto.name },
+    });
+    if (existing) {
+      throw new BadRequestException(`Institution "${dto.name}" already exists`);
+    }
+
+    const institution = this.engineeringInstitutionRepository.create({
+      name: dto.name,
+      country: dto.country || 'Tanzania',
+      institutionType: dto.institutionType || 'UNIVERSITY',
+      recognitionStatus: dto.recognitionStatus || 'RECOGNIZED',
+      isActive: dto.isActive ?? true,
+      notes: dto.notes ?? null,
+    });
+    const saved = await this.engineeringInstitutionRepository.save(institution);
+    return { success: true, data: saved };
+  }
+
+  async updateEngineeringInstitution(id: string, dto: UpdateEngineeringInstitutionDto) {
+    const institution = await this.engineeringInstitutionRepository.findOne({
+      where: { id },
+    });
+    if (!institution) {
+      throw new NotFoundException('Engineering institution not found');
+    }
+
+    if (dto.name && dto.name !== institution.name) {
+      const existing = await this.engineeringInstitutionRepository.findOne({
+        where: { name: dto.name },
+      });
+      if (existing) {
+        throw new BadRequestException(`Institution "${dto.name}" already exists`);
+      }
+    }
+
+    Object.assign(institution, dto);
+    const saved = await this.engineeringInstitutionRepository.save(institution);
+    return { success: true, data: saved };
+  }
+
+  async deleteEngineeringInstitution(id: string) {
+    const institution = await this.engineeringInstitutionRepository.findOne({
+      where: { id },
+    });
+    if (!institution) {
+      throw new NotFoundException('Engineering institution not found');
+    }
+
+    institution.isActive = false;
+    await this.engineeringInstitutionRepository.save(institution);
+    return { success: true, message: 'Institution disabled successfully' };
   }
 }
