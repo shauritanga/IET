@@ -47,6 +47,8 @@ import {
   PaymentStatus,
   FeeStatus,
   UserRole,
+  NotificationType,
+  DocumentStatus,
 } from '../../../common/enums';
 
 type LegacyMemberImportResult = {
@@ -118,6 +120,92 @@ export class AdminService {
     private userService: UserService,
     private notificationsService: NotificationsService,
   ) {}
+
+  private getFileNameFromUrl(url: string, fallback: string): string {
+    try {
+      const pathname = new URL(url).pathname;
+      const fileName = pathname.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    } catch {
+      const fileName = url.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    }
+  }
+
+  private buildUnifiedApplicationDocuments(registration: RegistrationEntity) {
+    const documents: any[] = (registration.documents ?? []).map((document) => ({
+      id: document.id,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      fileSize: document.fileSize,
+      mimeType: document.mimeType,
+      description: document.description ?? null,
+      status: document.status,
+      uploadedAt: document.createdAt,
+      verifiedAt: document.verifiedAt ?? null,
+      source: 'registration_documents',
+    }));
+
+    if (registration.supportingDocumentUrl) {
+      documents.push({
+        id: `${registration.id}:supporting-document`,
+        documentType: 'STATUTORY_BOARD',
+        fileName: this.getFileNameFromUrl(
+          registration.supportingDocumentUrl,
+          'Supporting document',
+        ),
+        fileUrl: registration.supportingDocumentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Statutory board supporting document',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'supportingDocumentUrl',
+      });
+    }
+
+    if (registration.cvAttachment) {
+      documents.push({
+        id: `${registration.id}:cv`,
+        documentType: 'CV',
+        fileName: this.getFileNameFromUrl(registration.cvAttachment, 'CV'),
+        fileUrl: registration.cvAttachment,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Curriculum vitae',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'cvAttachment',
+      });
+    }
+
+    for (const education of registration.educations ?? []) {
+      if (!education.attachmentUrl) continue;
+      documents.push({
+        id: `${education.id}:education-attachment`,
+        documentType: 'EDUCATION_CERTIFICATE',
+        fileName: this.getFileNameFromUrl(
+          education.attachmentUrl,
+          `${education.qualification || education.institutionName || 'Education'} certificate`,
+        ),
+        fileUrl: education.attachmentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: education.institutionName
+          ? `Education certificate - ${education.institutionName}`
+          : 'Education certificate',
+        status: DocumentStatus.PENDING,
+        uploadedAt: education.updatedAt,
+        verifiedAt: null,
+        source: 'education.attachmentUrl',
+      });
+    }
+
+    return documents;
+  }
 
   private assertSuperAdmin(user: Pick<UserEntity, 'role'>): void {
     if (user.role !== UserRole.SUPER_ADMIN) {
@@ -598,8 +686,10 @@ export class AdminService {
             submittedAt: registration.submittedAt,
             educations: registration.educations,
             experiences: registration.experiences,
-            documents: registration.documents,
+            documents: this.buildUnifiedApplicationDocuments(registration),
             references: registration.references,
+            supportingDocumentUrl: registration.supportingDocumentUrl,
+            cvAttachment: registration.cvAttachment,
           }
         : null,
       paymentHistory: payments,
@@ -726,9 +816,11 @@ export class AdminService {
       engineeringDiscipline: registration.engineeringDiscipline,
       reviewComments: registration.reviewComments,
       rejectionReason: registration.rejectionReason,
+      supportingDocumentUrl: registration.supportingDocumentUrl,
+      cvAttachment: registration.cvAttachment,
       educations: registration.educations,
       experiences: registration.experiences,
-      documents: registration.documents,
+      documents: this.buildUnifiedApplicationDocuments(registration),
       references: registration.references,
       stageHistory: registration.stageHistory,
     };
@@ -773,14 +865,31 @@ export class AdminService {
     let newStage: ApplicationReviewStage = currentStage;
     let membershipId: string | undefined;
     const now = new Date();
+    const comments = dto.comments?.trim();
+    const requiresComments = [
+      'EVALUATOR_RECOMMEND',
+      'MPDC_RECOMMEND',
+      'COUNCIL_RECOMMEND',
+      'REJECT',
+      'RETURN_FOR_CHANGES',
+    ].includes(dto.action);
+    if (requiresComments && !comments) {
+      throw new BadRequestException('Comments or reason are required for this action');
+    }
+
+    let historyAction:
+      | 'ASSIGNED'
+      | 'ADVANCED'
+      | 'EVALUATOR_RECOMMENDED'
+      | 'MPDC_RECOMMENDED'
+      | 'COUNCIL_RECOMMENDED'
+      | 'APPROVED_BY_COUNCIL'
+      | 'RETURNED_FOR_CHANGES'
+      | 'REJECTED'
+      | 'NOTICE_SENT' = 'ADVANCED';
 
     switch (dto.action) {
       case 'ASSIGN_EVALUATOR':
-        if (currentStage !== ApplicationReviewStage.SECRETARIAT_REVIEW) {
-          throw new BadRequestException(
-            'Evaluators can only be assigned during secretariat review',
-          );
-        }
         if (!dto.evaluatorId) {
           throw new BadRequestException(
             'Evaluator ID is required when assigning an evaluator',
@@ -788,51 +897,29 @@ export class AdminService {
         }
         await this.assertAssignableEvaluator(dto.evaluatorId);
         newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
-        registration.reviewStage = newStage;
         registration.assignedEvaluatorId = dto.evaluatorId;
         registration.assignedAt = now;
-        registration.reviewComments = dto.comments;
-        registration.stageUpdatedAt = now;
-        registration.updatedBy = actor.id;
-        await this.registrationRepository.save(registration);
-        await this.recordStageHistory(registration, {
-          fromStage: currentStage,
-          toStage: newStage,
-          action: 'ASSIGNED',
-          actedByUserId: actor.id,
-          comments: dto.comments,
-          assignedEvaluatorId: dto.evaluatorId,
-        });
+        historyAction = 'ASSIGNED';
         break;
-      case 'ADVANCE_TO_MPDC':
+      case 'EVALUATOR_RECOMMEND':
+        newStage = ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION;
+        historyAction = 'EVALUATOR_RECOMMENDED';
+        break;
+      case 'SECRETARIAT_ADVANCE_TO_MPDC':
         newStage = ApplicationReviewStage.MPDC_REVIEW;
-        registration.reviewComments = dto.comments;
-        registration.stageUpdatedAt = now;
-        registration.reviewStage = newStage;
-        registration.updatedBy = actor.id;
-        await this.registrationRepository.save(registration);
-        await this.recordStageHistory(registration, {
-          fromStage: currentStage,
-          toStage: newStage,
-          action: 'ADVANCED',
-          actedByUserId: actor.id,
-          comments: dto.comments,
-        });
+        historyAction = 'ADVANCED';
         break;
-      case 'ADVANCE_TO_COUNCIL':
+      case 'MPDC_RECOMMEND':
+        newStage = ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION;
+        historyAction = 'MPDC_RECOMMENDED';
+        break;
+      case 'SECRETARIAT_ADVANCE_TO_COUNCIL':
         newStage = ApplicationReviewStage.COUNCIL_REVIEW;
-        registration.reviewComments = dto.comments;
-        registration.stageUpdatedAt = now;
-        registration.reviewStage = newStage;
-        registration.updatedBy = actor.id;
-        await this.registrationRepository.save(registration);
-        await this.recordStageHistory(registration, {
-          fromStage: currentStage,
-          toStage: newStage,
-          action: 'ADVANCED',
-          actedByUserId: actor.id,
-          comments: dto.comments,
-        });
+        historyAction = 'ADVANCED';
+        break;
+      case 'COUNCIL_RECOMMEND':
+        newStage = ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION;
+        historyAction = 'COUNCIL_RECOMMENDED';
         break;
       case 'APPROVE':
         if (!dto.membershipClass) {
@@ -860,18 +947,18 @@ export class AdminService {
         );
         registration.councilApprovedAt = now;
         registration.approvalNoticeSentAt = now;
-        registration.reviewComments = dto.comments;
-        registration.reviewStage = newStage;
-        registration.stageUpdatedAt = now;
+        historyAction = 'APPROVED_BY_COUNCIL';
         break;
 
       case 'REJECT':
         newStatus = ApplicationStatus.REJECTED;
-        registration.rejectionReason = dto.comments;
+        registration.rejectionReason = comments;
+        historyAction = 'REJECTED';
         break;
 
       case 'RETURN_FOR_CHANGES':
         newStatus = ApplicationStatus.CHANGES_REQUESTED;
+        historyAction = 'RETURNED_FOR_CHANGES';
         break;
 
       default:
@@ -882,11 +969,19 @@ export class AdminService {
     registration.reviewStage = newStage;
     registration.reviewedBy = actor.id;
     registration.reviewedAt = now;
-    registration.reviewComments = dto.comments;
+    registration.reviewComments = comments;
     registration.updatedBy = actor.id;
     registration.stageUpdatedAt = now;
 
     await this.registrationRepository.save(registration);
+    await this.recordStageHistory(registration, {
+      fromStage: currentStage,
+      toStage: newStage,
+      action: historyAction,
+      actedByUserId: actor.id,
+      comments,
+      assignedEvaluatorId: dto.action === 'ASSIGN_EVALUATOR' ? dto.evaluatorId : undefined,
+    });
 
     this.logger.log(
       `Application ${applicationId} action ${dto.action} processed by admin ${actor.id}`,
@@ -894,18 +989,11 @@ export class AdminService {
 
     if (dto.action === 'APPROVE') {
       await this.recordStageHistory(registration, {
-        fromStage: currentStage,
-        toStage: ApplicationReviewStage.COUNCIL_REVIEW,
-        action: 'APPROVED_BY_COUNCIL',
-        actedByUserId: actor.id,
-        comments: dto.comments,
-      });
-      await this.recordStageHistory(registration, {
-        fromStage: ApplicationReviewStage.COUNCIL_REVIEW,
+        fromStage: newStage,
         toStage: ApplicationReviewStage.APPROVAL_NOTICE_SENT,
         action: 'NOTICE_SENT',
         actedByUserId: actor.id,
-        comments: dto.comments,
+        comments,
       });
       await this.notificationsService.sendApplicationStatusNotification(
         registration.userId,
@@ -916,35 +1004,23 @@ export class AdminService {
         },
       );
     } else if (dto.action === 'REJECT') {
-      await this.recordStageHistory(registration, {
-        fromStage: currentStage,
-        toStage: currentStage,
-        action: 'REJECTED',
-        actedByUserId: actor.id,
-        comments: dto.comments,
-      });
       await this.notificationsService.sendApplicationStatusNotification(
         registration.userId,
         'REJECTED',
         {
-          reason: dto.comments,
+          reason: comments,
         },
       );
     } else if (dto.action === 'RETURN_FOR_CHANGES') {
-      await this.recordStageHistory(registration, {
-        fromStage: currentStage,
-        toStage: currentStage,
-        action: 'RETURNED_FOR_CHANGES',
-        actedByUserId: actor.id,
-        comments: dto.comments,
-      });
       await this.notificationsService.sendApplicationStatusNotification(
         registration.userId,
         'CHANGES_REQUESTED',
         {
-          reason: dto.comments,
+          reason: comments,
         },
       );
+    } else {
+      await this.sendInternalWorkflowNotification(registration, dto.action, actor);
     }
 
     return {
@@ -1154,8 +1230,8 @@ export class AdminService {
 
     switch (actor.role) {
       case UserRole.SECRETARIAT:
-        queryBuilder.andWhere('reg.reviewStage = :actorStage', {
-          actorStage: ApplicationReviewStage.SECRETARIAT_REVIEW,
+        queryBuilder.andWhere('reg.reviewStage IN (:...actorStages)', {
+          actorStages: this.getSecretariatStages(),
         });
         break;
       case UserRole.EVALUATOR:
@@ -1192,7 +1268,8 @@ export class AdminService {
     const stage = registration.reviewStage;
     const allowed =
       (actor.role === UserRole.SECRETARIAT &&
-        stage === ApplicationReviewStage.SECRETARIAT_REVIEW) ||
+        !!stage &&
+        this.getSecretariatStages().includes(stage)) ||
       ((actor.role === UserRole.EVALUATOR || actor.role === UserRole.REVIEWER) &&
         stage === ApplicationReviewStage.EVALUATOR_REVIEW &&
         registration.assignedEvaluatorId === actor.id) ||
@@ -1209,9 +1286,20 @@ export class AdminService {
   private assertCanPerformStageAction(
     actor: UserEntity,
     registration: RegistrationEntity,
-    _action: UpdateApplicationStageDto['action'],
+    action: UpdateApplicationStageDto['action'],
   ): void {
     this.assertCanViewApplication(actor, registration);
+    const secretariatActions: UpdateApplicationStageDto['action'][] = [
+      'ASSIGN_EVALUATOR',
+      'SECRETARIAT_ADVANCE_TO_MPDC',
+      'SECRETARIAT_ADVANCE_TO_COUNCIL',
+      'APPROVE',
+      'REJECT',
+      'RETURN_FOR_CHANGES',
+    ];
+    if (secretariatActions.includes(action) && !this.isFullWorkflowAdmin(actor.role) && actor.role !== UserRole.SECRETARIAT) {
+      throw new ForbiddenException('Only Secretariat can perform this workflow action');
+    }
   }
 
   private async assertAssignableEvaluator(evaluatorId: string): Promise<void> {
@@ -1230,6 +1318,10 @@ export class AdminService {
   private getQueueOwnerRole(stage?: ApplicationReviewStage | null): string | null {
     switch (stage) {
       case ApplicationReviewStage.SECRETARIAT_REVIEW:
+        return 'SECRETARIAT';
+      case ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION:
+      case ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION:
+      case ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION:
         return 'SECRETARIAT';
       case ApplicationReviewStage.EVALUATOR_REVIEW:
         return 'EVALUATOR';
@@ -1254,16 +1346,25 @@ export class AdminService {
         'REJECT',
       ],
       [ApplicationReviewStage.EVALUATOR_REVIEW]: [
-        'ADVANCE_TO_MPDC',
+        'EVALUATOR_RECOMMEND',
+      ],
+      [ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION]: [
+        'SECRETARIAT_ADVANCE_TO_MPDC',
         'RETURN_FOR_CHANGES',
         'REJECT',
       ],
       [ApplicationReviewStage.MPDC_REVIEW]: [
-        'ADVANCE_TO_COUNCIL',
+        'MPDC_RECOMMEND',
+      ],
+      [ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION]: [
+        'SECRETARIAT_ADVANCE_TO_COUNCIL',
         'RETURN_FOR_CHANGES',
         'REJECT',
       ],
       [ApplicationReviewStage.COUNCIL_REVIEW]: [
+        'COUNCIL_RECOMMEND',
+      ],
+      [ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION]: [
         'APPROVE',
         'RETURN_FOR_CHANGES',
         'REJECT',
@@ -1276,6 +1377,15 @@ export class AdminService {
         `Action ${action} is not allowed while the application is in ${stage}`,
       );
     }
+  }
+
+  private getSecretariatStages(): ApplicationReviewStage[] {
+    return [
+      ApplicationReviewStage.SECRETARIAT_REVIEW,
+      ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION,
+      ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION,
+      ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION,
+    ];
   }
 
   async listPayments(query: {
@@ -1953,6 +2063,57 @@ export class AdminService {
     const endDate = new Date(year, settings.endMonth - 1, settings.endDay);
     endDate.setHours(23, 59, 59, 999);
     return endDate;
+  }
+
+  private async sendInternalWorkflowNotification(
+    registration: RegistrationEntity,
+    action: UpdateApplicationStageDto['action'],
+    actor: UserEntity,
+  ): Promise<void> {
+    const reference = registration.referenceNumber ?? registration.id;
+
+    if (action === 'ASSIGN_EVALUATOR' && registration.assignedEvaluatorId) {
+      await this.notificationsService.createNotification(
+        registration.assignedEvaluatorId,
+        NotificationType.APPLICATION_UPDATE,
+        'Application Assigned',
+        `Application ${reference} has been assigned to you for evaluator review.`,
+        {
+          actionUrl: `/dashboard/applications/${registration.id}`,
+          data: { applicationId: registration.id, action, assignedBy: actor.id },
+        },
+      );
+      return;
+    }
+
+    const queueRoleByAction: Partial<Record<UpdateApplicationStageDto['action'], UserRole>> = {
+      SECRETARIAT_ADVANCE_TO_MPDC: UserRole.MPDC,
+      SECRETARIAT_ADVANCE_TO_COUNCIL: UserRole.COUNCIL,
+      EVALUATOR_RECOMMEND: UserRole.SECRETARIAT,
+      MPDC_RECOMMEND: UserRole.SECRETARIAT,
+      COUNCIL_RECOMMEND: UserRole.SECRETARIAT,
+    };
+    const queueRole = queueRoleByAction[action];
+    if (!queueRole) return;
+
+    const users = await this.userRepository.find({
+      where: { role: queueRole, isActive: true },
+    });
+
+    await Promise.all(
+      users.map((user) =>
+        this.notificationsService.createNotification(
+          user.id,
+          NotificationType.APPLICATION_UPDATE,
+          'Application Workflow Update',
+          `Application ${reference} is now waiting for ${queueRole} action.`,
+          {
+            actionUrl: `/dashboard/applications/${registration.id}`,
+            data: { applicationId: registration.id, action, actedBy: actor.id },
+          },
+        ),
+      ),
+    );
   }
 
   private async recordStageHistory(

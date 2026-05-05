@@ -41,10 +41,16 @@ export const getReviewStageLabel = (stage: ReviewStage) => {
             return "Reviewed by Secretariat";
         case "EVALUATOR_REVIEW":
             return "Assigned to Evaluator";
+        case "SECRETARIAT_EVALUATOR_RECOMMENDATION":
+            return "Secretariat Recommendation";
         case "MPDC_REVIEW":
             return "Reviewed by MPDC";
+        case "SECRETARIAT_MPDC_RECOMMENDATION":
+            return "Secretariat MPDC Recommendation";
         case "COUNCIL_REVIEW":
             return "Awaiting Council Approval";
+        case "SECRETARIAT_COUNCIL_RECOMMENDATION":
+            return "Secretariat Council Recommendation";
         case "APPROVAL_NOTICE_SENT":
             return "Approval Note Sent";
         default:

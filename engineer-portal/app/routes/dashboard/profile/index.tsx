@@ -1,16 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "react-router"
 import toast from "react-hot-toast"
 import http from "~/utils/http"
 import { useGetUserProfile } from "~/routes/dashboard/profile/repositories/handle-get-user-profile"
 import { useUpdateUserProfile } from "~/routes/dashboard/profile/repositories/handle-update-user-profile"
-
-const profileDocumentItems = [
-    { label: "Membership Certificate", action: "Download" },
-    { label: "CPD Record 2024", action: "Download" },
-    { label: "Good Standing Letter", action: "Request" },
-    { label: "Tax Invoice 2025", action: "Download" },
-]
 
 function getInitials(firstName?: string, lastName?: string): string {
     const f = firstName?.[0]?.toUpperCase() ?? ""
@@ -21,6 +15,31 @@ function getInitials(firstName?: string, lastName?: string): string {
 function formatDate(dateStr?: string | null): string {
     if (!dateStr) return "—"
     return new Date(dateStr).toLocaleDateString("en-TZ", { day: "numeric", month: "short", year: "numeric" })
+}
+
+function formatLabel(value?: string | null): string {
+    if (!value) return "—"
+    return value
+        .toLowerCase()
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
+}
+
+function getApplicationAction(status?: string | null) {
+    if (status === "DRAFT" || status === "CHANGES_REQUESTED") {
+        return { label: "Continue Application", to: "/application/personal-details" }
+    }
+    if (status === "REJECTED") {
+        return { label: "Start New Application", to: "/application/personal-details" }
+    }
+    return null
+}
+
+function getStatusBadgeClass(status?: string | null) {
+    if (status === "REJECTED") return "badge b-red"
+    if (status === "APPROVED") return "badge b-green"
+    return "badge b-yellow"
 }
 
 const Profile = () => {
@@ -79,7 +98,13 @@ const Profile = () => {
 
     const initials = getInitials(profile?.firstName, profile?.lastName)
     const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : ""
-    const membershipLabel = profile?.membershipClass ?? "Member"
+    const latestApplication = profile?.latestApplication
+    const currentExperience = latestApplication?.experiences?.find((experience) => experience.isCurrent)
+    const displayDiscipline = profile?.engineeringDiscipline || latestApplication?.engineeringDiscipline || ""
+    const displayLocation = profile?.location || currentExperience?.location || latestApplication?.educations?.find((education) => education.location)?.location || ""
+    const displayEmployer = profile?.employer || currentExperience?.employerName || ""
+    const membershipLabel = profile?.membershipClass ?? latestApplication?.appliedMembershipClass ?? "Member"
+    const applicationAction = getApplicationAction(latestApplication?.status)
 
     const statusBadgeClass = profile?.isMembershipExpired ? "badge b-red" : "badge b-green"
     const statusLabel = profile?.membershipStatus ?? "—"
@@ -114,17 +139,17 @@ const Profile = () => {
                     )}
                     <div className="p-role">{membershipLabel} · Institution of Engineers Tanzania</div>
                     <div className="p-chips">
-                        {profile?.engineeringDiscipline && (
-                            <span className="p-chip red">{profile.engineeringDiscipline}</span>
+                        {displayDiscipline && (
+                            <span className="p-chip red">{displayDiscipline}</span>
                         )}
-                        {profile?.membershipClass && (
-                            <span className="p-chip red">{profile.membershipClass}</span>
+                        {membershipLabel && (
+                            <span className="p-chip red">{membershipLabel}</span>
                         )}
                         {profile?.membershipId && (
                             <span className="p-chip">{profile.membershipId}</span>
                         )}
-                        {profile?.location && (
-                            <span className="p-chip">{profile.location}</span>
+                        {displayLocation && (
+                            <span className="p-chip">{displayLocation}</span>
                         )}
                     </div>
                 </div>
@@ -195,6 +220,7 @@ const Profile = () => {
                             <input
                                 className="form-input"
                                 value={location}
+                                placeholder={displayLocation || undefined}
                                 onChange={(e) => setLocation(e.target.value)}
                                 disabled={isPending}
                             />
@@ -204,6 +230,7 @@ const Profile = () => {
                             <input
                                 className="form-input"
                                 value={employer}
+                                placeholder={displayEmployer || undefined}
                                 onChange={(e) => setEmployer(e.target.value)}
                                 disabled={isPending}
                             />
@@ -213,6 +240,7 @@ const Profile = () => {
                             <input
                                 className="form-input"
                                 value={discipline}
+                                placeholder={displayDiscipline || undefined}
                                 onChange={(e) => setDiscipline(e.target.value)}
                                 disabled={isPending}
                             />
@@ -228,7 +256,7 @@ const Profile = () => {
                                 <tbody>
                                     <tr>
                                         <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Grade</td>
-                                        <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.membershipClass ?? "—"}</td>
+                                        <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{membershipLabel || "—"}</td>
                                     </tr>
                                     <tr>
                                         <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Member No.</td>
@@ -236,7 +264,7 @@ const Profile = () => {
                                     </tr>
                                     <tr>
                                         <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Discipline</td>
-                                        <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{profile?.engineeringDiscipline ?? "—"}</td>
+                                        <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{displayDiscipline || "—"}</td>
                                     </tr>
                                     <tr>
                                         <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Status</td>
@@ -258,15 +286,76 @@ const Profile = () => {
                     </div>
 
                     <div className="card">
-                        <div className="card-head"><span className="card-title">Documents</span></div>
+                        <div className="card-head"><span className="card-title">Application Profile</span></div>
+                        <div className="card-body" style={{ padding: 0 }}>
+                            {latestApplication ? (
+                                <table>
+                                    <tbody>
+                                        <tr>
+                                            <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Reference</td>
+                                            <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{latestApplication.referenceNumber ?? "Pending"}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Application Status</td>
+                                            <td style={{ padding: "10px 15px" }}>
+                                                <span className={getStatusBadgeClass(latestApplication.status)}>{formatLabel(latestApplication.status)}</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Review Stage</td>
+                                            <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{formatLabel(latestApplication.reviewStage)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Submitted</td>
+                                            <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{formatDate(latestApplication.submittedAt)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style={{ color: "var(--iet-muted)", fontSize: 11.5, padding: "10px 15px" }}>Payment</td>
+                                            <td style={{ fontSize: 12, fontWeight: 600, padding: "10px 15px" }}>{latestApplication.paymentCompleted ? "Completed" : "Pending"}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div style={{ color: "var(--iet-muted)", fontSize: 12 }}>No membership application has been started yet.</div>
+                            )}
+                            {latestApplication?.reviewComments && (
+                                <div style={{ margin: 15, padding: 12, border: "1px solid var(--iet-border)", borderRadius: 8, color: "var(--iet-muted)", fontSize: 12 }}>
+                                    {latestApplication.reviewComments}
+                                </div>
+                            )}
+                            {latestApplication?.rejectionReason && (
+                                <div style={{ margin: 15, padding: 12, border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, color: "var(--iet-red-dark)", fontSize: 12 }}>
+                                    {latestApplication.rejectionReason}
+                                </div>
+                            )}
+                            {applicationAction && (
+                                <div style={{ padding: "0 15px 15px" }}>
+                                    <Link className="btn btn-outline btn-sm" to={applicationAction.to}>{applicationAction.label}</Link>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div className="card-head"><span className="card-title">Application Documents</span></div>
                         <div className="card-body">
                             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                {profileDocumentItems.map((item) => (
-                                    <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                        <span style={{ fontSize: 12 }}>📄 {item.label}</span>
-                                        <span className="card-action">{item.action}</span>
+                                {(latestApplication?.documents?.length ?? 0) > 0 ? latestApplication?.documents.map((item) => (
+                                    <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 700 }}>{formatLabel(item.documentType)}</div>
+                                            <div style={{ color: "var(--iet-muted)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {item.fileName}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                                            <span className={getStatusBadgeClass(item.status)}>{formatLabel(item.status)}</span>
+                                            <a className="card-action" href={item.fileUrl} target="_blank" rel="noreferrer">View</a>
+                                        </div>
                                     </div>
-                                ))}
+                                )) : (
+                                    <div style={{ color: "var(--iet-muted)", fontSize: 12 }}>No application documents found.</div>
+                                )}
                             </div>
                         </div>
                     </div>

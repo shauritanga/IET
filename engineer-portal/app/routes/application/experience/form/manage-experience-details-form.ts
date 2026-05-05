@@ -84,7 +84,7 @@ export const useManageExperienceForm = () => {
                 startDate: item.startDate ?? "",
                 endDate: item.endDate ?? "",
                 courseName: item.qualification ?? "",
-                attachment: undefined,
+                attachment: item.attachmentUrl ?? item.attachment ?? undefined,
             }))
             : [{ ...defaultEducation }];
 
@@ -109,7 +109,7 @@ export const useManageExperienceForm = () => {
                 ...workExperience,
                 { ...defaultWorkExperience },
             ],
-            cvAttachment: undefined,
+            cvAttachment: registration.cvAttachment ?? undefined,
         });
     }, [draft, form, setSavedEducationCount, setSavedWorkCount]);
 

@@ -137,24 +137,51 @@ function StatusPill({ status }: { status?: string | null }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, compact = false }: { title: string; children: React.ReactNode; compact?: boolean }) {
   return (
-    <section style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+    <section style={{ borderTop: "1px solid var(--border)", paddingTop: compact ? 14 : 18 }}>
       <h2 style={{ fontSize: 13, fontWeight: 800, color: "var(--red-dark)", marginBottom: 12 }}>{title}</h2>
       {children}
     </section>
   );
 }
 
-function DetailGrid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
+function DetailRows({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {rows.map(([label, value]) => (
-        <div key={label} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--white)" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+        <div
+          key={label}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "140px minmax(0,1fr)",
+            gap: 12,
+            padding: "9px 0",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 750, color: "var(--muted)" }}>{label}</div>
           <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--text)", overflowWrap: "anywhere" }}>{value}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 750, color: "var(--text)", overflowWrap: "anywhere" }}>{value}</div>
+    </div>
+  );
+}
+
+function InlineMetric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: "var(--text)", fontWeight: 800 }}>{value}</span>
     </div>
   );
 }
@@ -213,84 +240,115 @@ export default function MemberDetailsPage() {
         <span>{name}</span>
       </nav>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
-          <div style={{ width: 54, height: 54, borderRadius: "50%", background: "linear-gradient(135deg,var(--red-dark),var(--red))", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
-            {member.personalDetails.profilePhotoUrl ? (
-              <img src={member.personalDetails.profilePhotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : initials(member)}
+      <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", padding: "20px 22px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 15, minWidth: 0 }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,var(--red-dark),var(--red))", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+              {member.personalDetails.profilePhotoUrl ? (
+                <img src={member.personalDetails.profilePhotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : initials(member)}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: 20, fontWeight: 900, color: "var(--red-dark)", margin: 0, lineHeight: 1.15 }}>{name}</h1>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "monospace" }}>{member.membershipId ?? "No membership number"}</span>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--border)" }} />
+                <span style={{ fontSize: 12, color: "var(--text)", fontWeight: 750 }}>{membershipClass ? CLASS_LABELS[membershipClass] ?? membershipClass : "No grade"}</span>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--border)" }} />
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>{member.membershipDetails.engineeringDiscipline ?? "No discipline"}</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 900, color: "var(--red-dark)", margin: 0 }}>{name}</h1>
-            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              {member.membershipId ?? "No membership number"} · {membershipClass ? CLASS_LABELS[membershipClass] ?? membershipClass : "No grade"}
-            </p>
-          </div>
+          <StatusPill status={member.membershipDetails.status} />
         </div>
-        <StatusPill status={member.membershipDetails.status} />
-      </div>
 
-      <Section title="Personal Details">
-        <DetailGrid rows={[
-          ["Email", valueOrDash(member.personalDetails.email)],
-          ["Phone", valueOrDash(member.personalDetails.phoneNumber)],
-          ["Gender", valueOrDash(member.personalDetails.gender)],
-          ["Date of Birth", formatDate(member.personalDetails.dateOfBirth)],
-          ["Nationality", valueOrDash(member.personalDetails.nationality)],
-          ["Employer", valueOrDash(member.personalDetails.employer)],
-          ["Position", valueOrDash(member.personalDetails.position)],
-          ["Location", valueOrDash(member.personalDetails.location)],
-        ]} />
-      </Section>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16, padding: "16px 22px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+          <SummaryItem label="Email" value={valueOrDash(member.personalDetails.email)} />
+          <SummaryItem label="Phone" value={valueOrDash(member.personalDetails.phoneNumber)} />
+          <SummaryItem label="Expiry Date" value={formatDate(member.membershipDetails.expiryDate)} />
+          <SummaryItem label="Account Active" value={valueOrDash(member.accountInfo.isActive)} />
+        </div>
 
-      <Section title="Membership Details">
-        <DetailGrid rows={[
-          ["Membership No.", valueOrDash(member.membershipId)],
-          ["Grade", membershipClass ? CLASS_LABELS[membershipClass] ?? membershipClass : "—"],
-          ["Discipline", valueOrDash(member.membershipDetails.engineeringDiscipline)],
-          ["Joining Date", formatDate(member.membershipDetails.joiningDate)],
-          ["Expiry Date", formatDate(member.membershipDetails.expiryDate)],
-          ["Annual Fee", formatMoney(member.membershipDetails.annualFee)],
-          ["Account Active", valueOrDash(member.accountInfo.isActive)],
-          ["Email Verified", valueOrDash(member.accountInfo.emailVerified)],
-        ]} />
-      </Section>
+        <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 28 }}>
+            <Section title="Personal Information" compact>
+              <DetailRows rows={[
+                ["Email", valueOrDash(member.personalDetails.email)],
+                ["Phone", valueOrDash(member.personalDetails.phoneNumber)],
+                ["Gender", valueOrDash(member.personalDetails.gender)],
+                ["Date of Birth", formatDate(member.personalDetails.dateOfBirth)],
+                ["Nationality", valueOrDash(member.personalDetails.nationality)],
+                ["Employer", valueOrDash(member.personalDetails.employer)],
+                ["Position", valueOrDash(member.personalDetails.position)],
+                ["Location", valueOrDash(member.personalDetails.location)],
+              ]} />
+            </Section>
 
-      <Section title="Fee History">
-        {member.feeHistory.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--muted)" }}>No membership fee records found.</p>
-        ) : (
-          <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 12 }}>
-            <table className="table-proto min-w-full border-separate border-spacing-0">
-              <thead><tr>{["Year", "Amount", "Status", "Due Date", "Paid At"].map((h) => <th key={h}>{h}</th>)}</tr></thead>
-              <tbody>
-                {member.feeHistory.map((fee) => (
-                  <tr key={fee.id}>
-                    <td>{fee.year}</td>
-                    <td>{formatMoney(fee.amount, fee.currency ?? "TZS")}</td>
-                    <td><StatusPill status={fee.status} /></td>
-                    <td>{formatDate(fee.dueDate)}</td>
-                    <td>{formatDate(fee.paidAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Section title="Membership and Account" compact>
+              <DetailRows rows={[
+                ["Membership No.", valueOrDash(member.membershipId)],
+                ["Grade", membershipClass ? CLASS_LABELS[membershipClass] ?? membershipClass : "—"],
+                ["Discipline", valueOrDash(member.membershipDetails.engineeringDiscipline)],
+                ["Joining Date", formatDate(member.membershipDetails.joiningDate)],
+                ["Expiry Date", formatDate(member.membershipDetails.expiryDate)],
+                ["Annual Fee", formatMoney(member.membershipDetails.annualFee)],
+                ["Email Verified", valueOrDash(member.accountInfo.emailVerified)],
+                ["2FA Enabled", valueOrDash(member.accountInfo.enable2FA)],
+              ]} />
+            </Section>
           </div>
-        )}
-      </Section>
 
-      <Section title="Registration and Activity">
-        <DetailGrid rows={[
-          ["Application Ref.", valueOrDash(member.registration?.referenceNumber)],
-          ["Application Status", valueOrDash(member.registration?.status)],
-          ["Submitted At", formatDate(member.registration?.submittedAt)],
-          ["Education Records", member.registration?.educations?.length ?? 0],
-          ["Experience Records", member.registration?.experiences?.length ?? 0],
-          ["Documents", member.registration?.documents?.length ?? 0],
-          ["Recent Payments", member.paymentHistory.length],
-          ["Event Registrations", member.eventParticipation.length],
-        ]} />
-      </Section>
+          <Section title="Fee History">
+            {member.feeHistory.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--muted)" }}>No membership fee records found.</p>
+            ) : (
+              <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 12 }}>
+                <table className="table-proto min-w-full border-separate border-spacing-0">
+                  <thead><tr>{["Year", "Amount", "Status", "Due Date", "Paid At"].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {member.feeHistory.map((fee) => (
+                      <tr key={fee.id}>
+                        <td>{fee.year}</td>
+                        <td>{formatMoney(fee.amount, fee.currency ?? "TZS")}</td>
+                        <td><StatusPill status={fee.status} /></td>
+                        <td>{formatDate(fee.dueDate)}</td>
+                        <td>{formatDate(fee.paidAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
+          <Section title="Registration and Activity">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 28 }}>
+              <div>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Application</h3>
+                <DetailRows rows={[
+                  ["Reference", valueOrDash(member.registration?.referenceNumber)],
+                  ["Status", valueOrDash(member.registration?.status)],
+                  ["Submitted", formatDate(member.registration?.submittedAt)],
+                ]} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Records</h3>
+                <InlineMetric label="Education" value={member.registration?.educations?.length ?? 0} />
+                <InlineMetric label="Experience" value={member.registration?.experiences?.length ?? 0} />
+                <InlineMetric label="Documents" value={member.registration?.documents?.length ?? 0} />
+                <InlineMetric label="References" value={member.registration?.references?.length ?? 0} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Activity</h3>
+                <InlineMetric label="Recent Payments" value={member.paymentHistory.length} />
+                <InlineMetric label="Event Registrations" value={member.eventParticipation.length} />
+                <InlineMetric label="Created" value={formatDate(member.accountInfo.createdAt)} />
+                <InlineMetric label="Updated" value={formatDate(member.accountInfo.updatedAt)} />
+              </div>
+            </div>
+          </Section>
+        </div>
+      </div>
     </section>
   );
 }

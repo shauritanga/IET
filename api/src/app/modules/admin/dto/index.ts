@@ -91,8 +91,11 @@ export class UpdateApplicationStageDto {
     description: 'Workflow action',
     enum: [
       'ASSIGN_EVALUATOR',
-      'ADVANCE_TO_MPDC',
-      'ADVANCE_TO_COUNCIL',
+      'EVALUATOR_RECOMMEND',
+      'SECRETARIAT_ADVANCE_TO_MPDC',
+      'MPDC_RECOMMEND',
+      'SECRETARIAT_ADVANCE_TO_COUNCIL',
+      'COUNCIL_RECOMMEND',
       'APPROVE',
       'REJECT',
       'RETURN_FOR_CHANGES',
@@ -102,8 +105,11 @@ export class UpdateApplicationStageDto {
   @IsString()
   action:
     | 'ASSIGN_EVALUATOR'
-    | 'ADVANCE_TO_MPDC'
-    | 'ADVANCE_TO_COUNCIL'
+    | 'EVALUATOR_RECOMMEND'
+    | 'SECRETARIAT_ADVANCE_TO_MPDC'
+    | 'MPDC_RECOMMEND'
+    | 'SECRETARIAT_ADVANCE_TO_COUNCIL'
+    | 'COUNCIL_RECOMMEND'
     | 'APPROVE'
     | 'REJECT'
     | 'RETURN_FOR_CHANGES';

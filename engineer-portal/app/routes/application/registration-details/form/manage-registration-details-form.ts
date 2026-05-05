@@ -84,7 +84,7 @@ export const useManageRegistrationDetailsForm = () => {
             appliedMembershipType: details.appliedMembershipClass ?? details.registrationCategory ?? "",
             registeredWithStatutoryBoard: details.registeredWithStatutoryBoards ?? false,
             memberOfOtherInstitutions: details.memberOfOtherInstitutions ?? false,
-            supportingDocument: details.supportingDocument ?? undefined,
+            supportingDocument: details.supportingDocument ?? details.supportingDocumentUrl ?? undefined,
             institutions: [
                 ...institutions,
                 { ...defaultInstitution }, // always keep one blank active form at the end

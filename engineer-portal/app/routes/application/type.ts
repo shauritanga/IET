@@ -67,8 +67,11 @@ export type ApplicationStatus =
 export type ApplicationReviewStage =
     | "SECRETARIAT_REVIEW"
     | "EVALUATOR_REVIEW"
+    | "SECRETARIAT_EVALUATOR_RECOMMENDATION"
     | "MPDC_REVIEW"
+    | "SECRETARIAT_MPDC_RECOMMENDATION"
     | "COUNCIL_REVIEW"
+    | "SECRETARIAT_COUNCIL_RECOMMENDATION"
     | "APPROVAL_NOTICE_SENT";
 
 export interface Registration {
@@ -87,7 +90,7 @@ export interface Registration {
     registrationDetails: RegistrationDetails;
     educations: Education[];
     experiences: Experience[];
-    documents: Document[];
+    documents: RegistrationDocument[];
     references: Reference[];
     emailVerified: boolean;
     paymentCompleted: boolean;
@@ -96,6 +99,8 @@ export interface Registration {
     declarationSignature: string | null;
     declarationDate: string | null;
     referenceNumber?: string | null;
+    supportingDocumentUrl?: string | null;
+    cvAttachment?: string | null;
     stageHistory?: ApplicationStageHistory[];
 }
 
@@ -141,6 +146,7 @@ export interface RegistrationDetails {
     registeredWithStatutoryBoards: boolean;
     memberOfOtherInstitutions: boolean;
     supportingDocument: string | null;
+    supportingDocumentUrl?: string | null;
     institutions: OtherInstitution[];
 }
 
@@ -159,6 +165,8 @@ export interface Education {
     endDate: string;
     grade: string;
     location: string;
+    attachment?: string | null;
+    attachmentUrl?: string | null;
     sortOrder: number;
 }
 
@@ -184,6 +192,9 @@ export interface RegistrationDocument {
     mimeType: string;
     description: string;
     status: "PENDING" | "APPROVED" | "REJECTED";
+    source?: string;
+    uploadedAt?: string | null;
+    verifiedAt?: string | null;
 }
 
 export interface Reference {

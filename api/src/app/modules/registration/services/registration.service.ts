@@ -60,6 +60,134 @@ export class RegistrationService {
     private storageService: StorageService,
   ) {}
 
+  private getFileNameFromUrl(url: string, fallback: string): string {
+    try {
+      const pathname = new URL(url).pathname;
+      const fileName = pathname.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    } catch {
+      const fileName = url.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    }
+  }
+
+  private buildUnifiedDocuments(registration: RegistrationEntity) {
+    const documents: any[] = (registration.documents ?? []).map((document) => ({
+      id: document.id,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      fileSize: document.fileSize,
+      mimeType: document.mimeType,
+      description: document.description ?? null,
+      status: document.status,
+      uploadedAt: document.createdAt,
+      verifiedAt: document.verifiedAt ?? null,
+      source: 'registration_documents',
+    }));
+
+    if (registration.supportingDocumentUrl) {
+      documents.push({
+        id: `${registration.id}:supporting-document`,
+        documentType: 'STATUTORY_BOARD',
+        fileName: this.getFileNameFromUrl(
+          registration.supportingDocumentUrl,
+          'Supporting document',
+        ),
+        fileUrl: registration.supportingDocumentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Statutory board supporting document',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'supportingDocumentUrl',
+      });
+    }
+
+    if (registration.cvAttachment) {
+      documents.push({
+        id: `${registration.id}:cv`,
+        documentType: 'CV',
+        fileName: this.getFileNameFromUrl(registration.cvAttachment, 'CV'),
+        fileUrl: registration.cvAttachment,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Curriculum vitae',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'cvAttachment',
+      });
+    }
+
+    for (const education of registration.educations ?? []) {
+      if (!education.attachmentUrl) continue;
+      documents.push({
+        id: `${education.id}:education-attachment`,
+        documentType: 'EDUCATION_CERTIFICATE',
+        fileName: this.getFileNameFromUrl(
+          education.attachmentUrl,
+          `${education.qualification || education.institutionName || 'Education'} certificate`,
+        ),
+        fileUrl: education.attachmentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: education.institutionName
+          ? `Education certificate - ${education.institutionName}`
+          : 'Education certificate',
+        status: DocumentStatus.PENDING,
+        uploadedAt: education.updatedAt,
+        verifiedAt: null,
+        source: 'education.attachmentUrl',
+      });
+    }
+
+    return documents;
+  }
+
+  private toApplicationResponse(registration: RegistrationEntity) {
+    const documents = this.buildUnifiedDocuments(registration);
+
+    return {
+      ...registration,
+      personalDetails: {
+        title: registration.user?.title,
+        firstName: registration.user?.firstName,
+        middleName: registration.user?.middleName,
+        lastName: registration.user?.lastName,
+        gender: registration.user?.gender,
+        dateOfBirth: registration.user?.dateOfBirth,
+        nationality: registration.user?.nationality,
+        phoneNumber: registration.user?.phoneNumber,
+        email: registration.user?.email,
+        employer: registration.user?.employer,
+        position: registration.user?.position,
+        profilePhotoUrl: registration.user?.profilePhotoUrl,
+      },
+      registrationDetails: {
+        engineeringDiscipline: registration.engineeringDiscipline,
+        applicationType: registration.applicationType,
+        existingMembershipNumber: registration.existingMembershipNumber,
+        registrationCategory: registration.registrationCategory,
+        appliedMembershipClass: registration.appliedMembershipClass,
+        registeredWithStatutoryBoards:
+          registration.registeredWithStatutoryBoards,
+        memberOfOtherInstitutions: registration.memberOfOtherInstitutions,
+        supportingDocument: registration.supportingDocumentUrl ?? null,
+        supportingDocumentUrl: registration.supportingDocumentUrl ?? null,
+        institutions: registration.otherInstitutions ?? [],
+      },
+      supportingDocumentUrl: registration.supportingDocumentUrl ?? null,
+      cvAttachment: registration.cvAttachment ?? null,
+      educations: (registration.educations ?? []).map((education) => ({
+        ...education,
+        attachment: education.attachmentUrl ?? null,
+      })),
+      documents,
+    };
+  }
+
   /**
    * Create a new registration application (Step 1: Personal Details)
    */
@@ -751,7 +879,7 @@ export class RegistrationService {
   async getRegistration(
     applicationId: string,
     userId: string,
-  ): Promise<RegistrationEntity> {
+  ): Promise<any> {
     const registration = await this.registrationRepository.findOne({
       where: { id: applicationId, userId },
       relations: [
@@ -773,18 +901,22 @@ export class RegistrationService {
       throw new NotFoundException('Registration not found');
     }
 
-    return registration;
+    return this.toApplicationResponse(registration);
   }
 
   /**
    * Get all registrations for a user
    */
-  async getUserRegistrations(userId: string): Promise<RegistrationEntity[]> {
-    return this.registrationRepository.find({
+  async getUserRegistrations(userId: string): Promise<any[]> {
+    const registrations = await this.registrationRepository.find({
       where: { userId },
-      relations: ['stageHistory'],
+      relations: ['user', 'educations', 'experiences', 'documents', 'references', 'stageHistory'],
       order: { createdAt: 'DESC' },
     });
+
+    return registrations.map((registration) =>
+      this.toApplicationResponse(registration),
+    );
   }
 
   /**

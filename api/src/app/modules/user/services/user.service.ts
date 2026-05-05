@@ -17,7 +17,7 @@ import { v4 as uuid4 } from 'uuid';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { EncryptionService } from '../../../common/services/encryption.service';
 import { ConfigService } from '@nestjs/config';
-import { UserRole, MembershipStatus } from '../../../common/enums';
+import { UserRole, MembershipStatus, DocumentStatus } from '../../../common/enums';
 
 // Mock user for when database is disabled
 const MOCK_USER: Partial<UserEntity> = {
@@ -59,6 +59,92 @@ export class UserService {
   ) {
     this.databaseEnabled = this.configService.get<boolean>('DATABASE_ENABLED');
     this.logger.log(`Database enabled: ${this.databaseEnabled}`);
+  }
+
+  private getFileNameFromUrl(url: string, fallback: string): string {
+    try {
+      const pathname = new URL(url).pathname;
+      const fileName = pathname.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    } catch {
+      const fileName = url.split('/').filter(Boolean).pop();
+      return fileName ? decodeURIComponent(fileName) : fallback;
+    }
+  }
+
+  private buildUnifiedApplicationDocuments(registration: RegistrationEntity) {
+    const documents: any[] = (registration.documents ?? []).map((document) => ({
+      id: document.id,
+      documentType: document.documentType,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      fileSize: document.fileSize,
+      mimeType: document.mimeType,
+      description: document.description ?? null,
+      status: document.status,
+      uploadedAt: document.createdAt,
+      verifiedAt: document.verifiedAt ?? null,
+      source: 'registration_documents',
+    }));
+
+    if (registration.supportingDocumentUrl) {
+      documents.push({
+        id: `${registration.id}:supporting-document`,
+        documentType: 'STATUTORY_BOARD',
+        fileName: this.getFileNameFromUrl(
+          registration.supportingDocumentUrl,
+          'Supporting document',
+        ),
+        fileUrl: registration.supportingDocumentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Statutory board supporting document',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'supportingDocumentUrl',
+      });
+    }
+
+    if (registration.cvAttachment) {
+      documents.push({
+        id: `${registration.id}:cv`,
+        documentType: 'CV',
+        fileName: this.getFileNameFromUrl(registration.cvAttachment, 'CV'),
+        fileUrl: registration.cvAttachment,
+        fileSize: 0,
+        mimeType: '',
+        description: 'Curriculum vitae',
+        status: DocumentStatus.PENDING,
+        uploadedAt: registration.updatedAt,
+        verifiedAt: null,
+        source: 'cvAttachment',
+      });
+    }
+
+    for (const education of registration.educations ?? []) {
+      if (!education.attachmentUrl) continue;
+      documents.push({
+        id: `${education.id}:education-attachment`,
+        documentType: 'EDUCATION_CERTIFICATE',
+        fileName: this.getFileNameFromUrl(
+          education.attachmentUrl,
+          `${education.qualification || education.institutionName || 'Education'} certificate`,
+        ),
+        fileUrl: education.attachmentUrl,
+        fileSize: 0,
+        mimeType: '',
+        description: education.institutionName
+          ? `Education certificate - ${education.institutionName}`
+          : 'Education certificate',
+        status: DocumentStatus.PENDING,
+        uploadedAt: education.updatedAt,
+        verifiedAt: null,
+        source: 'education.attachmentUrl',
+      });
+    }
+
+    return documents;
   }
 
   /**
@@ -330,7 +416,8 @@ export class UserService {
     const registration = this.registrationRepository
       ? await this.registrationRepository.findOne({
           where: { userId },
-          select: ['status', 'reviewStage', 'stageUpdatedAt'],
+          relations: ['documents', 'educations', 'experiences', 'references'],
+          order: { createdAt: 'DESC' },
         })
       : null;
 
@@ -357,6 +444,59 @@ export class UserService {
         registrationStatus: registration?.status ?? null,
         registrationReviewStage: registration?.reviewStage ?? null,
         registrationStageUpdatedAt: registration?.stageUpdatedAt ?? null,
+        latestApplication: registration
+          ? {
+              id: registration.id,
+              referenceNumber: registration.referenceNumber ?? null,
+              status: registration.status,
+              reviewStage: registration.reviewStage ?? null,
+              stageUpdatedAt: registration.stageUpdatedAt ?? null,
+              currentStep: registration.currentStep,
+              completedSteps: registration.completedSteps ?? [],
+              submittedAt: registration.submittedAt ?? null,
+              appliedMembershipClass:
+                registration.appliedMembershipClass ?? null,
+              engineeringDiscipline:
+                registration.engineeringDiscipline ?? null,
+              registrationCategory: registration.registrationCategory ?? null,
+              applicationType: registration.applicationType ?? null,
+              supportingDocumentUrl: registration.supportingDocumentUrl ?? null,
+              cvAttachment: registration.cvAttachment ?? null,
+              reviewComments: registration.reviewComments ?? null,
+              rejectionReason: registration.rejectionReason ?? null,
+              paymentCompleted: registration.paymentCompleted ?? false,
+              declarationAgreed: registration.declarationAgreed ?? false,
+              documents: this.buildUnifiedApplicationDocuments(registration),
+              educations: (registration.educations ?? []).map((education) => ({
+                id: education.id,
+                institutionName: education.institutionName,
+                qualification: education.qualification,
+                fieldOfStudy: education.fieldOfStudy,
+                startDate: education.startDate,
+                endDate: education.endDate,
+                location: education.location,
+                attachmentUrl: education.attachmentUrl ?? null,
+              })),
+              experiences: (registration.experiences ?? []).map(
+                (experience) => ({
+                  id: experience.id,
+                  employerName: experience.employerName,
+                  position: experience.position,
+                  startDate: experience.startDate,
+                  endDate: experience.endDate,
+                  isCurrent: experience.isCurrent,
+                  location: experience.location,
+                }),
+              ),
+              references: (registration.references ?? []).map((reference) => ({
+                id: reference.id,
+                referenceType: reference.referenceType,
+                fullName: reference.fullName,
+                membershipCategory: reference.membershipCategory,
+                membershipNumber: reference.membershipNumber,
+              })),
+            }
+          : null,
       },
     };
   }

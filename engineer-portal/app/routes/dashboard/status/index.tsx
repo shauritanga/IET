@@ -20,16 +20,22 @@ import { FileIcon } from "~/components/portal/icons";
 const REVIEW_STAGES: ApplicationReviewStage[] = [
   "SECRETARIAT_REVIEW",
   "EVALUATOR_REVIEW",
+  "SECRETARIAT_EVALUATOR_RECOMMENDATION",
   "MPDC_REVIEW",
+  "SECRETARIAT_MPDC_RECOMMENDATION",
   "COUNCIL_REVIEW",
+  "SECRETARIAT_COUNCIL_RECOMMENDATION",
   "APPROVAL_NOTICE_SENT",
 ];
 
 const STAGE_LABELS: Record<ApplicationReviewStage, string> = {
   SECRETARIAT_REVIEW: "Secretariat Review",
   EVALUATOR_REVIEW: "Technical Evaluation",
+  SECRETARIAT_EVALUATOR_RECOMMENDATION: "Secretariat Recommendation",
   MPDC_REVIEW: "MPDC Review",
+  SECRETARIAT_MPDC_RECOMMENDATION: "Secretariat Recommendation",
   COUNCIL_REVIEW: "Council Approval",
+  SECRETARIAT_COUNCIL_RECOMMENDATION: "Secretariat Recommendation",
   APPROVAL_NOTICE_SENT: "Approved",
 };
 

@@ -13,8 +13,11 @@ export type AvatarTone = "red" | "blue" | "green" | "purple" | "pink" | "orange"
 export type ApplicationWorkflowStage =
   | "Secretariat Review"
   | "Evaluator Review"
+  | "Secretariat - Evaluator Recommendation"
   | "MPDC Review"
+  | "Secretariat - MPDC Recommendation"
   | "Council Review"
+  | "Secretariat - Council Recommendation"
   | "Approval Note Sent";
 
 export const navGroups = [
