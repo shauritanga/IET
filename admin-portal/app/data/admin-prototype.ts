@@ -35,9 +35,18 @@ export const navGroups = [
     ],
   },
   {
+    label: "Communication",
+    collapsible: true,
+    items: [
+      { to: "/dashboard/communication/send", label: "Send Message" },
+      { to: "/dashboard/communication/history", label: "Message History" },
+      { to: "/dashboard/communication/templates", label: "Templates" },
+    ],
+  },
+  {
     label: "Operations",
     items: [
-      { to: "/dashboard/events", label: "Events" },
+      { to: "/dashboard/events", label: "Events & Training" },
       { to: "/dashboard/payments", label: "Payments" },
       { to: "/dashboard/reports", label: "Reports" },
     ],
@@ -52,12 +61,16 @@ export const pageLabels: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/applications": "Applications",
   "/dashboard/members": "Members",
-  "/dashboard/events": "Events",
+  "/dashboard/events": "Events & Training",
   "/dashboard/payments": "Payments",
   "/dashboard/reports": "Reports",
   "/dashboard/admin-users": "Users",
   "/dashboard/membership-categories": "Membership Categories",
   "/dashboard/engineering-institutions": "Engineering Institutions",
+  "/dashboard/communication": "Communication",
+  "/dashboard/communication/send": "Send Message",
+  "/dashboard/communication/history": "Message History",
+  "/dashboard/communication/templates": "Templates",
   "/dashboard/settings": "Settings",
 };
 

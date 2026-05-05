@@ -13,6 +13,7 @@ import {
   Matches,
   Min,
   Max,
+  IsUUID,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -46,6 +47,14 @@ export class MemberQueryDto {
   @IsOptional()
   @IsEnum(MembershipClass)
   membershipClass?: MembershipClass;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Membership category selected from the admin directory',
+  })
+  @IsOptional()
+  @IsUUID()
+  membershipCategoryId?: string;
 
   @ApiPropertyOptional({ example: 'joram' })
   @IsOptional()
@@ -241,6 +250,13 @@ export class CreateMemberDto {
   @Transform(({ value }) => value?.trim())
   firstName?: string;
 
+  @ApiPropertyOptional({ example: 'Allan' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  middleName?: string;
+
   @ApiPropertyOptional({ example: 'Jackson' })
   @IsOptional()
   @IsString()
@@ -258,6 +274,14 @@ export class CreateMemberDto {
   @IsOptional()
   @IsEnum(MembershipClass)
   membershipClass?: MembershipClass;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Membership category chosen in the admin form',
+  })
+  @IsOptional()
+  @IsUUID()
+  membershipCategoryId?: string;
 
   @ApiPropertyOptional({ example: 'Civil', enum: EngineeringDiscipline })
   @IsOptional()

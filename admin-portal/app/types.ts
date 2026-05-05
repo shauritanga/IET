@@ -87,11 +87,19 @@ export type MemberSummary = {
   id: string;
   fullName?: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   email: string;
   profilePhotoUrl?: string | null;
   membershipId?: string | null;
   membershipClass?: string | null;
+  membershipCategory?: {
+    id: string;
+    name: string;
+    yearlyFee: number;
+    minYearsExperience: number;
+    description?: string | null;
+  } | null;
   membershipStatus?: string | null;
   engineeringDiscipline?: string | null;
 };

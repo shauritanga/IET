@@ -88,7 +88,10 @@ export class MembershipService {
     nextPaymentDue: Date | null;
     daysUntilExpiry: number | null;
   }> {
-    const user = await this.userRepository.findOneBy({ id: userId });
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['membershipCategory'],
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -115,9 +118,14 @@ export class MembershipService {
       );
     }
 
-    const annualFee = user.membershipClass
-      ? await this.getMembershipFeeAmount(user.membershipClass)
-      : null;
+    const annualFee = user.membershipCategoryId
+      ? user.membershipCategory?.yearlyFee ??
+        (user.membershipClass
+          ? await this.getMembershipFeeAmount(user.membershipClass)
+          : null)
+      : user.membershipClass
+        ? await this.getMembershipFeeAmount(user.membershipClass)
+        : null;
 
     return {
       membershipId: user.membershipId,
@@ -199,12 +207,19 @@ export class MembershipService {
     status: string;
     mobileMoneyRef?: string;
   }> {
-    const user = await this.userRepository.findOneBy({ id: userId });
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['membershipCategory'],
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.membershipClass) {
+    const effectiveMembershipClass =
+      user.membershipClass ??
+      this.resolveMembershipClassFromCategoryName(user.membershipCategory?.name);
+
+    if (!effectiveMembershipClass && !user.membershipCategory) {
       throw new BadRequestException(
         'User does not have an active membership class',
       );
@@ -220,8 +235,11 @@ export class MembershipService {
       fee = new MembershipFeeEntity();
       fee.userId = userId;
       fee.year = dto.year;
-      fee.membershipClass = user.membershipClass;
-      fee.amount = await this.getMembershipFeeAmount(user.membershipClass);
+      fee.membershipClass = effectiveMembershipClass ?? MembershipClass.MEMBER;
+      fee.amount = user.membershipCategory?.yearlyFee ??
+        (effectiveMembershipClass
+          ? await this.getMembershipFeeAmount(effectiveMembershipClass)
+          : 0);
       fee.currency = 'TZS';
       fee.status = FeeStatus.PENDING;
       fee.dueDate = await this.getFiscalYearEndDate(dto.year);
@@ -344,11 +362,15 @@ export class MembershipService {
   async createAnnualFees(year: number): Promise<number> {
     const activeMembers = await this.userRepository.find({
       where: { membershipStatus: MembershipStatus.ACTIVE },
+      relations: ['membershipCategory'],
     });
 
     let created = 0;
     for (const member of activeMembers) {
-      if (!member.membershipClass) continue;
+      const effectiveMembershipClass =
+        member.membershipClass ??
+        this.resolveMembershipClassFromCategoryName(member.membershipCategory?.name);
+      if (!effectiveMembershipClass && !member.membershipCategory) continue;
 
       // Check if fee already exists
       const existingFee = await this.feeRepository.findOne({
@@ -359,8 +381,12 @@ export class MembershipService {
         const fee = new MembershipFeeEntity();
         fee.userId = member.id;
         fee.year = year;
-        fee.membershipClass = member.membershipClass;
-        fee.amount = this.FEE_AMOUNTS[member.membershipClass];
+        fee.membershipClass = effectiveMembershipClass ?? MembershipClass.MEMBER;
+        fee.amount =
+          member.membershipCategory?.yearlyFee ??
+          (effectiveMembershipClass
+            ? this.FEE_AMOUNTS[effectiveMembershipClass]
+            : 0);
         fee.currency = 'TZS';
         fee.status = FeeStatus.PENDING;
         fee.dueDate = new Date(year, 6, 10); // July 10th
@@ -439,6 +465,39 @@ export class MembershipService {
     });
 
     return category?.yearlyFee ?? this.FEE_AMOUNTS[membershipClass];
+  }
+
+  private resolveMembershipClassFromCategoryName(
+    categoryName?: string | null,
+  ): MembershipClass | undefined {
+    const normalized = (categoryName ?? '').trim().toUpperCase();
+    if (!normalized) return undefined;
+
+    if (normalized.includes('GRADUATE')) return MembershipClass.GRADUATE;
+    if (normalized.includes('ASSOCIATE') || normalized.includes('AMIET')) {
+      return MembershipClass.ASSOCIATE;
+    }
+    if (
+      normalized === 'MEMBER' ||
+      normalized.includes('MIET') ||
+      normalized.includes('MEMBER')
+    ) {
+      return MembershipClass.MEMBER;
+    }
+    if (normalized.includes('CORPORATE') || normalized.includes('CMIET')) {
+      return MembershipClass.CORPORATE;
+    }
+    if (normalized.includes('SENIOR') || normalized.includes('SMIET')) {
+      return MembershipClass.SENIOR;
+    }
+    if (normalized.includes('FELLOW') || normalized.includes('FIET')) {
+      return MembershipClass.FELLOW;
+    }
+    if (normalized.includes('HONORARY')) {
+      return MembershipClass.HONORARY;
+    }
+
+    return undefined;
   }
 
   private async getFiscalYearSettings(): Promise<FiscalYearSettings> {

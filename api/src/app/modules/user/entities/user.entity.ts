@@ -1,4 +1,4 @@
-import { Entity, Column, Index } from 'typeorm';
+import { Entity, Column, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
@@ -10,11 +10,13 @@ import {
   MembershipStatus,
   EngineeringDiscipline,
 } from '../../../common/enums';
+import { MembershipCategoryEntity } from '../../admin/entities/membership-category.entity';
 
 @Entity('users')
 @Index(['email'], { unique: true })
 @Index(['membershipId'], { unique: true, where: '"membershipId" IS NOT NULL' })
 @Index(['phoneNumber'])
+@Index(['membershipCategoryId'])
 export class UserEntity extends BaseEntity {
   // ============================================
   // AUTHENTICATION FIELDS
@@ -241,6 +243,18 @@ export class UserEntity extends BaseEntity {
   })
   @Column({ type: 'enum', enum: MembershipClass, nullable: true })
   membershipClass?: MembershipClass;
+
+  @ApiProperty({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Membership category reference',
+    required: false,
+  })
+  @Column({ type: 'uuid', nullable: true })
+  membershipCategoryId?: string | null;
+
+  @ManyToOne(() => MembershipCategoryEntity, { nullable: true })
+  @JoinColumn({ name: 'membershipCategoryId' })
+  membershipCategory?: MembershipCategoryEntity | null;
 
   @ApiProperty({
     example: 'ACTIVE',

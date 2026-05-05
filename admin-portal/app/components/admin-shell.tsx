@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp } from "lucide-react";
+import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { clearSession, getStoredUser } from "~/utils/auth";
@@ -89,6 +89,16 @@ function CategoriesIcon() {
   );
 }
 
+function CommunicationIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h5" />
+    </svg>
+  );
+}
+
 function InstitutionsIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -132,12 +142,17 @@ function navIcon(label: string) {
   if (label === "Dashboard") return <DashboardIcon />;
   if (label === "Applications") return <ApplicationsIcon />;
   if (label === "Members") return <MembersIcon />;
+  if (label === "Communication") return <CommunicationIcon />;
+  if (label === "Send Message") return <SendHorizonal size={15} />;
+  if (label === "Message History") return <History size={15} />;
+  if (label === "Templates") return <FileText size={15} />;
   if (label === "Users") return <AdminUsersIcon />;
   if (label === "Admin Users") return <AdminUsersIcon />;
   if (label === "Categories") return <CategoriesIcon />;
   if (label === "Institutions") return <InstitutionsIcon />;
   if (label === "Profile") return <MembersIcon />;
   if (label === "Events") return <EventsIcon />;
+  if (label === "Events & Training") return <EventsIcon />;
   if (label === "Payments") return <PaymentsIcon />;
   if (label === "Reports") return <ReportsIcon />;
   return <SettingsIcon />;
@@ -155,6 +170,7 @@ function roleLabel(role?: string | null) {
 export default function AdminShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<"header" | "sidebar" | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const location = useLocation();
   const navigate = useNavigate();
   const headerAccountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +218,27 @@ export default function AdminShell() {
   useEffect(() => {
     setAccountMenuAnchor(null);
   }, [location.pathname]);
+
+  useEffect(() => {
+    setOpenGroups((current) => ({
+      ...current,
+      Communication: location.pathname.startsWith("/dashboard/communication"),
+    }));
+  }, [location.pathname]);
+
+  function toggleGroup(label: string) {
+    setOpenGroups((current) => ({
+      ...current,
+      [label]: !current[label],
+    }));
+  }
+
+  function isGroupActive(label: string, items: ReadonlyArray<{ to: string }>) {
+    if (label === "Communication") {
+      return location.pathname.startsWith("/dashboard/communication");
+    }
+    return items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
+  }
 
   function AccountMenuPanel({ placement }: { placement: "header" | "sidebar" }) {
     return (
@@ -298,26 +335,71 @@ export default function AdminShell() {
         <nav className="flex-1 overflow-y-auto px-0 py-3">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <div className="px-[18px] pb-1 pt-[10px] text-[8.5px] font-bold uppercase tracking-[1.8px] text-[var(--muted)] opacity-60">
-                {group.label}
-              </div>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/dashboard"}
-                  className={({ isActive }) =>
-                    `flex select-none items-center gap-[10px] border-l-[3px] px-[18px] py-[9px] text-[12px] font-medium transition-all duration-[160ms] ${
-                      isActive
+              {"collapsible" in group && group.collapsible ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.label)}
+                    className={`flex w-full select-none items-center gap-[10px] border-l-[3px] px-[18px] py-[9px] text-left text-[12px] font-medium transition-all duration-[160ms] ${
+                      isGroupActive(group.label, group.items)
                         ? "border-[var(--red)] bg-[var(--red-light)] font-bold text-[var(--red)]"
                         : "border-transparent text-[var(--muted)] hover:bg-[var(--red-light)] hover:text-[var(--red)]"
-                    }`
-                  }
-                >
-                  <span className="shrink-0">{navIcon(item.label)}</span>
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
+                    }`}
+                    title={collapsed ? group.label : undefined}
+                  >
+                    <span className="shrink-0">{navIcon(group.label)}</span>
+                    <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                    <ChevronDown
+                      size={13}
+                      className={`shrink-0 transition-transform duration-150 ${openGroups[group.label] ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {openGroups[group.label] && (
+                    <div className="border-l-[3px] border-transparent">
+                      {group.items.map((item) => (
+                        <button
+                          key={item.to}
+                          type="button"
+                          onClick={() => navigate(item.to)}
+                          aria-current={location.pathname === item.to || location.pathname.startsWith(`${item.to}/`) ? "page" : undefined}
+                          className={`flex w-full select-none items-center gap-[10px] px-[18px] py-[8px] pl-[42px] text-left text-[11.5px] font-medium transition-all duration-[160ms] ${
+                            location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+                              ? "bg-[var(--red-light)] font-bold text-[var(--red)]"
+                              : "text-[var(--muted)] hover:bg-[var(--red-light)] hover:text-[var(--red)]"
+                          }`}
+                        >
+                          <span className="shrink-0 text-[var(--red)]/70">•</span>
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div className="px-[18px] pb-1 pt-[10px] text-[8.5px] font-bold uppercase tracking-[1.8px] text-[var(--muted)] opacity-60">
+                    {group.label}
+                  </div>
+                  {group.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === "/dashboard"}
+                      className={({ isActive }) =>
+                        `flex select-none items-center gap-[10px] border-l-[3px] px-[18px] py-[9px] text-[12px] font-medium transition-all duration-[160ms] ${
+                          isActive
+                            ? "border-[var(--red)] bg-[var(--red-light)] font-bold text-[var(--red)]"
+                            : "border-transparent text-[var(--muted)] hover:bg-[var(--red-light)] hover:text-[var(--red)]"
+                        }`
+                      }
+                    >
+                      <span className="shrink-0">{navIcon(item.label)}</span>
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </nav>

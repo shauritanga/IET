@@ -9,9 +9,24 @@ type MemberRow = MemberSummary & {
   profilePhotoUrl?: string | null;
   membershipId?: string | null;
   membershipClass?: string | null;
+  membershipCategory?: {
+    id: string;
+    name: string;
+    yearlyFee: number;
+    minYearsExperience: number;
+    description?: string | null;
+  } | null;
   membershipStatus?: string | null;
   engineeringDiscipline?: string | null;
   expiryDate?: string | null;
+};
+
+type MembershipCategory = {
+  id: string;
+  name: string;
+  yearlyFee: number;
+  minYearsExperience: number;
+  description: string | null;
 };
 
 type ImportResult = {
@@ -27,30 +42,22 @@ type ImportResult = {
 type CreateMemberForm = {
   email: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   phoneNumber: string;
-  membershipClass: string;
+  membershipCategoryId: string;
   engineeringDiscipline: string;
 };
 
 const EMPTY_FORM: CreateMemberForm = {
   email: "",
   firstName: "",
+  middleName: "",
   lastName: "",
   phoneNumber: "",
-  membershipClass: "",
+  membershipCategoryId: "",
   engineeringDiscipline: "",
 };
-
-const MEMBERSHIP_CLASSES = [
-  { value: "GRADUATE", label: "Graduate Member" },
-  { value: "ASSOCIATE", label: "AMIET — Associate Member" },
-  { value: "MIET", label: "MIET — Member" },
-  { value: "CORPORATE", label: "CMIET — Corporate Member" },
-  { value: "SENIOR", label: "SMIET — Senior Member" },
-  { value: "FELLOW", label: "FIET — Fellow" },
-  { value: "HONORARY", label: "Honorary Fellow" },
-];
 
 const DISCIPLINES = [
   "Civil", "Mechanical", "Electrical", "Electronics", "Chemical",
@@ -80,7 +87,15 @@ function initials(m: MemberRow) {
 
 function displayName(m: MemberRow) {
   if (m.fullName) return m.fullName;
-  return `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || m.email;
+  return `${m.firstName ?? ""} ${m.middleName ?? ""} ${m.lastName ?? ""}`.trim().replace(/\s+/g, " ") || m.email;
+}
+
+function displayMembershipGrade(m: MemberRow) {
+  return (
+    m.membershipCategory?.name ??
+    (m.membershipClass ? CLASS_LABELS[m.membershipClass] ?? m.membershipClass : null) ??
+    "—"
+  );
 }
 
 function formatMoney(amount: number | string) {
@@ -459,6 +474,9 @@ export default function MembersPage() {
   const [createForm, setCreateForm] = useState<CreateMemberForm>(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [membershipCategories, setMembershipCategories] = useState<MembershipCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   // import state
   const [importOpen, setImportOpen] = useState(false);
@@ -493,7 +511,7 @@ export default function MembersPage() {
     setPageError(null);
     const params = new URLSearchParams({ page: "1", limit: "100" });
     if (statusFilter) params.set("status", statusFilter);
-    if (classFilter) params.set("membershipClass", classFilter);
+    if (classFilter) params.set("membershipCategoryId", classFilter);
     if (search) params.set("search", search);
     try {
       const { data } = await http.get<ApiEnvelope<MemberRow[]>>(`/admin/members?${params}`);
@@ -526,6 +544,25 @@ export default function MembersPage() {
     void loadFeeConfig();
   }, []);
 
+  useEffect(() => {
+    async function loadMembershipCategories() {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      try {
+        const { data } = await http.get<ApiEnvelope<MembershipCategory[]>>(
+          "/admin/membership-categories?limit=100",
+        );
+        setMembershipCategories(data.data ?? []);
+      } catch {
+        setCategoriesError("Failed to load membership categories.");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    }
+
+    void loadMembershipCategories();
+  }, []);
+
   // ── Create member ──────────────────────────────────────────────
 
   function openCreate() {
@@ -537,15 +574,23 @@ export default function MembersPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!createForm.email.trim()) { setCreateError("Email is required."); return; }
+    if (categoriesLoading) { setCreateError("Membership categories are still loading."); return; }
+    if (categoriesError) { setCreateError(categoriesError); return; }
+    if (membershipCategories.length === 0) { setCreateError("No membership categories are available."); return; }
+    if (!createForm.membershipCategoryId.trim()) {
+      setCreateError("Membership grade is required.");
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
       await http.post("/admin/members", {
         email: createForm.email.trim(),
         firstName: createForm.firstName.trim() || undefined,
+        middleName: createForm.middleName.trim() || undefined,
         lastName: createForm.lastName.trim() || undefined,
         phoneNumber: createForm.phoneNumber.trim() || undefined,
-        membershipClass: createForm.membershipClass || undefined,
+        membershipCategoryId: createForm.membershipCategoryId || undefined,
         engineeringDiscipline: createForm.engineeringDiscipline || undefined,
       });
       setCreateOpen(false);
@@ -746,8 +791,10 @@ export default function MembersPage() {
         <div style={{ position: "relative" }}>
           <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
             <option value="">All Grades</option>
-            {MEMBERSHIP_CLASSES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label.split(" — ")[0]}</option>
+            {membershipCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
             ))}
           </select>
           <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
@@ -845,8 +892,8 @@ export default function MembersPage() {
                           </td>
                           <td style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--text)" }}>{member.membershipId ?? <span style={{ color: "var(--muted)" }}>—</span>}</td>
                           <td>
-                            {member.membershipClass
-                              ? <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 6, padding: "2px 8px" }}>{CLASS_LABELS[member.membershipClass] ?? member.membershipClass}</span>
+                            {displayMembershipGrade(member) !== "—"
+                              ? <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 6, padding: "2px 8px" }}>{displayMembershipGrade(member)}</span>
                               : <span style={{ color: "var(--muted)", fontSize: 11.5 }}>—</span>}
                           </td>
                           <td style={{ fontSize: 11.5, color: "var(--text)" }}>{member.engineeringDiscipline ?? <span style={{ color: "var(--muted)" }}>—</span>}</td>
@@ -875,8 +922,8 @@ export default function MembersPage() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Grade</span>
-                          {member.membershipClass
-                            ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{CLASS_LABELS[member.membershipClass] ?? member.membershipClass}</span>
+                          {displayMembershipGrade(member) !== "—"
+                            ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{displayMembershipGrade(member)}</span>
                             : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -934,9 +981,12 @@ export default function MembersPage() {
       {/* Add Member Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Add New Member">
         <form onSubmit={(e) => void handleCreate(e)}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px" }}>
             <FormField label="First Name">
               <input style={inputStyle} value={createForm.firstName} onChange={setField("firstName")} placeholder="Joram" />
+            </FormField>
+            <FormField label="Middle Name">
+              <input style={inputStyle} value={createForm.middleName} onChange={setField("middleName")} placeholder="Allan" />
             </FormField>
             <FormField label="Last Name">
               <input style={inputStyle} value={createForm.lastName} onChange={setField("lastName")} placeholder="Jackson" />
@@ -954,12 +1004,26 @@ export default function MembersPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
             <FormField label="Membership Grade">
               <div style={{ position: "relative" }}>
-                <select style={{ ...selectStyle, paddingRight: 28 }} value={createForm.membershipClass} onChange={setField("membershipClass")}>
-                  <option value="">Select grade…</option>
-                  {MEMBERSHIP_CLASSES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                <select
+                  style={{ ...selectStyle, paddingRight: 28 }}
+                  value={createForm.membershipCategoryId}
+                  onChange={setField("membershipCategoryId")}
+                  disabled={categoriesLoading || membershipCategories.length === 0}
+                >
+                  <option value="">
+                    {categoriesLoading ? "Loading categories…" : "Select grade…"}
+                  </option>
+                  {membershipCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
                 </select>
                 <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
               </div>
+              {categoriesError && (
+                <div style={{ marginTop: 5, fontSize: 10.5, color: "var(--red)" }}>{categoriesError}</div>
+              )}
             </FormField>
             <FormField label="Discipline">
               <div style={{ position: "relative" }}>
@@ -983,8 +1047,11 @@ export default function MembersPage() {
               style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>
               Cancel
             </button>
-            <button type="submit" disabled={creating}
-              style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: creating ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer", transition: "background .15s" }}>
+            <button
+              type="submit"
+              disabled={creating || categoriesLoading || membershipCategories.length === 0}
+              style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: creating || categoriesLoading || membershipCategories.length === 0 ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: creating || categoriesLoading || membershipCategories.length === 0 ? "not-allowed" : "pointer", transition: "background .15s" }}
+            >
               {creating ? "Creating…" : "Create Member"}
             </button>
           </div>
@@ -1063,7 +1130,7 @@ export default function MembersPage() {
             <div style={{ marginBottom: 16, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg)" }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{displayName(renewTarget)}</div>
               <div style={{ marginTop: 3, fontSize: 11.5, color: "var(--muted)" }}>
-                {renewTarget.membershipId ?? "No membership number"} · {renewTarget.membershipClass ? CLASS_LABELS[renewTarget.membershipClass] ?? renewTarget.membershipClass : "No grade"}
+                {renewTarget.membershipId ?? "No membership number"} · {displayMembershipGrade(renewTarget)}
               </div>
               {renewForm.amount && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--muted)" }}>

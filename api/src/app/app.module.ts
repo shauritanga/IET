@@ -8,6 +8,7 @@ import { MembershipModule } from './modules/membership/membership.module';
 import { EventsModule } from './modules/events/events.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CommunicationModule } from './modules/communication/communication.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { GuestModule } from './modules/guest/guest.module';
 
@@ -122,6 +123,7 @@ import * as Joi from 'joi';
     EventsModule,
     PaymentsModule,
     NotificationsModule,
+    CommunicationModule,
     AdminModule,
     GuestModule,
   ],

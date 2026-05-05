@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
 import { UserEntity } from '../../user/entities/user.entity';
 import {
@@ -22,6 +23,7 @@ import { MembershipCategoryEntity } from '../entities/membership-category.entity
 import { EngineeringInstitutionEntity } from '../entities/engineering-institution.entity';
 import { UserService } from '../../user/services/user.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { EmailService } from '../../shared/services/email.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
@@ -125,6 +127,7 @@ export class AdminService {
     private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
     private userService: UserService,
     private notificationsService: NotificationsService,
+    private emailService: EmailService,
   ) {}
 
   private getFileNameFromUrl(url: string, fallback: string): string {
@@ -239,6 +242,39 @@ export class AdminService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  private resolveMembershipClassFromCategoryName(
+    categoryName?: string | null,
+  ): MembershipClass | undefined {
+    const normalized = (categoryName ?? '').trim().toUpperCase();
+    if (!normalized) return undefined;
+
+    if (normalized.includes('GRADUATE')) return MembershipClass.GRADUATE;
+    if (normalized.includes('ASSOCIATE') || normalized.includes('AMIET')) {
+      return MembershipClass.ASSOCIATE;
+    }
+    if (
+      normalized === 'MEMBER' ||
+      normalized.includes('MIET') ||
+      normalized.includes('MEMBER')
+    ) {
+      return MembershipClass.MEMBER;
+    }
+    if (normalized.includes('CORPORATE') || normalized.includes('CMIET')) {
+      return MembershipClass.CORPORATE;
+    }
+    if (normalized.includes('SENIOR') || normalized.includes('SMIET')) {
+      return MembershipClass.SENIOR;
+    }
+    if (normalized.includes('FELLOW') || normalized.includes('FIET')) {
+      return MembershipClass.FELLOW;
+    }
+    if (normalized.includes('HONORARY')) {
+      return MembershipClass.HONORARY;
+    }
+
+    return undefined;
   }
 
   async listAdminUsers(
@@ -526,12 +562,14 @@ export class AdminService {
       limit = 20,
       status,
       membershipClass,
+      membershipCategoryId,
       search,
       discipline,
     } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository.createQueryBuilder('user');
+    queryBuilder.leftJoinAndSelect('user.membershipCategory', 'membershipCategory');
 
     if (status) {
       queryBuilder.andWhere('user.membershipStatus = :status', { status });
@@ -539,6 +577,11 @@ export class AdminService {
     if (membershipClass) {
       queryBuilder.andWhere('user.membershipClass = :membershipClass', {
         membershipClass,
+      });
+    }
+    if (membershipCategoryId) {
+      queryBuilder.andWhere('user.membershipCategoryId = :membershipCategoryId', {
+        membershipCategoryId,
       });
     }
     if (discipline) {
@@ -582,10 +625,20 @@ export class AdminService {
       fullName: user.fullName,
       firstName: user.firstName,
       lastName: user.lastName,
+      middleName: user.middleName,
       email: user.email,
       phoneNumber: user.phoneNumber,
       profilePhotoUrl: user.profilePhotoUrl,
       membershipClass: user.membershipClass,
+      membershipCategory: user.membershipCategory
+        ? {
+            id: user.membershipCategory.id,
+            name: user.membershipCategory.name,
+            yearlyFee: user.membershipCategory.yearlyFee,
+            minYearsExperience: user.membershipCategory.minYearsExperience,
+            description: user.membershipCategory.description,
+          }
+        : null,
       membershipStatus: user.membershipStatus,
       status: user.membershipStatus,
       engineeringDiscipline: user.engineeringDiscipline,
@@ -608,13 +661,60 @@ export class AdminService {
    * Create a single member account (admin-initiated)
    */
   async createMember(dto: CreateMemberDto): Promise<UserEntity> {
-    return this.userService.create({
+    const category = dto.membershipCategoryId
+      ? await this.membershipCategoryRepository.findOne({
+          where: { id: dto.membershipCategoryId },
+        })
+      : null;
+
+    if (dto.membershipCategoryId && !category) {
+      throw new BadRequestException('Selected membership category was not found');
+    }
+
+    const temporaryPassword = this.generateTemporaryPassword();
+
+    const user = await this.userService.create({
       email: dto.email,
+      password: temporaryPassword,
       firstName: dto.firstName,
+      middleName: dto.middleName,
       lastName: dto.lastName,
       phoneNumber: dto.phoneNumber,
       engineeringDiscipline: dto.engineeringDiscipline as any,
     });
+
+    if (category) {
+      user.membershipCategoryId = category.id;
+      user.membershipClass =
+        this.resolveMembershipClassFromCategoryName(category.name) ??
+        user.membershipClass ??
+        MembershipClass.MEMBER;
+      await this.userRepository.save(user);
+    } else if (!user.membershipClass) {
+      user.membershipClass = MembershipClass.MEMBER;
+      await this.userRepository.save(user);
+    }
+
+    void this.emailService.send({
+      to: user.email,
+      subject: 'Your IET member account has been created',
+      html: `
+        <p>Hello ${user.firstName ?? 'Member'},</p>
+        <p>Your IET member account has been created by the admin team.</p>
+        <p><strong>Login email:</strong> ${user.email}</p>
+        <p><strong>Temporary password:</strong> ${temporaryPassword}</p>
+        <p>Please sign in and change your password immediately.</p>
+      `,
+    }).catch((error: any) => {
+      this.logger.warn(`Failed to send member credentials email to ${user.email}: ${error.message}`);
+    });
+
+    return user;
+  }
+
+  private generateTemporaryPassword(): string {
+    const token = randomBytes(6).toString('hex');
+    return `${token}A1!`;
   }
 
   /**
@@ -623,6 +723,7 @@ export class AdminService {
   async getMemberDetails(memberId: string): Promise<any> {
     const user = await this.userRepository.findOne({
       where: { id: memberId },
+      relations: ['membershipCategory'],
     });
 
     if (!user) {
@@ -679,6 +780,15 @@ export class AdminService {
       },
       membershipDetails: {
         membershipClass: user.membershipClass,
+        membershipCategory: user.membershipCategory
+          ? {
+              id: user.membershipCategory.id,
+              name: user.membershipCategory.name,
+              yearlyFee: user.membershipCategory.yearlyFee,
+              minYearsExperience: user.membershipCategory.minYearsExperience,
+              description: user.membershipCategory.description,
+            }
+          : null,
         status: user.membershipStatus,
         engineeringDiscipline: user.engineeringDiscipline,
         joiningDate: user.joiningDate,
@@ -1072,12 +1182,20 @@ export class AdminService {
     status: MembershipStatus;
     expiryDate: Date;
   }> {
-    const user = await this.userRepository.findOneBy({ id: memberId });
+    const user = await this.userRepository.findOne({
+      where: { id: memberId },
+      relations: ['membershipCategory'],
+    });
     if (!user) {
       throw new NotFoundException('Member not found');
     }
 
-    if (!user.membershipClass) {
+    const membershipCategory = user.membershipCategory;
+    const effectiveMembershipClass =
+      user.membershipClass ??
+      this.resolveMembershipClassFromCategoryName(membershipCategory?.name);
+
+    if (!effectiveMembershipClass && !membershipCategory) {
       throw new BadRequestException('Member does not have a membership class');
     }
 
@@ -1090,13 +1208,14 @@ export class AdminService {
       fee = this.feeRepository.create({
         userId: memberId,
         year: dto.year,
-        membershipClass: user.membershipClass,
+        membershipClass:
+          effectiveMembershipClass ?? MembershipClass.MEMBER,
         currency: 'TZS',
         remindersSent: 0,
       });
     }
 
-    fee.membershipClass = user.membershipClass;
+    fee.membershipClass = effectiveMembershipClass ?? MembershipClass.MEMBER;
     fee.amount = dto.amount;
     fee.status = FeeStatus.PAID;
     fee.dueDate = expiryDate;
