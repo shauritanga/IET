@@ -278,6 +278,13 @@ export class RegistrationEntity extends AuditableEntity {
   stageUpdatedAt?: Date;
 
   @ApiProperty({
+    description: 'Date when a stage delay escalation was last sent',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  workflowDelayNotifiedAt?: Date;
+
+  @ApiProperty({
     description: 'Date when the council approved the application',
     required: false,
   })

@@ -1,9 +1,11 @@
 import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText, ArrowUpRight } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { clearSession, getStoredUser } from "~/utils/auth";
 import { navGroups, pageLabels } from "~/data/admin-prototype";
 import { useThemeMode } from "~/providers/theme";
+import http from "~/utils/http";
 
 function DashboardIcon() {
   return (
@@ -138,6 +140,34 @@ function BellIcon() {
   );
 }
 
+type AdminNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  actionUrl?: string | null;
+};
+
+function formatNotificationTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-TZ", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function isExternalUrl(url?: string | null) {
+  return !!url && /^https?:\/\//i.test(url);
+}
+
 function navIcon(label: string) {
   if (label === "Dashboard") return <DashboardIcon />;
   if (label === "Applications") return <ApplicationsIcon />;
@@ -171,10 +201,13 @@ export default function AdminShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<"header" | "sidebar" | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const headerAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const sidebarAccountMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const user = getStoredUser();
   const { theme, toggleTheme } = useThemeMode();
 
@@ -203,19 +236,68 @@ export default function AdminShell() {
     return "https://member-portal.iet.or.tz";
   })();
   const closeAccountMenu = () => setAccountMenuAnchor(null);
-  const openAccountMenu = (anchor: "header" | "sidebar") => setAccountMenuAnchor(anchor);
+  const openAccountMenu = (anchor: "header" | "sidebar") => {
+    setNotificationsOpen(false);
+    setAccountMenuAnchor(anchor);
+  };
+  const closeNotifications = () => setNotificationsOpen(false);
+
+  const unreadCountQuery = useQuery({
+    queryKey: ["admin-notifications-unread-count"],
+    queryFn: async () => {
+      const response = await http.get<{ data: { count: number } }>("/notifications/unread-count");
+      return response.data.data?.count ?? 0;
+    },
+    refetchInterval: 30000,
+  });
+
+  const notificationsQuery = useQuery({
+    queryKey: ["admin-notifications", notificationsOpen],
+    queryFn: async () => {
+      const response = await http.get<{ data: AdminNotification[] }>("/notifications", {
+        params: { page: 1, limit: 6 },
+      });
+      return response.data.data ?? [];
+    },
+    enabled: notificationsOpen,
+  });
+
+  const markNotificationAsRead = useMutation({
+    mutationFn: async (notificationId: string) => {
+      await http.patch(`/notifications/${notificationId}/read`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-notifications-unread-count"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    },
+  });
+
+  const markAllNotificationsAsRead = useMutation({
+    mutationFn: async () => {
+      await http.post("/notifications/mark-all-read");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-notifications-unread-count"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    },
+  });
+  const unreadCount = unreadCountQuery.data ?? 0;
+  const notifications = notificationsQuery.data ?? [];
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       const activeRef = accountMenuAnchor === "header" ? headerAccountMenuRef : sidebarAccountMenuRef;
       if (activeRef.current?.contains(target)) return;
+      if (notificationPanelRef.current?.contains(target)) return;
       if (accountMenuAnchor) setAccountMenuAnchor(null);
+      if (notificationsOpen) setNotificationsOpen(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setAccountMenuAnchor(null);
+        setNotificationsOpen(false);
       }
     };
 
@@ -226,10 +308,14 @@ export default function AdminShell() {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [accountMenuAnchor]);
+  }, [accountMenuAnchor, notificationsOpen]);
 
   useEffect(() => {
     setAccountMenuAnchor(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setNotificationsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -251,6 +337,24 @@ export default function AdminShell() {
       return location.pathname.startsWith("/dashboard/communication");
     }
     return items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
+  }
+
+  async function handleNotificationClick(notification: AdminNotification) {
+    if (!notification.actionUrl) {
+      await markNotificationAsRead.mutateAsync(notification.id);
+      closeNotifications();
+      return;
+    }
+
+    await markNotificationAsRead.mutateAsync(notification.id);
+    closeNotifications();
+
+    if (isExternalUrl(notification.actionUrl)) {
+      window.location.assign(notification.actionUrl);
+      return;
+    }
+
+    navigate(notification.actionUrl);
   }
 
   function AccountMenuPanel({ placement }: { placement: "header" | "sidebar" }) {
@@ -487,15 +591,88 @@ export default function AdminShell() {
               {theme === "dark" ? <SunMedium size={14} /> : <MoonStar size={14} />}
             </button>
 
-            <button
-              type="button"
-              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-all duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
-              aria-label="Notifications"
-              title="Notifications"
-            >
-              <BellIcon />
-              <span className="absolute right-[7px] top-[6px] h-[6px] w-[6px] rounded-full bg-[var(--red)]" />
-            </button>
+            <div className="relative" ref={notificationPanelRef}>
+              <button
+                type="button"
+                className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--muted)] transition-all duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
+                aria-label="Notifications"
+                aria-haspopup="menu"
+                aria-expanded={notificationsOpen}
+                title="Notifications"
+                onClick={() => {
+                  closeAccountMenu();
+                  setNotificationsOpen((value) => !value);
+                }}
+              >
+                <BellIcon />
+                {unreadCount > 0 ? (
+                  <span className="absolute right-[5px] top-[4px] flex min-h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[var(--red)] px-[3px] text-[8px] font-bold leading-none text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                ) : null}
+              </button>
+
+              {notificationsOpen ? (
+                <div
+                  role="menu"
+                  aria-label="Notifications"
+                  className="absolute right-0 top-[38px] z-[80] w-[380px] overflow-hidden rounded-[14px] border border-[var(--border)] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]"
+                >
+                  <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+                    <div>
+                      <div className="text-[12px] font-bold text-[var(--red-dark)]">Notifications</div>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        {unreadCount} unread
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-full border border-[var(--border)] px-3 py-1 text-[10.5px] font-semibold text-[var(--red-dark)] transition hover:border-[var(--red)] hover:text-[var(--red)] disabled:opacity-50"
+                      onClick={() => markAllNotificationsAsRead.mutate()}
+                      disabled={!notifications.length || markAllNotificationsAsRead.isPending}
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-[420px] overflow-auto">
+                    {notificationsQuery.isLoading ? (
+                      <div className="px-4 py-5 text-[11px] text-[var(--muted)]">Loading notifications...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="px-4 py-5 text-[11px] text-[var(--muted)]">No notifications found.</div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          className={`flex w-full gap-3 border-b border-[var(--border)] px-4 py-3 text-left transition hover:bg-[var(--red-pale)] ${notification.isRead ? "bg-white" : "bg-[rgba(226,12,10,0.03)]"}`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <span className={`mt-[6px] h-2.5 w-2.5 shrink-0 rounded-full ${notification.isRead ? "bg-[var(--border)]" : "bg-[var(--red)]"}`} />
+                          <span className="min-w-0">
+                            <strong className="block truncate text-[11.5px] text-[var(--red-dark)]">{notification.title}</strong>
+                            <span className="mt-1 block text-[10.5px] leading-[1.4] text-[var(--muted)]">
+                              {notification.message}
+                            </span>
+                            <span className="mt-1 block text-[9.5px] font-medium text-[var(--muted)]">
+                              {formatNotificationTime(notification.createdAt)}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex items-center justify-end border-t border-[var(--border)] px-4 py-3">
+                    <button
+                      type="button"
+                      className="text-[10.5px] font-semibold text-[var(--muted)] transition hover:text-[var(--red-dark)]"
+                      onClick={closeNotifications}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             <div className="relative" ref={headerAccountMenuRef}>
               <button

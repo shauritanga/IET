@@ -14,6 +14,7 @@ import { UserEntity } from '../user/entities/user.entity';
 import { EngineeringInstitutionEntity } from '../admin/entities/engineering-institution.entity';
 import { UserModule } from '../user/user.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PaymentsModule } from '../payments/payments.module';
     ]),
     UserModule,
     PaymentsModule,
+    NotificationsModule,
   ],
   controllers: [RegistrationController],
   providers: [RegistrationService],

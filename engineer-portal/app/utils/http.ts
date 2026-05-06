@@ -1,10 +1,23 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { deleteFromCookie, deleteFromStorage, getFromCookie, setToCookie } from "~/utils/storage";
-import { MEMBERSHIP_STATUS_COOKIE_KEY, REGISTRATION_STATUS_COOKIE_KEY } from "~/utils/otp-session";
+import {
+    clearAuthSession,
+    MEMBERSHIP_STATUS_COOKIE_KEY,
+    REGISTRATION_STATUS_COOKIE_KEY,
+} from "~/utils/otp-session";
 
 export const TOKEN_KEY = "global-ut";
 export const REFRESH_TOKEN_KEY = "global-rt";
 export const USER_KEY = "global-uid";
+
+type RefreshTokenResponse = {
+    data?: {
+        accessToken?: string;
+        refreshToken?: string;
+    };
+};
+
+let isRedirectingToLogin = false;
 
 const clearAuthAndRedirect = () => {
     deleteFromCookie(TOKEN_KEY);
@@ -13,6 +26,9 @@ const clearAuthAndRedirect = () => {
     deleteFromCookie(REGISTRATION_STATUS_COOKIE_KEY);
     deleteFromStorage(TOKEN_KEY);
     deleteFromStorage(USER_KEY);
+    clearAuthSession();
+    if (typeof window === "undefined" || isRedirectingToLogin) return;
+    isRedirectingToLogin = true;
     window.location.href = "/auth/login";
 };
 
@@ -43,7 +59,12 @@ const createAxiosInstance = (config: AxiosRequestConfig = {}): AxiosInstance => 
         async (error) => {
             const originalRequest = error.config;
 
-            if (error.response?.status !== 401 || originalRequest._retry) {
+            if (error.response?.status !== 401) {
+                return Promise.reject(error);
+            }
+
+            if (!originalRequest || originalRequest._retry) {
+                clearAuthAndRedirect();
                 return Promise.reject(error);
             }
 
@@ -66,15 +87,23 @@ const createAxiosInstance = (config: AxiosRequestConfig = {}): AxiosInstance => 
             isRefreshing = true;
 
             try {
-                const { data } = await axios.post(
+                const response = await axios.post<RefreshTokenResponse>(
                     `${import.meta.env.VITE_API_BASE_URL || "/api/v1"}/auth/refresh`,
                     { refreshToken },
                 );
-                setToCookie(TOKEN_KEY, data.accessToken);
-                setToCookie(REFRESH_TOKEN_KEY, data.refreshToken);
-                instance.defaults.headers.common["Authorization"] = `Bearer ${data.accessToken}`;
-                processQueue(null, data.accessToken);
-                originalRequest.headers["Authorization"] = `Bearer ${data.accessToken}`;
+
+                const nextAccessToken = response.data.data?.accessToken;
+                const nextRefreshToken = response.data.data?.refreshToken;
+
+                if (!nextAccessToken || !nextRefreshToken) {
+                    throw new Error("Malformed refresh token response");
+                }
+
+                setToCookie(TOKEN_KEY, nextAccessToken);
+                setToCookie(REFRESH_TOKEN_KEY, nextRefreshToken);
+                instance.defaults.headers.common["Authorization"] = `Bearer ${nextAccessToken}`;
+                processQueue(null, nextAccessToken);
+                originalRequest.headers["Authorization"] = `Bearer ${nextAccessToken}`;
                 return instance(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);

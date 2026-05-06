@@ -16,6 +16,7 @@ import {
   ReferenceEntity,
 } from '../entities';
 import { UserEntity } from '../../user/entities/user.entity';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../shared/services/email.service';
 import { StorageService } from '../../shared/services/storage.service';
 import { EngineeringInstitutionEntity } from '../../admin/entities/engineering-institution.entity';
@@ -36,6 +37,8 @@ import {
   RegistrationStep,
   ReferenceType,
   DocumentStatus,
+  NotificationType,
+  UserRole,
 } from '../../../common/enums';
 
 @Injectable()
@@ -60,6 +63,7 @@ export class RegistrationService {
     @InjectRepository(EngineeringInstitutionEntity)
     private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
     private emailService: EmailService,
+    private notificationsService: NotificationsService,
     private storageService: StorageService,
   ) {}
 
@@ -848,6 +852,7 @@ export class RegistrationService {
     registration.referenceNumber = referenceNumber;
     registration.currentStep = RegistrationStep.DECLARATION;
     registration.updatedBy = userId;
+    registration.workflowDelayNotifiedAt = null;
 
     if (!registration.completedSteps.includes(RegistrationStep.DECLARATION)) {
       registration.completedSteps.push(RegistrationStep.DECLARATION);
@@ -861,19 +866,50 @@ export class RegistrationService {
       actedByUserId: userId,
     });
 
-    // Send submission confirmation email (fire-and-forget)
-    const submittedUser = await this.userRepository.findOneBy({ id: userId });
-    if (submittedUser) {
-      this.emailService
-        .sendApplicationSubmittedEmail(
-          submittedUser.email,
-          submittedUser.firstName,
+    await this.notificationsService.sendMemberWorkflowNotification(
+      userId,
+      NotificationType.APPLICATION_UPDATE,
+      wasChangesRequested
+        ? 'Application Resubmitted'
+        : 'Application Submitted',
+      wasChangesRequested
+        ? `Your IET membership application ${referenceNumber} has been resubmitted and is now back with Secretariat for review.`
+        : `Your IET membership application ${referenceNumber} has been submitted and is now under Secretariat review.`,
+      {
+        actionUrl: '/dashboard/status',
+        data: {
+          applicationId: registration.id,
           referenceNumber,
-        )
-        .catch((err) =>
-          this.logger.error(`Failed to send submission email: ${err.message}`),
-        );
-    }
+          reviewStage: ApplicationReviewStage.SECRETARIAT_REVIEW,
+          status: ApplicationStatus.IN_REVIEW,
+        },
+        sendEmail: true,
+        sendSms: true,
+      },
+    );
+
+    await this.notificationsService.sendAdminWorkflowNotificationToRole(
+      UserRole.SECRETARIAT,
+      NotificationType.APPLICATION_UPDATE,
+      wasChangesRequested
+        ? 'Application Resubmitted'
+        : 'New Application Submitted',
+      wasChangesRequested
+        ? `Application ${referenceNumber} has been resubmitted and requires Secretariat review.`
+        : `Application ${referenceNumber} has been submitted and requires Secretariat review.`,
+      {
+        actionUrl: `/dashboard/applications/${registration.id}`,
+        data: {
+          applicationId: registration.id,
+          referenceNumber,
+          applicantId: userId,
+          reviewStage: ApplicationReviewStage.SECRETARIAT_REVIEW,
+          status: ApplicationStatus.IN_REVIEW,
+        },
+        sendEmail: true,
+        sendSms: true,
+      },
+    );
 
     this.logger.log(
       `Application ${referenceNumber} submitted by user ${userId}`,

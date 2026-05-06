@@ -9,6 +9,8 @@ const http = axios.create({
   },
 });
 
+let isRedirectingToLogin = false;
+
 http.interceptors.request.use((config) => {
   if (typeof document !== "undefined") {
     const token = parseCookie(document.cookie, TOKEN_KEY);
@@ -25,7 +27,8 @@ http.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearSession();
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && !isRedirectingToLogin) {
+        isRedirectingToLogin = true;
         window.location.href = "/auth/login";
       }
     }

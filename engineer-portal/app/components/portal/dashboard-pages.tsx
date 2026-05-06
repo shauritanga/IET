@@ -106,10 +106,14 @@ const getActivityIcon = (type: string) => {
         case "WELCOME":
         case "EMAIL_VERIFICATION":
             return { Icon: CheckIcon, bg: "#E8F5E9", color: "#1a6b3c" }
+        case "APPLICATION_DELAY":
+            return { Icon: ClockIcon, bg: "#FFF4E5", color: "#C2410C" }
         default:
             return { Icon: FileIcon, bg: "#FFF8E1", color: "#F57F17" }
     }
 }
+
+const isExternalUrl = (value?: string | null) => !!value && /^https?:\/\//i.test(value)
 
 
 const PageHeader = ({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) => (
@@ -239,12 +243,30 @@ export const DashboardOverviewPage = () => {
                                     </div>
                                 )
 
-                                return activity.actionUrl ? (
-                                    <Link key={activity.id} to={activity.actionUrl} style={{ display: "block", textDecoration: "none" }}>
+                                if (!activity.actionUrl) {
+                                    return <div key={activity.id}>{content}</div>
+                                }
+
+                                if (isExternalUrl(activity.actionUrl)) {
+                                    return (
+                                        <a
+                                            key={activity.id}
+                                            href={activity.actionUrl}
+                                            style={{ display: "block", textDecoration: "none" }}
+                                        >
+                                            {content}
+                                        </a>
+                                    )
+                                }
+
+                                return (
+                                    <Link
+                                        key={activity.id}
+                                        to={activity.actionUrl}
+                                        style={{ display: "block", textDecoration: "none" }}
+                                    >
                                         {content}
                                     </Link>
-                                ) : (
-                                    <div key={activity.id}>{content}</div>
                                 )
                             })
                         )}

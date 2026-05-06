@@ -1,25 +1,62 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotificationEntity } from '../entities/notification.entity';
+import { RegistrationEntity } from '../../registration/entities/registration.entity';
 import { UserEntity } from '../../user/entities/user.entity';
 import { NotificationQueryDto, UpdatePreferencesDto } from '../dto';
-import { NotificationType, NotificationChannel } from '../../../common/enums';
+import {
+  NotificationType,
+  NotificationChannel,
+  AuthPortal,
+  UserRole,
+  ApplicationStatus,
+} from '../../../common/enums';
 import { SmsService } from '../../shared/services/sms.service';
 import { EmailService } from '../../shared/services/email.service';
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
+  private workflowDelayMonitor: NodeJS.Timeout | null = null;
 
   constructor(
     @InjectRepository(NotificationEntity)
     private notificationRepository: Repository<NotificationEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(RegistrationEntity)
+    private registrationRepository: Repository<RegistrationEntity>,
     private smsService: SmsService,
     private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    if (this.workflowDelayMonitor) {
+      return;
+    }
+
+    this.workflowDelayMonitor = setInterval(() => {
+      void this.scanForApplicationDelays();
+    }, 60 * 60 * 1000);
+
+    void this.scanForApplicationDelays();
+  }
+
+  onModuleDestroy(): void {
+    if (this.workflowDelayMonitor) {
+      clearInterval(this.workflowDelayMonitor);
+      this.workflowDelayMonitor = null;
+    }
+  }
 
   /**
    * Create a notification for a user
@@ -75,6 +112,92 @@ export class NotificationsService {
 
     this.logger.log(`Notification created for user ${userId}: ${title}`);
     return savedNotification;
+  }
+
+  /**
+   * Create a workflow-critical notification and force delivery via email/SMS.
+   */
+  async sendWorkflowNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+      portal?: AuthPortal;
+    },
+  ): Promise<NotificationEntity> {
+    const notification = new NotificationEntity();
+    notification.userId = userId;
+    notification.type = type;
+    notification.title = title;
+    notification.message = message;
+    notification.actionUrl = this.resolveActionUrl(
+      options?.actionUrl,
+      options?.portal,
+    );
+    notification.data = options?.data || {};
+    notification.sentVia = [];
+
+    const savedNotification =
+      await this.notificationRepository.save(notification);
+
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user) {
+      return savedNotification;
+    }
+
+    if (options?.sendEmail !== false) {
+      await this.sendWorkflowEmailNotification(
+        user,
+        savedNotification,
+        options?.portal,
+      );
+    }
+
+    if (options?.sendSms !== false) {
+      await this.sendWorkflowSmsNotification(user, savedNotification);
+    }
+
+    this.logger.log(`Workflow notification sent to user ${userId}: ${title}`);
+    return savedNotification;
+  }
+
+  /**
+   * Send a workflow notification to all active users in a role.
+   */
+  async sendWorkflowNotificationToRole(
+    role: UserRole,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+      portal?: AuthPortal;
+    },
+  ): Promise<number> {
+    const users = await this.userRepository.find({
+      where: { role, isActive: true },
+    });
+
+    if (!users.length) {
+      this.logger.warn(`No active users found for role ${role}`);
+      return 0;
+    }
+
+    await Promise.all(
+      users.map((user) =>
+        this.sendWorkflowNotification(user.id, type, title, message, options),
+      ),
+    );
+
+    return users.length;
   }
 
   /**
@@ -239,6 +362,7 @@ export class NotificationsService {
       [NotificationType.PAYMENT_REMINDER]: 'paymentReminders',
       [NotificationType.EVENT_REMINDER]: 'eventReminders',
       [NotificationType.APPLICATION_UPDATE]: 'applicationUpdates',
+      [NotificationType.APPLICATION_DELAY]: 'applicationUpdates',
       [NotificationType.MEMBERSHIP_EXPIRY]: 'paymentReminders',
       [NotificationType.GENERAL_ANNOUNCEMENT]: 'generalAnnouncements',
       [NotificationType.WELCOME]: 'applicationUpdates',
@@ -299,6 +423,64 @@ export class NotificationsService {
     }
   }
 
+  private async sendWorkflowEmailNotification(
+    user: UserEntity,
+    notification: NotificationEntity,
+    portal?: AuthPortal,
+  ): Promise<void> {
+    if (!user.email) return;
+
+    try {
+      const absoluteActionUrl = this.resolveActionUrl(
+        notification.actionUrl,
+        portal,
+      );
+      const result = await this.emailService.send({
+        to: user.email,
+        subject: notification.title,
+        html: this.formatNotificationHtml(notification, absoluteActionUrl),
+      });
+
+      if (result.success) {
+        notification.sentVia.push(NotificationChannel.EMAIL);
+        notification.emailSentAt = new Date();
+        await this.notificationRepository.save(notification);
+        this.logger.log(`Workflow email sent to ${user.email}: ${notification.title}`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send workflow email to ${user.email}: ${error.message}`,
+      );
+    }
+  }
+
+  private async sendWorkflowSmsNotification(
+    user: UserEntity,
+    notification: NotificationEntity,
+  ): Promise<void> {
+    if (!user.phoneNumber) return;
+
+    try {
+      const result = await this.smsService.send({
+        to: user.phoneNumber,
+        message: `${notification.title}: ${notification.message}`,
+      });
+
+      if (result.success) {
+        notification.sentVia.push(NotificationChannel.SMS);
+        notification.smsSentAt = new Date();
+        await this.notificationRepository.save(notification);
+        this.logger.log(
+          `Workflow SMS sent to ${user.phoneNumber}: ${notification.title}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send workflow SMS to ${user.phoneNumber}: ${error.message}`,
+      );
+    }
+  }
+
   private async sendPushNotification(
     user: UserEntity,
     notification: NotificationEntity,
@@ -314,7 +496,10 @@ export class NotificationsService {
     await this.notificationRepository.save(notification);
   }
 
-  private formatNotificationHtml(notification: NotificationEntity): string {
+  private formatNotificationHtml(
+    notification: NotificationEntity,
+    actionUrl?: string,
+  ): string {
     return `
             <!DOCTYPE html>
             <html>
@@ -327,10 +512,10 @@ export class NotificationsService {
                     <h2>${notification.title}</h2>
                     <p>${notification.message}</p>
                     ${
-                      notification.actionUrl
+                      actionUrl || notification.actionUrl
                         ? `
                         <p style="text-align: center; margin-top: 30px;">
-                            <a href="${notification.actionUrl}" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">View Details</a>
+                            <a href="${actionUrl || notification.actionUrl}" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">View Details</a>
                         </p>
                     `
                         : ''
@@ -342,6 +527,40 @@ export class NotificationsService {
             </body>
             </html>
         `;
+  }
+
+  private resolveActionUrl(
+    actionUrl: string | undefined,
+    portal: AuthPortal = AuthPortal.MEMBER_PORTAL,
+  ): string | undefined {
+    if (!actionUrl) {
+      return undefined;
+    }
+
+    if (/^https?:\/\//i.test(actionUrl)) {
+      return actionUrl;
+    }
+
+    const baseUrl = this.resolvePortalBaseUrl(portal);
+    if (!baseUrl) {
+      return actionUrl;
+    }
+
+    return new URL(actionUrl, baseUrl).toString();
+  }
+
+  private resolvePortalBaseUrl(portal: AuthPortal): string | undefined {
+    if (portal === AuthPortal.ADMIN_PORTAL) {
+      return (
+        this.configService.get<string>('ADMIN_PORTAL_URL') ??
+        this.configService.get<string>('APP_URL')
+      );
+    }
+
+    return (
+      this.configService.get<string>('ENGINEER_PORTAL_URL') ??
+      this.configService.get<string>('APP_URL')
+    );
   }
 
   // ============================================
@@ -377,8 +596,6 @@ export class NotificationsService {
         `Your membership expires on ${user.membershipExpiryDate?.toLocaleDateString()}. Please renew to maintain your active status.`,
         {
           actionUrl: '/memberships/fees',
-          sendEmail: true,
-          sendSms: true,
         },
       );
 
@@ -428,9 +645,6 @@ export class NotificationsService {
       reason?: string;
     },
   ): Promise<void> {
-    const user = await this.userRepository.findOneBy({ id: userId });
-    if (!user) return;
-
     const titles = {
       APPROVED: 'Application Approved!',
       REJECTED: 'Application Update',
@@ -443,35 +657,182 @@ export class NotificationsService {
       CHANGES_REQUESTED: `Your IET membership application requires additional information. Please login to update your application.`,
     };
 
-    // Create in-app notification
-    await this.createNotification(
+    await this.sendWorkflowNotification(
       userId,
       NotificationType.APPLICATION_UPDATE,
       titles[status],
       messages[status],
       {
-        actionUrl: '/registrations',
+        actionUrl: '/dashboard/status',
         data: details,
         sendEmail: true,
         sendSms: true,
+        portal: AuthPortal.MEMBER_PORTAL,
       },
     );
+  }
 
-    // Send SMS
-    if (user.phoneNumber) {
-      await this.smsService.sendApplicationStatusUpdate(
-        user.phoneNumber,
-        status,
-        details.membershipId,
-      );
+  /**
+   * Send a workflow notification that uses the member portal as the destination.
+   */
+  async sendMemberWorkflowNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+    },
+  ): Promise<NotificationEntity> {
+    return this.sendWorkflowNotification(userId, type, title, message, {
+      ...options,
+      portal: AuthPortal.MEMBER_PORTAL,
+    });
+  }
+
+  /**
+   * Send a workflow notification that uses the admin portal as the destination.
+   */
+  async sendAdminWorkflowNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+    },
+  ): Promise<NotificationEntity> {
+    return this.sendWorkflowNotification(userId, type, title, message, {
+      ...options,
+      portal: AuthPortal.ADMIN_PORTAL,
+    });
+  }
+
+  /**
+   * Send workflow notifications to all active users in a role using the admin portal destination.
+   */
+  async sendAdminWorkflowNotificationToRole(
+    role: UserRole,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+    },
+  ): Promise<number> {
+    return this.sendWorkflowNotificationToRole(role, type, title, message, {
+      ...options,
+      portal: AuthPortal.ADMIN_PORTAL,
+    });
+  }
+
+  /**
+   * Send workflow notifications to all active users in a role using the member portal destination.
+   */
+  async sendMemberWorkflowNotificationToRole(
+    role: UserRole,
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+    },
+  ): Promise<number> {
+    return this.sendWorkflowNotificationToRole(role, type, title, message, {
+      ...options,
+      portal: AuthPortal.MEMBER_PORTAL,
+    });
+  }
+
+  /**
+   * Check for applications that have remained in the same stage for more than 3 days.
+   */
+  async scanForApplicationDelays(): Promise<number> {
+    const threshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const delayedApplications = await this.registrationRepository
+      .createQueryBuilder('registration')
+      .where('registration.status = :status', {
+        status: ApplicationStatus.IN_REVIEW,
+      })
+      .andWhere('registration.stageUpdatedAt IS NOT NULL')
+      .andWhere('registration.stageUpdatedAt <= :threshold', { threshold })
+      .andWhere(
+        '(registration.workflowDelayNotifiedAt IS NULL OR registration.workflowDelayNotifiedAt < registration.stageUpdatedAt)',
+      )
+      .leftJoinAndSelect('registration.user', 'user')
+      .getMany();
+
+    if (!delayedApplications.length) {
+      return 0;
     }
 
-    // Send email
-    await this.emailService.sendApplicationStatusEmail(
-      user.email,
-      user.firstName || 'Applicant',
-      status,
-      details,
+    const superAdmins = await this.userRepository.find({
+      where: { role: UserRole.SUPER_ADMIN, isActive: true },
+    });
+
+    if (!superAdmins.length) {
+      this.logger.warn(
+        `Application delay scan found ${delayedApplications.length} delayed applications, but no active super admins were available`,
+      );
+      return delayedApplications.length;
+    }
+
+    for (const registration of delayedApplications) {
+      const reference = registration.referenceNumber ?? registration.id;
+      const title = 'Application Review Delay Alert';
+      const stageLabel = registration.reviewStage
+        ? registration.reviewStage
+            .replace(/_/g, ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, (char) => char.toUpperCase())
+        : 'review';
+      const message = `Application ${reference} has remained in ${stageLabel} for more than 3 days.`;
+      const actionUrl = `/dashboard/applications/${registration.id}`;
+
+      await Promise.all(
+        superAdmins.map((superAdmin) =>
+          this.sendAdminWorkflowNotification(
+            superAdmin.id,
+            NotificationType.APPLICATION_DELAY,
+            title,
+            message,
+            {
+              actionUrl,
+              data: {
+                applicationId: registration.id,
+                referenceNumber: reference,
+                reviewStage: registration.reviewStage,
+                applicantId: registration.userId,
+                stageUpdatedAt: registration.stageUpdatedAt,
+                severity: 'critical',
+              },
+              sendEmail: true,
+              sendSms: true,
+            },
+          ),
+        ),
+      );
+
+      registration.workflowDelayNotifiedAt = new Date();
+      await this.registrationRepository.save(registration);
+    }
+
+    this.logger.log(
+      `Escalated ${delayedApplications.length} delayed membership applications to super admins`,
     );
+    return delayedApplications.length;
   }
 }

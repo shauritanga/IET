@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router"
 import { MoonStar, SunMedium, ChevronDown, LogOut, UserRound } from "lucide-react"
+import { isAxiosError } from "axios"
 import { BellIcon } from "~/components/portal/icons"
 import MembershipRequiredModal from "~/components/custom/membership-modal"
 import { AppSidebar } from "~/routes/dashboard/layouts/sidebar"
@@ -75,6 +76,12 @@ export default function AuthLayout() {
 
     useEffect(() => {
         if (typeof window === "undefined") return
+        const sharedToken = parseCookie(window.document.cookie, TOKEN_KEY)
+        if (!sharedToken) {
+            navigate("/auth/login", { replace: true })
+            return
+        }
+
         const auth = window.sessionStorage.getItem(AUTH_STORAGE_KEY)
         if (auth) {
             try {
@@ -84,12 +91,6 @@ export default function AuthLayout() {
             } catch {
                 window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
             }
-        }
-
-        const sharedToken = parseCookie(window.document.cookie, TOKEN_KEY)
-        if (!sharedToken) {
-            navigate("/auth/login", { replace: true })
-            return
         }
 
         let cancelled = false
@@ -152,8 +153,10 @@ export default function AuthLayout() {
                 writeAuthSession(nextSession)
                 setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, profile.membershipStatus ?? "")
                 setToCookie(REGISTRATION_STATUS_COOKIE_KEY, profile.registrationStatus ?? "")
-            } catch {
-                // Keep locally restored session if profile refresh fails.
+            } catch (error) {
+                if (isAxiosError(error) && error.response?.status === 401) {
+                    navigate("/auth/login", { replace: true })
+                }
             }
         }
         void refresh()

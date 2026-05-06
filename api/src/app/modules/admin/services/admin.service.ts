@@ -1140,6 +1140,7 @@ export class AdminService {
     registration.reviewComments = comments;
     registration.updatedBy = actor.id;
     registration.stageUpdatedAt = now;
+    registration.workflowDelayNotifiedAt = null;
 
     await this.registrationRepository.save(registration);
     await this.recordStageHistory(registration, {
@@ -2374,19 +2375,22 @@ export class AdminService {
     actor: UserEntity,
   ): Promise<void> {
     const reference = registration.referenceNumber ?? registration.id;
+    const applicationUrl = `/dashboard/applications/${registration.id}`;
+    const applicantUrl = '/dashboard/status';
 
     if (action === 'ASSIGN_EVALUATOR' && registration.assignedEvaluatorId) {
-      await this.notificationsService.createNotification(
+      await this.notificationsService.sendAdminWorkflowNotification(
         registration.assignedEvaluatorId,
         NotificationType.APPLICATION_UPDATE,
         'Application Assigned',
         `Application ${reference} has been assigned to you for evaluator review.`,
         {
-          actionUrl: `/dashboard/applications/${registration.id}`,
+          actionUrl: applicationUrl,
           data: { applicationId: registration.id, action, assignedBy: actor.id },
+          sendEmail: true,
+          sendSms: true,
         },
       );
-      return;
     }
 
     const queueRoleByAction: Partial<Record<UpdateApplicationStageDto['action'], UserRole>> = {
@@ -2397,25 +2401,66 @@ export class AdminService {
       COUNCIL_RECOMMEND: UserRole.SECRETARIAT,
     };
     const queueRole = queueRoleByAction[action];
-    if (!queueRole) return;
+    const queueTitleByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      SECRETARIAT_ADVANCE_TO_MPDC: 'Application Ready for MPDC Review',
+      SECRETARIAT_ADVANCE_TO_COUNCIL: 'Application Ready for Council Review',
+      EVALUATOR_RECOMMEND: 'Evaluator Recommendation Submitted',
+      MPDC_RECOMMEND: 'MPDC Recommendation Submitted',
+      COUNCIL_RECOMMEND: 'Council Recommendation Submitted',
+    };
+    const queueMessageByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      SECRETARIAT_ADVANCE_TO_MPDC: `Application ${reference} has been advanced to MPDC review.`,
+      SECRETARIAT_ADVANCE_TO_COUNCIL: `Application ${reference} has been advanced to Council review.`,
+      EVALUATOR_RECOMMEND: `Application ${reference} has been recommended by the assigned evaluator and is waiting for Secretariat action.`,
+      MPDC_RECOMMEND: `Application ${reference} has been recommended by MPDC and is waiting for Secretariat action.`,
+      COUNCIL_RECOMMEND: `Application ${reference} has been recommended by Council and is waiting for Secretariat action.`,
+    };
 
-    const users = await this.userRepository.find({
-      where: { role: queueRole, isActive: true },
-    });
-
-    await Promise.all(
-      users.map((user) =>
-        this.notificationsService.createNotification(
-          user.id,
-          NotificationType.APPLICATION_UPDATE,
-          'Application Workflow Update',
+    if (queueRole) {
+      await this.notificationsService.sendAdminWorkflowNotificationToRole(
+        queueRole,
+        NotificationType.APPLICATION_UPDATE,
+        queueTitleByAction[action] ?? 'Application Workflow Update',
+        queueMessageByAction[action] ??
           `Application ${reference} is now waiting for ${queueRole} action.`,
-          {
-            actionUrl: `/dashboard/applications/${registration.id}`,
-            data: { applicationId: registration.id, action, actedBy: actor.id },
-          },
-        ),
-      ),
+        {
+          actionUrl: applicationUrl,
+          data: { applicationId: registration.id, action, actedBy: actor.id },
+          sendEmail: true,
+          sendSms: true,
+        },
+      );
+    }
+
+    const applicantTitleByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      ASSIGN_EVALUATOR: 'Application Under Evaluation',
+      EVALUATOR_RECOMMEND: 'Application Advanced',
+      SECRETARIAT_ADVANCE_TO_MPDC: 'Application Advanced to MPDC Review',
+      MPDC_RECOMMEND: 'Application Advanced',
+      SECRETARIAT_ADVANCE_TO_COUNCIL: 'Application Advanced to Council Review',
+      COUNCIL_RECOMMEND: 'Council Recommendation Submitted',
+    };
+    const applicantMessageByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      ASSIGN_EVALUATOR: `Your application ${reference} has been assigned to an evaluator for review.`,
+      EVALUATOR_RECOMMEND: `Your application ${reference} has completed evaluator review and is now back with Secretariat.`,
+      SECRETARIAT_ADVANCE_TO_MPDC: `Your application ${reference} has been forwarded to MPDC for further review.`,
+      MPDC_RECOMMEND: `Your application ${reference} has completed MPDC review and is now back with Secretariat.`,
+      SECRETARIAT_ADVANCE_TO_COUNCIL: `Your application ${reference} has been forwarded to Council for final review.`,
+      COUNCIL_RECOMMEND: `Your application ${reference} has been recommended by Council and is awaiting the final Secretariat decision.`,
+    };
+
+    await this.notificationsService.sendMemberWorkflowNotification(
+      registration.userId,
+      NotificationType.APPLICATION_UPDATE,
+      applicantTitleByAction[action] ?? 'Application Update',
+      applicantMessageByAction[action] ??
+        `Your application ${reference} has been updated.`,
+      {
+        actionUrl: applicantUrl,
+        data: { applicationId: registration.id, action, actedBy: actor.id },
+        sendEmail: true,
+        sendSms: true,
+      },
     );
   }
 
