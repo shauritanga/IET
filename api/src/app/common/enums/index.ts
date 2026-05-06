@@ -32,6 +32,11 @@ export enum UserRole {
   COUNCIL = 'COUNCIL',
 }
 
+export enum AuthPortal {
+  MEMBER_PORTAL = 'MEMBER_PORTAL',
+  ADMIN_PORTAL = 'ADMIN_PORTAL',
+}
+
 // ============================================
 // MEMBERSHIP ENUMS
 // ============================================

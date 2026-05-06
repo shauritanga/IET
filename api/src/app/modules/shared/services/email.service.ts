@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import { AuthPortal } from '../../../common/enums';
 
 export interface EmailOptions {
   to: string | string[];
@@ -131,14 +132,22 @@ export class EmailService implements OnModuleInit {
     email: string,
     firstName: string,
     resetToken: string,
-    portalUrl?: string,
+    portal: AuthPortal = AuthPortal.MEMBER_PORTAL,
   ): Promise<EmailResult> {
-    const baseUrl = portalUrl ?? this.configService.get('ENGINEER_PORTAL_URL') ?? this.configService.get('APP_URL');
+    const isAdminPortal = portal === AuthPortal.ADMIN_PORTAL;
+    const baseUrl = isAdminPortal
+      ? this.configService.get('ADMIN_PORTAL_URL') ?? this.configService.get('APP_URL')
+      : this.configService.get('ENGINEER_PORTAL_URL') ?? this.configService.get('APP_URL');
     const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}`;
-    const html = this.getTemplate('password-reset', { firstName, resetUrl });
+    const portalLabel = isAdminPortal ? 'Admin Portal' : 'Member Portal';
+    const html = this.getTemplate('password-reset', {
+      firstName,
+      resetUrl,
+      portalLabel,
+    });
     return this.send({
       to: email,
-      subject: 'Reset Your IET Password',
+      subject: `Reset Your IET ${portalLabel} Password`,
       html,
     });
   }
@@ -151,9 +160,14 @@ export class EmailService implements OnModuleInit {
     firstName: string,
     referenceNumber: string,
   ): Promise<EmailResult> {
+    const portalUrl =
+      this.configService.get<string>('ENGINEER_PORTAL_URL') ??
+      this.configService.get<string>('APP_URL');
+    const applicationStatusUrl = `${portalUrl}/dashboard/status`;
     const html = this.getTemplate('application-submitted', {
       firstName,
       referenceNumber,
+      applicationStatusUrl,
     });
     return this.send({
       to: email,
@@ -430,7 +444,7 @@ export class EmailService implements OnModuleInit {
                     </div>
                     <div style="padding: 30px; background: #f7fafc;">
                         <h2>Hello ${ctx.firstName},</h2>
-                        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+                        <p>We received a request to reset your password for the ${ctx.portalLabel}. Click the button below to create a new password:</p>
                         <p style="text-align: center; margin: 30px 0;">
                             <a href="${ctx.resetUrl}" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">Reset Password</a>
                         </p>
@@ -464,7 +478,7 @@ export class EmailService implements OnModuleInit {
                         </ul>
                         <p>Please keep your reference number for future correspondence.</p>
                         <p style="text-align: center; margin-top: 30px;">
-                            <a href="${this.configService.get('APP_URL')}/dashboard" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">View Application Status</a>
+                            <a href="${ctx.applicationStatusUrl}" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">View Application Status</a>
                         </p>
                     </div>
                     <div style="text-align: center; padding: 20px; color: #718096; font-size: 12px;">

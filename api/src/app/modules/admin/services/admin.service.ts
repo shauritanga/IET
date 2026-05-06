@@ -51,6 +51,7 @@ import {
   ApplicationStatus,
   ApplicationReviewStage,
   PaymentStatus,
+  PaymentType,
   FeeStatus,
   UserRole,
   NotificationType,
@@ -129,6 +130,57 @@ export class AdminService {
     private notificationsService: NotificationsService,
     private emailService: EmailService,
   ) {}
+
+  private hasThreeConsecutiveUnpaidFeeYears(
+    fees: Array<{ year: number; status: FeeStatus }>,
+  ): boolean {
+    let streak = 0;
+    let previousYear: number | null = null;
+
+    for (const fee of [...fees].sort((a, b) => b.year - a.year)) {
+      if (fee.status === FeeStatus.PAID) {
+        break;
+      }
+
+      if (previousYear !== null && previousYear !== fee.year + 1) {
+        break;
+      }
+
+      streak += 1;
+      if (streak >= 3) {
+        return true;
+      }
+
+      previousYear = fee.year;
+    }
+
+    return false;
+  }
+
+  private async getMembersWithThreeConsecutiveUnpaidFeeYears(): Promise<string[]> {
+    const feeRows = await this.feeRepository
+      .createQueryBuilder('fee')
+      .select('fee.userId', 'userId')
+      .addSelect('fee.year', 'year')
+      .addSelect('fee.status', 'status')
+      .orderBy('fee.userId', 'ASC')
+      .addOrderBy('fee.year', 'DESC')
+      .getRawMany<Array<{ userId: string; year: string | number; status: FeeStatus }>>();
+
+    const groupedFees = new Map<string, Array<{ year: number; status: FeeStatus }>>();
+    for (const row of feeRows as unknown as Array<{ userId: string; year: string | number; status: FeeStatus }>) {
+      const userFees = groupedFees.get(row.userId) ?? [];
+      userFees.push({
+        year: Number(row.year),
+        status: row.status,
+      });
+      groupedFees.set(row.userId, userFees);
+    }
+
+    return Array.from(groupedFees.entries())
+      .filter(([, fees]) => this.hasThreeConsecutiveUnpaidFeeYears(fees))
+      .map(([userId]) => userId);
+  }
 
   private getFileNameFromUrl(url: string, fallback: string): string {
     try {
@@ -1513,57 +1565,196 @@ export class AdminService {
     ];
   }
 
+  private getLedgerYear(value?: Date | null): number {
+    return (value ?? new Date()).getFullYear();
+  }
+
+  private getLedgerDate(item: { completedAt?: Date | null; createdAt: Date }) {
+    return item.completedAt ?? item.createdAt;
+  }
+
+  private buildPaymentLedgerSummary(
+    items: Array<{ amount: number; status: string; createdAt: Date; completedAt?: Date | null }>,
+  ) {
+    const now = new Date();
+    const completedStatuses = new Set<string>([PaymentStatus.COMPLETED]);
+    const completed = items.filter((item) => completedStatuses.has(item.status));
+    const pending = items.filter((item) =>
+      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(item.status as PaymentStatus),
+    );
+    const failed = items.filter((item) =>
+      [PaymentStatus.FAILED, PaymentStatus.CANCELLED].includes(item.status as PaymentStatus),
+    );
+
+    return {
+      totalRevenue: completed.reduce((sum, item) => sum + item.amount, 0),
+      thisMonth: completed
+        .filter((item) => {
+          const date = this.getLedgerDate(item);
+          return (
+            date.getFullYear() === now.getFullYear() &&
+            date.getMonth() === now.getMonth()
+          );
+        })
+        .reduce((sum, item) => sum + item.amount, 0),
+      pending: pending.reduce((sum, item) => sum + item.amount, 0),
+      currency: 'TZS',
+      counts: {
+        completed: completed.length,
+        pending: pending.length,
+        failed: failed.length,
+        total: items.length,
+      },
+    };
+  }
+
+  private async getPaymentLedgerYears(): Promise<number[]> {
+    const paymentYears = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .select('DISTINCT EXTRACT(YEAR FROM COALESCE(payment.completedAt, payment.createdAt))::int', 'year')
+      .getRawMany<{ year: string | number }>();
+
+    const feeYears = await this.feeRepository
+      .createQueryBuilder('fee')
+      .select('DISTINCT fee.year', 'year')
+      .where('fee.status = :paid', { paid: FeeStatus.PAID })
+      .getRawMany<{ year: string | number }>();
+
+    return Array.from(
+      new Set(
+        [...paymentYears, ...feeYears]
+          .map((row) => Number(row.year))
+          .filter((value) => Number.isFinite(value)),
+      ),
+    ).sort((a, b) => b - a);
+  }
+
   async listPayments(query: {
     page?: number;
     limit?: number;
     status?: string;
     type?: string;
+    year?: number;
   }) {
     const page = query.page ?? 1;
     const pageSize = Math.min(query.limit ?? 50, 200);
-    const skip = (page - 1) * pageSize;
+    const status = query.status?.toUpperCase();
+    const type = query.type?.toUpperCase();
+    const year = query.year;
 
-    const qb = this.paymentRepository
+    const paymentQuery = this.paymentRepository
       .createQueryBuilder('payment')
-      .leftJoinAndSelect('payment.user', 'user')
-      .orderBy('payment.createdAt', 'DESC')
-      .skip(skip)
-      .take(pageSize);
+      .leftJoinAndSelect('payment.user', 'user');
 
-    if (query.status) {
-      qb.andWhere('payment.status = :status', { status: query.status });
+    if (status) {
+      paymentQuery.andWhere('UPPER(payment.status::text) = :status', { status });
     }
-    if (query.type) {
-      qb.andWhere('payment.paymentType = :type', { type: query.type });
+    if (type) {
+      paymentQuery.andWhere('UPPER(payment."paymentType"::text) = :type', { type });
+    }
+    if (year) {
+      paymentQuery.andWhere(
+        'EXTRACT(YEAR FROM COALESCE(payment.completedAt, payment.createdAt)) = :year',
+        { year },
+      );
     }
 
-    const [payments, total] = await qb.getManyAndCount();
+    const payments = await paymentQuery.getMany();
 
-    const items = payments.map((p) => ({
-      id: p.id,
-      transactionRef: p.transactionRef ?? p.receiptNumber ?? p.id.slice(0, 8).toUpperCase(),
-      receiptNumber: p.receiptNumber,
-      receiptUrl: p.receiptUrl,
-      memberName: p.user
-        ? `${p.user.firstName ?? ''} ${p.user.lastName ?? ''}`.trim() || p.user.email
-        : 'Unknown',
-      memberEmail: p.user?.email ?? null,
-      paymentType: p.paymentType,
-      description: p.description ?? p.paymentType,
-      amount: p.amount,
-      currency: p.currency,
-      paymentMethod: p.paymentMethod,
-      status: p.status,
-      completedAt: p.completedAt ?? null,
-      createdAt: p.createdAt,
-    }));
+    const includeFees = !type || type === PaymentType.MEMBERSHIP_FEE;
+    const includePaidFees = !status || status === PaymentStatus.COMPLETED;
+    const fees =
+      includeFees && includePaidFees
+        ? await this.feeRepository
+            .createQueryBuilder('fee')
+            .leftJoinAndSelect('fee.user', 'user')
+            .where('fee.status = :paid', { paid: FeeStatus.PAID })
+            .andWhere(
+              year ? 'fee.year = :year' : '1=1',
+              year ? { year } : {},
+            )
+            .getMany()
+        : [];
+
+    const paymentItems = payments.map((payment) => {
+      const ledgerDate = this.getLedgerDate(payment);
+      return {
+        id: payment.id,
+        transactionRef:
+          payment.transactionRef ??
+          payment.receiptNumber ??
+          payment.id.slice(0, 8).toUpperCase(),
+        receiptNumber: payment.receiptNumber,
+        receiptUrl: payment.receiptUrl,
+        memberName: payment.user
+          ? `${payment.user.firstName ?? ''} ${payment.user.lastName ?? ''}`.trim() ||
+            payment.user.email
+          : 'Unknown',
+        memberEmail: payment.user?.email ?? null,
+        paymentType: payment.paymentType,
+        description: payment.description ?? payment.paymentType,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentMethod: payment.paymentMethod,
+        status: payment.status,
+        completedAt: payment.completedAt ?? null,
+        createdAt: payment.createdAt,
+        year: this.getLedgerYear(ledgerDate),
+        source: 'PAYMENT' as const,
+        sourceLabel: 'Gateway payment',
+      };
+    });
+
+    const feeItems = fees.map((fee) => {
+      const ledgerDate = fee.paidAt ?? fee.createdAt;
+      return {
+        id: `fee-${fee.id}`,
+        transactionRef:
+          fee.receiptNumber ??
+          fee.paymentId ??
+          fee.id.slice(0, 8).toUpperCase(),
+        receiptNumber: fee.receiptNumber ?? null,
+        receiptUrl: fee.receiptUrl ?? null,
+        memberName: fee.user
+          ? `${fee.user.firstName ?? ''} ${fee.user.lastName ?? ''}`.trim() ||
+            fee.user.email
+          : 'Unknown',
+        memberEmail: fee.user?.email ?? null,
+        paymentType: PaymentType.MEMBERSHIP_FEE,
+        description: fee.notes ?? `Membership fee ${fee.year}`,
+        amount: fee.amount,
+        currency: fee.currency,
+        paymentMethod: fee.paymentMethod ?? 'Imported',
+        status: PaymentStatus.COMPLETED,
+        completedAt: fee.paidAt ?? fee.createdAt,
+        createdAt: fee.createdAt,
+        year: fee.year,
+        source: 'MEMBERSHIP_FEE' as const,
+        sourceLabel: 'Imported fee',
+      };
+    });
+
+    const items = [...paymentItems, ...feeItems].sort((a, b) => {
+      const dateA = this.getLedgerDate(a).getTime();
+      const dateB = this.getLedgerDate(b).getTime();
+      if (dateA !== dateB) return dateB - dateA;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    const total = items.length;
+    const summary = this.buildPaymentLedgerSummary(items);
+    const years = await this.getPaymentLedgerYears();
+    const start = (page - 1) * pageSize;
+    const paginatedItems = items.slice(start, start + pageSize);
 
     return {
-      items,
+      items: paginatedItems,
       page,
       pageSize,
       total,
       totalPages: Math.ceil(total / pageSize),
+      years,
+      summary,
     };
   }
 
@@ -2016,7 +2207,7 @@ export class AdminService {
       .createQueryBuilder('user')
       .where('user.isActive = :active', { active: true })
       .andWhere('user.membershipStatus = :status', { status: MembershipStatus.EXPIRED })
-      .andWhere('user.updatedAt < :cutoff', { cutoff })
+      .andWhere('user.membershipExpiryDate < :cutoff', { cutoff })
       .getMany();
 
     if (!inactive.length) return { deactivated: 0 };
@@ -2049,11 +2240,7 @@ export class AdminService {
 
     const feesMarkedOverdue = overdueResult.affected ?? 0;
 
-    const overdueUserIds = await this.feeRepository
-      .createQueryBuilder('fee')
-      .select('DISTINCT fee.userId', 'userId')
-      .where('fee.status = :overdue', { overdue: FeeStatus.OVERDUE })
-      .getRawMany<{ userId: string }>();
+    const overdueUserIds = await this.getMembersWithThreeConsecutiveUnpaidFeeYears();
 
     let membershipsExpired = 0;
     if (overdueUserIds.length) {
@@ -2061,20 +2248,11 @@ export class AdminService {
         .createQueryBuilder()
         .update()
         .set({ membershipStatus: MembershipStatus.EXPIRED })
-        .where('id IN (:...ids)', { ids: overdueUserIds.map((r) => r.userId) })
+        .where('id IN (:...ids)', { ids: overdueUserIds })
         .andWhere('membershipStatus = :active', { active: MembershipStatus.ACTIVE })
         .execute();
       membershipsExpired = expiredResult.affected ?? 0;
     }
-
-    const expiredByDateResult = await this.userRepository
-      .createQueryBuilder()
-      .update()
-      .set({ membershipStatus: MembershipStatus.EXPIRED })
-      .where('"membershipExpiryDate" < :today', { today })
-      .andWhere('membershipStatus = :active', { active: MembershipStatus.ACTIVE })
-      .execute();
-    membershipsExpired += expiredByDateResult.affected ?? 0;
 
     this.logger.log(
       `Maintenance: ${feesMarkedOverdue} fees marked overdue, ${membershipsExpired} memberships expired`,

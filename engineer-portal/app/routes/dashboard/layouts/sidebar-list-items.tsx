@@ -15,7 +15,7 @@ type NavSection = {
 
 export const navSections: NavSection[] = [
     {
-        label: "Main Menu",
+        label: "Member Services",
         items: [
             {
                 title: "Overview",

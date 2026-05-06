@@ -15,6 +15,8 @@ import {
 } from "~/utils/auth";
 import http from "~/utils/http";
 
+const PORTAL = "ADMIN_PORTAL";
+
 export const loader = ({ request }: LoaderFunctionArgs) => {
   const token = getCookieValue(request, TOKEN_KEY);
   const role = getCookieValue(request, ROLE_KEY);
@@ -54,6 +56,7 @@ export default function AdminLoginPage() {
       const response = await http.post<ApiEnvelope<AuthResponse>>("/auth/login", {
         email: email.trim(),
         password,
+        portal: PORTAL,
       });
 
       const result = response.data.data;

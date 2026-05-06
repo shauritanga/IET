@@ -256,6 +256,7 @@ export class AuthController {
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     const result = await this.authService.forgotPassword(
       forgotPasswordDto.email,
+      forgotPasswordDto.portal,
     );
     return {
       success: true,

@@ -22,7 +22,7 @@ import { EmailService } from '../../shared/services/email.service';
 import { SmsService } from '../../shared/services/sms.service';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { RegistrationEntity } from '../../registration/entities';
-import { UserRole } from '../../../common/enums';
+import { AuthPortal, UserRole } from '../../../common/enums';
 import { RegisterDto } from '../dto/register.dto';
 
 @Injectable()
@@ -225,6 +225,10 @@ export class AuthService {
         const smsResult = await this.smsService.sendLoginOtp(
           user.phoneNumber,
           otp,
+          loginDTO.portal ??
+            ([UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
+              ? AuthPortal.ADMIN_PORTAL
+              : AuthPortal.MEMBER_PORTAL),
         );
         if (!smsResult.success) {
           this.logger.error(
@@ -282,21 +286,28 @@ export class AuthService {
   /**
    * Forgot password - generate reset token
    */
-  async forgotPassword(email: string): Promise<{ message: string }> {
+  async forgotPassword(
+    email: string,
+    portal?: AuthPortal,
+  ): Promise<{ message: string }> {
     try {
       const token = await this.usersService.generatePasswordResetToken(email);
 
       // Get user info for email
       const user = await this.usersService.findByEmail(email);
       if (user) {
-        const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
-          user.role,
-        );
-        const portalUrl = isAdmin
-          ? this.configService.get<string>('ADMIN_PORTAL_URL')
-          : this.configService.get<string>('ENGINEER_PORTAL_URL');
+        const resolvedPortal =
+          portal ??
+          ([UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
+            ? AuthPortal.ADMIN_PORTAL
+            : AuthPortal.MEMBER_PORTAL);
         this.emailService
-          .sendPasswordResetEmail(user.email, user.firstName, token, portalUrl)
+          .sendPasswordResetEmail(
+            user.email,
+            user.firstName,
+            token,
+            resolvedPortal,
+          )
           .catch((err) =>
             this.logger.error(
               `Failed to send password reset email: ${err.message}`,

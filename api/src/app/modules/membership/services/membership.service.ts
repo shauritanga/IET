@@ -59,6 +59,57 @@ export class MembershipService {
     private settingRepository: Repository<SystemSettingEntity>,
   ) {}
 
+  private hasThreeConsecutiveUnpaidFeeYears(
+    fees: Array<{ year: number; status: FeeStatus }>,
+  ): boolean {
+    let streak = 0;
+    let previousYear: number | null = null;
+
+    for (const fee of [...fees].sort((a, b) => b.year - a.year)) {
+      if (fee.status === FeeStatus.PAID) {
+        break;
+      }
+
+      if (previousYear !== null && previousYear !== fee.year + 1) {
+        break;
+      }
+
+      streak += 1;
+      if (streak >= 3) {
+        return true;
+      }
+
+      previousYear = fee.year;
+    }
+
+    return false;
+  }
+
+  private async getMembersWithThreeConsecutiveUnpaidFeeYears(): Promise<string[]> {
+    const feeRows = await this.feeRepository
+      .createQueryBuilder('fee')
+      .select('fee.userId', 'userId')
+      .addSelect('fee.year', 'year')
+      .addSelect('fee.status', 'status')
+      .orderBy('fee.userId', 'ASC')
+      .addOrderBy('fee.year', 'DESC')
+      .getRawMany<Array<{ userId: string; year: string | number; status: FeeStatus }>>();
+
+    const groupedFees = new Map<string, Array<{ year: number; status: FeeStatus }>>();
+    for (const row of feeRows as unknown as Array<{ userId: string; year: string | number; status: FeeStatus }>) {
+      const userFees = groupedFees.get(row.userId) ?? [];
+      userFees.push({
+        year: Number(row.year),
+        status: row.status,
+      });
+      groupedFees.set(row.userId, userFees);
+    }
+
+    return Array.from(groupedFees.entries())
+      .filter(([, fees]) => this.hasThreeConsecutiveUnpaidFeeYears(fees))
+      .map(([userId]) => userId);
+  }
+
   async getMembershipCategories(): Promise<
     Array<{
       id: string;
@@ -431,28 +482,16 @@ export class MembershipService {
       .execute();
 
     // Update membership status for members with overdue fees
-    const overdueUserIds = await this.feeRepository
-      .createQueryBuilder('fee')
-      .select('DISTINCT fee.userId', 'userId')
-      .where('fee.status = :overdue', { overdue: FeeStatus.OVERDUE })
-      .getRawMany();
+    const overdueUserIds = await this.getMembersWithThreeConsecutiveUnpaidFeeYears();
 
     if (overdueUserIds.length > 0) {
       await this.userRepository
         .createQueryBuilder()
         .update(UserEntity)
         .set({ membershipStatus: MembershipStatus.EXPIRED })
-        .whereInIds(overdueUserIds.map((u) => u.userId))
+        .whereInIds(overdueUserIds)
         .execute();
     }
-
-    await this.userRepository
-      .createQueryBuilder()
-      .update(UserEntity)
-      .set({ membershipStatus: MembershipStatus.EXPIRED })
-      .where('"membershipExpiryDate" < :now', { now })
-      .andWhere('membershipStatus = :active', { active: MembershipStatus.ACTIVE })
-      .execute();
 
     this.logger.log('Fee statuses updated');
   }

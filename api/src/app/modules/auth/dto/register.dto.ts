@@ -3,12 +3,14 @@ import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
+  IsEnum,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
   Matches,
 } from 'class-validator';
+import { AuthPortal } from '../../../common/enums';
 
 const normalizePhoneNumber = (value?: string) =>
   typeof value === 'string'
@@ -116,6 +118,11 @@ export class ForgotPasswordDto {
   @IsNotEmpty({ message: 'Email is required' })
   @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
+
+  @ApiPropertyOptional({ enum: AuthPortal, example: AuthPortal.MEMBER_PORTAL })
+  @IsOptional()
+  @IsEnum(AuthPortal)
+  portal?: AuthPortal;
 }
 
 export class ResetPasswordDto {

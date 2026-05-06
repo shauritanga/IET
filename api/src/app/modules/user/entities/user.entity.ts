@@ -366,17 +366,22 @@ export class UserEntity extends BaseEntity {
    * Check if membership is expired
    */
   get isMembershipExpired(): boolean {
-    if (!this.membershipExpiryDate) return false;
-    return new Date() > new Date(this.membershipExpiryDate);
+    return this.membershipStatus === MembershipStatus.EXPIRED;
   }
 
   /**
    * Get days until membership expiry
    */
   get daysUntilExpiry(): number | null {
-    if (!this.membershipExpiryDate) return null;
+    if (
+      this.membershipStatus !== MembershipStatus.ACTIVE ||
+      !this.membershipExpiryDate
+    ) {
+      return null;
+    }
     const now = new Date();
     const expiry = new Date(this.membershipExpiryDate);
+    if (expiry <= now) return null;
     const diffTime = expiry.getTime() - now.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }

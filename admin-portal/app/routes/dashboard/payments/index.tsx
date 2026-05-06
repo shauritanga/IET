@@ -19,12 +19,31 @@ type PaymentRecord = {
   status: string;
   completedAt?: string | null;
   createdAt: string;
+  year: number;
+  source: "PAYMENT" | "MEMBERSHIP_FEE";
+  sourceLabel?: string | null;
 };
 
 type PaymentSummary = {
   totalRevenue: number;
   thisMonth: number;
   pending: number;
+  currency: string;
+  counts?: {
+    completed: number;
+    pending: number;
+    failed: number;
+    total: number;
+  };
+};
+
+type PaymentLedgerMeta = NonNullable<ApiEnvelope<PaymentRecord[]>["meta"]> & {
+  years?: number[];
+  summary?: PaymentSummary;
+};
+
+type PaymentLedgerResponse = ApiEnvelope<PaymentRecord[]> & {
+  meta?: PaymentLedgerMeta;
 };
 
 const STATUS_OPTIONS = ["All Statuses", "COMPLETED", "PENDING", "PROCESSING", "FAILED", "CANCELLED"] as const;
@@ -35,6 +54,8 @@ const TYPE_OPTIONS = [
   { value: "EVENT_REGISTRATION", label: "Event Registration" },
   { value: "UPGRADE_FEE", label: "Upgrade Fee" },
 ] as const;
+const YEAR_OPTION_ALL = "";
+const PAGE_SIZE = 10;
 
 const METHOD_LABELS: Record<string, string> = {
   AIRTEL_MONEY: "Airtel Money",
@@ -50,6 +71,11 @@ const TYPE_LABELS: Record<string, string> = {
   MEMBERSHIP_FEE: "Membership Fee",
   EVENT_REGISTRATION: "Event Registration",
   UPGRADE_FEE: "Upgrade Fee",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  PAYMENT: "Gateway Payment",
+  MEMBERSHIP_FEE: "Imported Fee",
 };
 
 function formatMoney(amount: number, currency = "TZS") {
@@ -69,6 +95,31 @@ function statusTone(status: string): "approved" | "pending" | "rejected" {
   if (status === "COMPLETED") return "approved";
   if (status === "FAILED" || status === "CANCELLED") return "rejected";
   return "pending";
+}
+
+function buildPaginationItems(current: number, total: number): Array<number | "..."> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | "..."> = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  if (start > 2) {
+    items.push("...");
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
+  }
+
+  if (end < total - 1) {
+    items.push("...");
+  }
+
+  items.push(total);
+  return items;
 }
 
 function RevenueIcon() {
@@ -137,25 +188,36 @@ export default function PaymentsPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [typeFilter, setTypeFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState(YEAR_OPTION_ALL);
+  const [years, setYears] = useState<number[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
 
   async function loadPayments() {
     setLoading(true);
     setPageError(null);
 
-    const params = new URLSearchParams({ page: "1", limit: "100" });
+    const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (statusFilter !== "All Statuses") params.set("status", statusFilter);
     if (typeFilter) params.set("type", typeFilter);
+    if (yearFilter) params.set("year", yearFilter);
 
     try {
-      const [paymentsRes, statsRes] = await Promise.all([
-        http.get<ApiEnvelope<PaymentRecord[]>>(`/admin/payments?${params}`),
-        http.get<ApiEnvelope<{ payments: PaymentSummary }>>("/admin/dashboard/stats"),
-      ]);
+      const paymentsRes = await http.get<PaymentLedgerResponse>(`/admin/payments?${params}`);
 
       setPayments(paymentsRes.data.data ?? []);
       setTotal(paymentsRes.data.meta?.total ?? 0);
-      setSummary(statsRes.data.data?.payments ?? null);
+      setSummary(paymentsRes.data.meta?.summary ?? null);
+      const metaYears = paymentsRes.data.meta?.years ?? [];
+      const derivedYears = Array.from(
+        new Set([
+          ...metaYears,
+          ...(paymentsRes.data.data ?? []).map((payment) => payment.year),
+        ]),
+      ).filter((value): value is number => Number.isFinite(value));
+      setYears(derivedYears.sort((a, b) => b - a));
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
       setPageError(apiError.response?.data?.message ?? "Failed to load payments.");
@@ -167,10 +229,18 @@ export default function PaymentsPage() {
   useEffect(() => {
     void loadPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter]);
+  }, [statusFilter, typeFilter, yearFilter, page]);
 
-  const completedCount = payments.filter((p) => p.status === "COMPLETED").length;
-  const pendingCount = payments.filter((p) => p.status === "PENDING" || p.status === "PROCESSING").length;
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const completedCount = summary?.counts?.completed ?? payments.filter((p) => p.status === "COMPLETED").length;
+  const pendingCount = summary?.counts?.pending ?? payments.filter((p) => p.status === "PENDING" || p.status === "PROCESSING").length;
+  const startItem = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(total, safePage * PAGE_SIZE);
 
   return (
     <section>
@@ -178,13 +248,31 @@ export default function PaymentsPage() {
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Payments</h1>
           <p className="mt-[2px] text-[11px] text-[var(--muted)]">
-            Track all member payments and subscriptions
+            Track all member payments, imported fee records, and subscriptions
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={yearFilter}
+            onChange={(e) => {
+              setPage(1);
+              setYearFilter(e.target.value);
+            }}
+            className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+          >
+            <option value={YEAR_OPTION_ALL}>All Years</option>
+            {years.map((year) => (
+              <option key={year} value={String(year)}>
+                {year}
+              </option>
+            ))}
+          </select>
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+            onChange={(e) => {
+              setPage(1);
+              setTypeFilter(e.target.value);
+            }}
             className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {TYPE_OPTIONS.map((o) => (
@@ -193,7 +281,10 @@ export default function PaymentsPage() {
           </select>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setPage(1);
+              setStatusFilter(e.target.value);
+            }}
             className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {STATUS_OPTIONS.map((o) => (
@@ -217,13 +308,13 @@ export default function PaymentsPage() {
           icon={<RevenueIcon />}
           value={summary ? formatMoney(summary.totalRevenue) : "—"}
           label="Total Revenue"
-          note="All completed payments"
+          note="Filtered ledger"
         />
         <MetricCard
           icon={<ConfirmedIcon />}
           value={completedCount.toString()}
-          label="Completed (this page)"
-          note="Confirmed payments"
+          label="Completed"
+          note="Filtered ledger"
           iconClassName="bg-[#E8F5E9] text-[var(--success)]"
           valueClassName="text-[var(--success)]"
         />
@@ -231,7 +322,7 @@ export default function PaymentsPage() {
           icon={<PendingIcon />}
           value={pendingCount.toString()}
           label="Pending / Processing"
-          note="Awaiting confirmation"
+          note="Filtered ledger"
           iconClassName="bg-[#FFF8E1] text-[var(--warn)]"
           valueClassName="text-[var(--warn)]"
           noteClassName="text-[var(--warn)]"
@@ -249,6 +340,7 @@ export default function PaymentsPage() {
                   <th>Ref</th>
                   <th>Member</th>
                   <th>Type</th>
+                  <th>Source</th>
                   <th>Amount</th>
                   <th>Method</th>
                   <th>Date</th>
@@ -267,6 +359,17 @@ export default function PaymentsPage() {
                       )}
                     </td>
                     <td className="text-[11.5px]">{TYPE_LABELS[p.paymentType] ?? p.paymentType}</td>
+                    <td>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-[4px] text-[11px] font-semibold ${
+                          p.source === "MEMBERSHIP_FEE"
+                            ? "bg-[#f0fdf4] text-[#166534]"
+                            : "bg-[#eff6ff] text-[#1d4ed8]"
+                        }`}
+                      >
+                        {SOURCE_LABELS[p.source] ?? p.sourceLabel ?? p.source}
+                      </span>
+                    </td>
                     <td className="text-[11.5px] font-semibold">{formatMoney(p.amount, p.currency)}</td>
                     <td className="text-[11.5px]">{METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</td>
                     <td className="text-[11.5px]">{formatDate(p.completedAt ?? p.createdAt)}</td>
@@ -291,7 +394,7 @@ export default function PaymentsPage() {
                 ))}
                 {!loading && payments.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                    <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
                       No payments found.
                     </td>
                   </tr>
@@ -300,11 +403,54 @@ export default function PaymentsPage() {
             </table>
           )}
         </div>
-        {total > payments.length && !loading && (
-          <div className="border-t border-[var(--border)] px-4 py-2 text-right text-[11px] text-[var(--muted)]">
-            Showing {payments.length} of {total} payments
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-2">
+          <span className="text-[11px] text-[var(--muted)]">
+            Showing <strong>{startItem}</strong>-<strong>{endItem}</strong> of <strong>{total}</strong> payments
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] text-[13px] font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹
+            </button>
+            {buildPaginationItems(safePage, totalPages).map((item, index) =>
+              item === "..." ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="flex h-[30px] w-[22px] items-center justify-center text-[13px] font-bold text-[var(--muted)]"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setPage(item)}
+                  className={`flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] text-[11.5px] font-bold transition-colors duration-150 ${
+                    safePage === item
+                      ? "border-[var(--red)] bg-[var(--red)] text-white"
+                      : "border-[var(--border)] bg-[var(--white)] text-[var(--text)]"
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage === totalPages}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] text-[13px] font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ›
+            </button>
           </div>
-        )}
+        </div>
+      )}
       </section>
     </section>
   );

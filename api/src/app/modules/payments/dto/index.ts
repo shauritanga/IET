@@ -77,6 +77,12 @@ export class PaymentQueryDto {
   @IsOptional()
   @IsString()
   type?: string;
+
+  @ApiPropertyOptional({ example: 2025 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  year?: number;
 }
 
 export class InitiateApplicationPaymentDto {

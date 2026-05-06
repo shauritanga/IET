@@ -32,9 +32,22 @@ export const deleteFromStorage = (key: string): void => {
     }
 };
 
+const getSharedCookieDomain = () => {
+    if (typeof window === "undefined") return "";
+
+    const hostname = window.location.hostname;
+    if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") return "";
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) return "";
+    if (hostname === "iet.or.tz" || hostname.endsWith(".iet.or.tz")) {
+        return "domain=iet.or.tz; ";
+    }
+
+    return "";
+};
+
 export const setToCookie = (key: string, value: string): void => {
     if (typeof document === "undefined") return;
-    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; SameSite=Strict`;
+    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; ${getSharedCookieDomain()}SameSite=Strict`;
 };
 
 export const getFromCookie = (key: string): string | null => {
@@ -47,5 +60,5 @@ export const getFromCookie = (key: string): string | null => {
 
 export const deleteFromCookie = (key: string): void | null => {
     if (typeof document === "undefined") return null;
-    document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    document.cookie = `${key}=; path=/; ${getSharedCookieDomain()}expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 };

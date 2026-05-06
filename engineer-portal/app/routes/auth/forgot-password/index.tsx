@@ -4,6 +4,8 @@ import { Link } from "react-router";
 import type { AxiosError } from "axios";
 import http from "~/utils/http";
 
+const PORTAL = "MEMBER_PORTAL";
+
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -21,6 +23,7 @@ export default function ForgotPasswordPage() {
         try {
             await http.post("/auth/forgot-password", {
                 email: email.trim().toLowerCase(),
+                portal: PORTAL,
             });
             setSent(true);
         } catch (err) {

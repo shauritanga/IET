@@ -1,12 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
+  IsEnum,
   IsString,
   MaxLength,
   MinLength,
+  IsOptional,
 } from 'class-validator';
+import { AuthPortal } from '../../../common/enums';
 
 export class UserLoginDto {
   @ApiProperty()
@@ -21,4 +24,9 @@ export class UserLoginDto {
   @MinLength(8, { message: 'password should be minimum 8 ' })
   @MaxLength(50, { message: 'password should be maximum 50 ' })
   password: string;
+
+  @ApiPropertyOptional({ enum: AuthPortal, example: AuthPortal.MEMBER_PORTAL })
+  @IsOptional()
+  @IsEnum(AuthPortal)
+  portal?: AuthPortal;
 }

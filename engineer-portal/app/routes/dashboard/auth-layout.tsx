@@ -6,6 +6,7 @@ import MembershipRequiredModal from "~/components/custom/membership-modal"
 import { AppSidebar } from "~/routes/dashboard/layouts/sidebar"
 import { useLogout } from "~/routes/auth/logout/index"
 import http from "~/utils/http"
+import { parseCookie } from "~/utils/parse-cookie"
 import {
     AUTH_STORAGE_KEY,
     createAuthSession,
@@ -14,7 +15,8 @@ import {
     writeAuthSession,
     type AuthSession,
 } from "~/utils/otp-session"
-import { setToCookie } from "~/utils/storage"
+import { setToCookie, setToStorage } from "~/utils/storage"
+import { TOKEN_KEY, USER_KEY } from "~/utils/http"
 import { useThemeMode } from "~/providers/theme"
 
 type UserProfileSessionSource = {
@@ -74,16 +76,57 @@ export default function AuthLayout() {
     useEffect(() => {
         if (typeof window === "undefined") return
         const auth = window.sessionStorage.getItem(AUTH_STORAGE_KEY)
-        if (!auth) {
+        if (auth) {
+            try {
+                const session = JSON.parse(auth) as AuthSession
+                setAuthSession(session)
+                return
+            } catch {
+                window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
+            }
+        }
+
+        const sharedToken = parseCookie(window.document.cookie, TOKEN_KEY)
+        if (!sharedToken) {
             navigate("/auth/login", { replace: true })
             return
         }
-        try {
-            const session = JSON.parse(auth) as AuthSession
-            setAuthSession(session)
-        } catch {
-            window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
-            navigate("/auth/login", { replace: true })
+
+        let cancelled = false
+
+        const bootstrap = async () => {
+            try {
+                const response = await http.get<{ data: UserProfileSessionSource }>("/users/profile")
+                const profile = response.data.data
+                if (cancelled || !profile) return
+
+                const name = profile.fullName?.trim()
+                    || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim()
+                    || profile.email
+
+                const nextSession = createAuthSession({
+                    email: profile.email,
+                    name,
+                    profilePhotoUrl: profile.profilePhotoUrl,
+                    membershipStatus: profile.membershipStatus,
+                    registrationStatus: profile.registrationStatus,
+                })
+
+                setAuthSession(nextSession)
+                writeAuthSession(nextSession)
+                setToStorage(USER_KEY, profile)
+                setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, profile.membershipStatus ?? "")
+                setToCookie(REGISTRATION_STATUS_COOKIE_KEY, profile.registrationStatus ?? "")
+            } catch {
+                if (!cancelled) {
+                    navigate("/auth/login", { replace: true })
+                }
+            }
+        }
+
+        void bootstrap()
+        return () => {
+            cancelled = true
         }
     }, [navigate])
 

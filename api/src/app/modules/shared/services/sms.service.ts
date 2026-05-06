@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AuthPortal } from '../../../common/enums';
 
 export interface SmsOptions {
   to: string;
@@ -76,8 +77,14 @@ export class SmsService {
   /**
    * Send login OTP for 2FA
    */
-  async sendLoginOtp(phoneNumber: string, code: string): Promise<SmsResult> {
-    const message = `Your IET admin login code is: ${code}. Valid for 5 minutes. Do not share this code.`;
+  async sendLoginOtp(
+    phoneNumber: string,
+    code: string,
+    portal: AuthPortal = AuthPortal.MEMBER_PORTAL,
+  ): Promise<SmsResult> {
+    const portalLabel =
+      portal === AuthPortal.ADMIN_PORTAL ? 'Admin Portal' : 'Member Portal';
+    const message = `Your IET ${portalLabel} login code is: ${code}. Valid for 5 minutes. Do not share this code.`;
     return this.send({ to: phoneNumber, message });
   }
 

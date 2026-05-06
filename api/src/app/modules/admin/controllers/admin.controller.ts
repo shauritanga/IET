@@ -529,6 +529,7 @@ export class AdminController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, type: String })
   @ApiQuery({ name: 'type', required: false, type: String })
+  @ApiQuery({ name: 'year', required: false, type: Number })
   @ApiResponse({ status: HttpStatus.OK, description: 'Payments list retrieved' })
   async listPayments(@Query() query: PaymentQueryDto) {
     const result = await this.adminService.listPayments(query);
@@ -542,6 +543,8 @@ export class AdminController {
         totalPages: result.totalPages,
         hasNextPage: result.page < result.totalPages,
         hasPreviousPage: result.page > 1,
+        years: result.years,
+        summary: result.summary,
       },
     };
   }

@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText } from "lucide-react";
+import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText, ArrowUpRight } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { clearSession, getStoredUser } from "~/utils/auth";
@@ -189,6 +189,19 @@ export default function AdminShell() {
   const renderAvatar = () => user?.profilePhotoUrl ? (
     <img src={user.profilePhotoUrl} alt="" className="h-full w-full rounded-full object-cover" />
   ) : initials;
+  const memberPortalUrl = (() => {
+    const configured = (import.meta.env.VITE_MEMBER_PORTAL_URL as string | undefined)?.trim();
+    if (configured) return configured.replace(/\/$/, "");
+
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
+        return "http://localhost:4000";
+      }
+    }
+
+    return "https://member-portal.iet.or.tz";
+  })();
   const closeAccountMenu = () => setAccountMenuAnchor(null);
   const openAccountMenu = (anchor: "header" | "sidebar") => setAccountMenuAnchor(anchor);
 
@@ -278,6 +291,21 @@ export default function AdminShell() {
           >
             <UserRound size={14} className="shrink-0 text-[var(--muted)]" />
             <span>Profile</span>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeAccountMenu();
+              if (typeof window !== "undefined") {
+                window.open(memberPortalUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors duration-150 hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+          >
+            <ArrowUpRight size={14} className="shrink-0 text-[var(--muted)]" />
+            <span>Member Portal</span>
           </button>
 
           <button
