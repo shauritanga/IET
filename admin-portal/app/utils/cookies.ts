@@ -43,5 +43,10 @@ export function setCookie(key: string, value: string) {
 
 export function deleteCookie(key: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${key}=; path=/; ${getSharedCookieDomain()}expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+
+  const sharedDomain = getSharedCookieDomain();
+  if (sharedDomain) {
+    document.cookie = `${key}=; path=/; ${sharedDomain}expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+  }
 }

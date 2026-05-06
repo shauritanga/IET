@@ -60,5 +60,10 @@ export const getFromCookie = (key: string): string | null => {
 
 export const deleteFromCookie = (key: string): void | null => {
     if (typeof document === "undefined") return null;
-    document.cookie = `${key}=; path=/; ${getSharedCookieDomain()}expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+
+    const sharedDomain = getSharedCookieDomain();
+    if (sharedDomain) {
+        document.cookie = `${key}=; path=/; ${sharedDomain}expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
+    }
 };

@@ -56,10 +56,9 @@ export function persistSession(user: LoginUser, accessToken: string, refreshToke
 }
 
 export function setSessionCookies(accessToken: string, refreshToken: string, role: string) {
-  if (typeof document === "undefined") return;
-  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(accessToken)}; path=/; SameSite=Strict`;
-  document.cookie = `${REFRESH_TOKEN_KEY}=${encodeURIComponent(refreshToken)}; path=/; SameSite=Strict`;
-  document.cookie = `${ROLE_KEY}=${encodeURIComponent(role)}; path=/; SameSite=Strict`;
+  setCookie(TOKEN_KEY, accessToken);
+  setCookie(REFRESH_TOKEN_KEY, refreshToken);
+  setCookie(ROLE_KEY, role);
 }
 
 export function clearSession() {

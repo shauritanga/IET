@@ -433,6 +433,11 @@ export default function AdminShell() {
             onClick={() => {
               closeAccountMenu();
               clearSession();
+              queryClient.clear();
+              if (typeof window !== "undefined") {
+                window.location.assign("/auth/login");
+                return;
+              }
               navigate("/auth/login", { replace: true });
             }}
             className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--red)] transition-colors duration-150 hover:bg-[var(--red-pale)]"
