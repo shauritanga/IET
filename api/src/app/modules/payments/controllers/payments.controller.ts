@@ -30,6 +30,7 @@ import {
   PaymentQueryDto,
   MpesaCallbackDto,
   SelcomCallbackDto,
+  SelcomC2bCallbackDto,
 } from '../dto';
 
 @ApiTags('Payments')
@@ -187,16 +188,83 @@ export class PaymentsController {
   @Post('webhooks/selcom')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Selcom payment callback' })
+  @ApiOperation({ summary: 'Selcom payment callback (legacy)' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Callback processed',
-    schema: {
-      example: { status: 'OK' },
-    },
+    schema: { example: { status: 'OK' } },
   })
   async handleSelcomCallback(@Body() data: SelcomCallbackDto) {
     return this.paymentsService.handleSelcomCallback(data);
+  }
+
+  @Post('webhooks/selcom/lookup')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Selcom C2B lookup callback' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Lookup processed',
+    schema: {
+      example: {
+        reference: 'ref123',
+        resultcode: '000',
+        result: 'SUCCESS',
+        message: 'Lookup successful',
+      },
+    },
+  })
+  async handleSelcomLookup(
+    @Body() data: SelcomC2bCallbackDto,
+    @Headers('authorization') auth: string,
+  ) {
+    return this.paymentsService.handleSelcomLookup(data, auth);
+  }
+
+  @Post('webhooks/selcom/validation')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Selcom C2B validation callback' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Validation processed',
+    schema: {
+      example: {
+        reference: 'ref123',
+        resultcode: '000',
+        result: 'SUCCESS',
+        message: 'Validation successful',
+      },
+    },
+  })
+  async handleSelcomValidation(
+    @Body() data: SelcomC2bCallbackDto,
+    @Headers('authorization') auth: string,
+  ) {
+    return this.paymentsService.handleSelcomValidation(data, auth);
+  }
+
+  @Post('webhooks/selcom/notification')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Selcom C2B notification callback' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Notification processed',
+    schema: {
+      example: {
+        reference: 'ref123',
+        resultcode: '000',
+        result: 'SUCCESS',
+        message: 'Payment confirmed',
+      },
+    },
+  })
+  async handleSelcomNotification(
+    @Body() data: SelcomC2bCallbackDto,
+    @Headers('authorization') auth: string,
+  ) {
+    return this.paymentsService.handleSelcomNotification(data, auth);
   }
 
   @Post('webhooks/clickpesa')

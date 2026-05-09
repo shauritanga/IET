@@ -8,6 +8,8 @@ export interface PaymentRequest {
   currency: string;
   phoneNumber?: string;
   email?: string;
+  firstName?: string;
+  lastName?: string;
   reference: string;
   description: string;
   callbackUrl?: string;
@@ -68,6 +70,12 @@ export class PaymentGatewayService {
   private readonly clickPesaUseChecksum: boolean;
   private clickPesaToken: string | null = null;
   private clickPesaTokenExpiresAt = 0;
+  private readonly selcomBaseUrl: string;
+  private readonly selcomApiKey: string;
+  private readonly selcomApiSecret: string;
+  private readonly selcomVendor: string;
+  private readonly selcomRedirectUrl: string;
+  private readonly selcomCancelUrl: string;
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
@@ -79,6 +87,14 @@ export class PaymentGatewayService {
     this.clickPesaUseChecksum = !!configService.get<boolean>(
       'CLICKPESA_USE_CHECKSUM',
     );
+    this.selcomBaseUrl = configService.get<string>('SELCOM_BASE_URL')!;
+    this.selcomApiKey = configService.get<string>('SELCOM_API_KEY') || '';
+    this.selcomApiSecret = configService.get<string>('SELCOM_API_SECRET') || '';
+    this.selcomVendor = configService.get<string>('SELCOM_VENDOR') || '';
+    this.selcomRedirectUrl =
+      configService.get<string>('SELCOM_REDIRECT_URL') || '';
+    this.selcomCancelUrl =
+      configService.get<string>('SELCOM_CANCEL_URL') || '';
   }
 
   /**
@@ -118,6 +134,10 @@ export class PaymentGatewayService {
     transactionId: string,
   ): Promise<PaymentStatusResponse> {
     this.logger.log(`Checking ${method} payment status for ${transactionId}`);
+
+    if (method === PaymentMethod.SELCOM && this.isSelcomConfigured()) {
+      return this.checkSelcomOrderStatus(transactionId);
+    }
 
     if (this.usesClickPesa(method)) {
       return this.checkClickPesaPaymentStatus(transactionId);
@@ -383,12 +403,16 @@ export class PaymentGatewayService {
   }
 
   // ============================================
-  // SELCOM (Card & Aggregator)
+  // SELCOM (Checkout API + C2B Collection)
   // ============================================
 
   private async initiateSelcom(
     request: PaymentRequest,
   ): Promise<PaymentResponse> {
+    if (this.isSelcomConfigured()) {
+      return this.initiateSelcomCheckout(request);
+    }
+
     if (this.usesClickPesa(PaymentMethod.SELCOM)) {
       return this.initiateClickPesaCardPayment(request);
     }
@@ -397,14 +421,163 @@ export class PaymentGatewayService {
       return this.mockSelcomPayment(request);
     }
 
-    // TODO: Implement actual Selcom API
-    // Required env variables:
-    // - SELCOM_API_KEY
-    // - SELCOM_API_SECRET
-    // - SELCOM_VENDOR_ID
-    // - SELCOM_CALLBACK_URL
-
     return this.mockSelcomPayment(request);
+  }
+
+  private async initiateSelcomCheckout(
+    request: PaymentRequest,
+  ): Promise<PaymentResponse> {
+    const orderId = `IET-${request.reference}`;
+    const apiUrl = `${this.selcomBaseUrl}/checkout/create-order`;
+
+    const firstName = request.firstName || 'IET';
+    const lastName = request.lastName || 'Member';
+    const buyerName = `${firstName} ${lastName}`.trim();
+    const buyerPhone = request.phoneNumber
+      ? this.formatTanzanianPhone(request.phoneNumber).replace(/^\+/, '')
+      : '';
+
+    const fields: Record<string, string> = {
+      vendor: this.selcomVendor,
+      order_id: orderId,
+      buyer_email: request.email || '',
+      buyer_name: buyerName,
+      buyer_phone: buyerPhone,
+      amount: String(request.amount),
+      currency: request.currency,
+      payment_methods: 'ALL',
+      redirect_url: Buffer.from(this.selcomRedirectUrl || '').toString('base64'),
+      cancel_url: Buffer.from(this.selcomCancelUrl || '').toString('base64'),
+      webhook: Buffer.from(request.callbackUrl || '').toString('base64'),
+      'billing.firstname': firstName,
+      'billing.lastname': lastName,
+      'billing.address_1': 'N/A',
+      'billing.city': 'Dar es Salaam',
+      'billing.state_or_region': 'Dar es Salaam',
+      'billing.postcode_or_pobox': '00000',
+      'billing.country': 'TZ',
+      'billing.phone': buyerPhone || request.email || '',
+      no_of_items: '1',
+    };
+
+    const headers = this.buildSelcomHeaders(fields);
+
+    this.logger.log(
+      `[SELCOM] Creating order ${orderId} for ${request.amount} ${request.currency}`,
+    );
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(fields),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    this.logger.log(
+      `[SELCOM] Create order response [${response.status}]: ${JSON.stringify(payload)}`,
+    );
+
+    if (!response.ok || payload?.resultcode !== '000') {
+      throw new BadRequestException(
+        payload?.message ||
+          `Selcom order creation failed (HTTP ${response.status})`,
+      );
+    }
+
+    const paymentGatewayUrl = payload?.data?.[0]?.payment_gateway_url;
+
+    return {
+      success: true,
+      transactionId: orderId,
+      paymentUrl: paymentGatewayUrl,
+      status: 'PENDING',
+      message:
+        payload?.message ||
+        'Checkout created. Redirect customer to the payment page.',
+      rawResponse: payload,
+    };
+  }
+
+  async checkSelcomOrderStatus(orderId: string): Promise<PaymentStatusResponse> {
+    const fields: Record<string, string> = { order_id: orderId };
+    const headers = this.buildSelcomHeaders(fields);
+
+    const url = `${this.selcomBaseUrl}/checkout/order-status?order_id=${encodeURIComponent(orderId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { ...headers, Accept: 'application/json' },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    this.logger.log(
+      `[SELCOM] Order status for ${orderId} [${response.status}]: ${JSON.stringify(payload)}`,
+    );
+
+    if (!response.ok) {
+      return {
+        success: false,
+        status: 'PENDING',
+        transactionId: orderId,
+        message: payload?.message || 'Unable to verify Selcom order status',
+      };
+    }
+
+    const resultcode = payload?.resultcode || payload?.data?.[0]?.resultcode;
+    const rawStatus = String(
+      payload?.data?.[0]?.payment_status || payload?.result || '',
+    ).toUpperCase();
+
+    const status =
+      resultcode === '000' && this.completedStatuses.has(rawStatus)
+        ? 'COMPLETED'
+        : rawStatus === 'CANCELLED'
+          ? 'CANCELLED'
+          : rawStatus === 'FAILED'
+            ? 'FAILED'
+            : 'PENDING';
+
+    return {
+      success: true,
+      status,
+      transactionId: payload?.data?.[0]?.transid || orderId,
+      amount: payload?.data?.[0]?.amount,
+      message: payload?.message || `Selcom status: ${rawStatus || 'PENDING'}`,
+    };
+  }
+
+  private buildSelcomHeaders(
+    orderedFields: Record<string, string>,
+  ): Record<string, string> {
+    const timestamp = new Date().toISOString();
+    const signedFields = Object.keys(orderedFields).join(',');
+    const fieldPairs = Object.entries(orderedFields)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    const signingString = `timestamp=${timestamp}&${fieldPairs}`;
+    const digest = createHmac('sha256', this.selcomApiSecret)
+      .update(signingString)
+      .digest('base64');
+    const authorization = `SELCOM ${Buffer.from(this.selcomApiKey).toString('base64')}`;
+
+    return {
+      Authorization: authorization,
+      'Digest-Method': 'HS256',
+      Digest: digest,
+      Timestamp: timestamp,
+      'Signed-Fields': signedFields,
+    };
+  }
+
+  private isSelcomConfigured(): boolean {
+    return Boolean(
+      this.selcomApiKey && this.selcomApiSecret && this.selcomVendor,
+    );
   }
 
   private async mockSelcomPayment(
@@ -480,6 +653,9 @@ export class PaymentGatewayService {
   }
 
   usesClickPesa(method: PaymentMethod): boolean {
+    if (method === PaymentMethod.SELCOM && this.isSelcomConfigured()) {
+      return false;
+    }
     return (
       this.isClickPesaConfigured() &&
       [
@@ -493,6 +669,12 @@ export class PaymentGatewayService {
   }
 
   getCallbackUrl(method: PaymentMethod, apiUrl?: string): string | undefined {
+    if (method === PaymentMethod.SELCOM && this.isSelcomConfigured()) {
+      return apiUrl
+        ? `${apiUrl}/payments/webhooks/selcom/notification`
+        : undefined;
+    }
+
     if (this.usesClickPesa(method)) {
       return (
         this.configService.get<string>('CLICKPESA_CALLBACK_URL') ||
@@ -1025,12 +1207,14 @@ export class PaymentGatewayService {
         mode: clickPesaMode,
       },
       selcom: {
-        configured: !!this.configService.get('SELCOM_API_KEY'),
-        mode: clickPesaConfigured
-          ? 'clickpesa'
-          : this.isDevelopment
-            ? 'mock'
-            : 'live',
+        configured: this.isSelcomConfigured(),
+        mode: this.isSelcomConfigured()
+          ? 'live'
+          : clickPesaConfigured
+            ? 'clickpesa'
+            : this.isDevelopment
+              ? 'mock'
+              : 'live',
       },
       dpo: {
         configured: !!this.configService.get('DPO_COMPANY_TOKEN'),

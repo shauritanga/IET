@@ -148,7 +148,7 @@ export class MpesaCallbackDto {
   LastName?: string;
 }
 
-// Selcom Callback DTO
+// Selcom Callback DTO (legacy flat format)
 export class SelcomCallbackDto {
   @ApiProperty()
   transid: string;
@@ -166,5 +166,38 @@ export class SelcomCallbackDto {
   amount: string;
 
   @ApiPropertyOptional()
+  msisdn?: string;
+}
+
+// Selcom C2B Callback DTO (lookup / validation / notification)
+export class SelcomC2bCallbackDto {
+  @ApiProperty({ description: 'Mobile operator channel name' })
+  @IsNotEmpty()
+  @IsString()
+  operator: string;
+
+  @ApiProperty({ description: 'Selcom transaction ID' })
+  @IsNotEmpty()
+  @IsString()
+  transid: string;
+
+  @ApiProperty({ description: 'Selcom gateway reference' })
+  @IsNotEmpty()
+  @IsString()
+  reference: string;
+
+  @ApiProperty({ description: 'IET payment ID (order_id echoed back)' })
+  @IsNotEmpty()
+  @IsString()
+  utilityref: string;
+
+  @ApiPropertyOptional({ description: 'Transaction amount' })
+  @IsOptional()
+  @IsString()
+  amount?: string;
+
+  @ApiPropertyOptional({ description: 'Customer mobile number' })
+  @IsOptional()
+  @IsString()
   msisdn?: string;
 }

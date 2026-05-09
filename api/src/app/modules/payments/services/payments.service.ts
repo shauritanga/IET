@@ -15,6 +15,7 @@ import {
   InitiateApplicationPaymentDto,
   MpesaCallbackDto,
   SelcomCallbackDto,
+  SelcomC2bCallbackDto,
   PaymentQueryDto,
 } from '../dto';
 import {
@@ -126,6 +127,8 @@ export class PaymentsService {
         currency: 'TZS',
         phoneNumber: dto.phoneNumber,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
         reference: providerOrderReference,
         description: payment.description,
         callbackUrl: this.paymentGateway.getCallbackUrl(
@@ -559,8 +562,6 @@ export class PaymentsService {
         payment.status = PaymentStatus.COMPLETED;
         payment.completedAt = new Date();
         payment.receiptNumber = await this.generateReceiptNumber();
-
-        // Send success notifications
         await this.sendPaymentNotifications(payment);
       } else {
         payment.status = PaymentStatus.FAILED;
@@ -587,6 +588,175 @@ export class PaymentsService {
       );
       return { status: 'OK' };
     }
+  }
+
+  async handleSelcomLookup(
+    data: SelcomC2bCallbackDto,
+    auth: string,
+  ): Promise<Record<string, string>> {
+    const fail = (code: string, msg: string) => ({
+      reference: data.reference,
+      resultcode: code,
+      result: 'FAIL',
+      message: msg,
+    });
+
+    if (!this.verifySelcomWebhookToken(auth)) {
+      return fail('010', 'Unauthorized');
+    }
+
+    const payment = await this.paymentRepository.findOne({
+      where: { id: data.utilityref },
+      relations: ['user'],
+    });
+
+    if (!payment) {
+      this.logger.warn(
+        `Selcom lookup for unknown payment ref: ${data.utilityref}`,
+      );
+      return fail('010', 'Invalid payment reference');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: payment.userId },
+    });
+    const name = user
+      ? `${user.firstName} ${user.lastName}`.trim()
+      : 'IET Member';
+
+    this.logger.log(`Selcom lookup OK for payment ${payment.id}`);
+    return {
+      reference: data.reference,
+      resultcode: '000',
+      result: 'SUCCESS',
+      message: 'Lookup successful',
+      name,
+    };
+  }
+
+  async handleSelcomValidation(
+    data: SelcomC2bCallbackDto,
+    auth: string,
+  ): Promise<Record<string, string>> {
+    const fail = (code: string, msg: string) => ({
+      reference: data.reference,
+      resultcode: code,
+      result: 'FAIL',
+      message: msg,
+    });
+
+    if (!this.verifySelcomWebhookToken(auth)) {
+      return fail('010', 'Unauthorized');
+    }
+
+    const payment = await this.paymentRepository.findOne({
+      where: { id: data.utilityref },
+    });
+
+    if (!payment) {
+      this.logger.warn(
+        `Selcom validation for unknown payment ref: ${data.utilityref}`,
+      );
+      return fail('010', 'Invalid payment reference');
+    }
+
+    if (data.amount) {
+      const incoming = parseInt(data.amount, 10);
+      if (!isNaN(incoming) && incoming !== payment.amount) {
+        this.logger.warn(
+          `Selcom amount mismatch for ${payment.id}: expected ${payment.amount}, got ${incoming}`,
+        );
+        return fail('012', 'Invalid amount');
+      }
+    }
+
+    this.logger.log(`Selcom validation OK for payment ${payment.id}`);
+    return {
+      reference: data.reference,
+      resultcode: '000',
+      result: 'SUCCESS',
+      message: 'Validation successful',
+    };
+  }
+
+  async handleSelcomNotification(
+    data: SelcomC2bCallbackDto,
+    auth: string,
+  ): Promise<Record<string, string>> {
+    const fail = (code: string, msg: string) => ({
+      reference: data.reference,
+      resultcode: code,
+      result: 'FAIL',
+      message: msg,
+    });
+
+    if (!this.verifySelcomWebhookToken(auth)) {
+      return fail('010', 'Unauthorized');
+    }
+
+    try {
+      const payment = await this.paymentRepository.findOne({
+        where: { id: data.utilityref },
+      });
+
+      if (!payment) {
+        this.logger.warn(
+          `Selcom notification for unknown payment ref: ${data.utilityref}`,
+        );
+        return fail('010', 'Invalid payment reference');
+      }
+
+      if (payment.status === PaymentStatus.COMPLETED) {
+        this.logger.log(`Selcom payment ${payment.id} already completed`);
+        return {
+          reference: data.reference,
+          resultcode: '000',
+          result: 'SUCCESS',
+          message: 'Already processed',
+        };
+      }
+
+      payment.status = PaymentStatus.COMPLETED;
+      payment.completedAt = new Date();
+      payment.transactionRef = data.transid;
+      payment.mobileMoneyRef = data.reference;
+      payment.receiptNumber = await this.generateReceiptNumber();
+      payment.providerResponse = {
+        ...payment.providerResponse,
+        selcomNotification: data,
+      };
+
+      const savedPayment = await this.paymentRepository.save(payment);
+      await this.updateRegistrationPaymentStatus(savedPayment);
+      await this.sendPaymentNotifications(savedPayment);
+
+      this.logger.log(`Selcom payment ${payment.id} completed via notification`);
+      return {
+        reference: data.reference,
+        resultcode: '000',
+        result: 'SUCCESS',
+        message: 'Payment confirmed',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error processing Selcom notification: ${error.message}`,
+        error.stack,
+      );
+      return fail('4XX', 'Internal error');
+    }
+  }
+
+  private verifySelcomWebhookToken(auth: string): boolean {
+    const webhookToken = this.configService.get<string>('SELCOM_WEBHOOK_TOKEN');
+    if (!webhookToken) {
+      return true;
+    }
+    const expected = `Bearer ${webhookToken}`;
+    const valid = auth === expected;
+    if (!valid) {
+      this.logger.warn('Selcom webhook token verification failed');
+    }
+    return valid;
   }
 
   async handleClickPesaCallback(data: any): Promise<{ status: string }> {
