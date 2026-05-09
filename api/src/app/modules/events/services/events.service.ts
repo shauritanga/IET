@@ -892,7 +892,7 @@ export class EventsService {
   private async generateTicketNumber(year: number): Promise<string> {
     const result = await this.registrationRepository
       .createQueryBuilder('reg')
-      .select('MAX(CAST(SUBSTRING(reg.ticketNumber, 13) AS INTEGER))', 'maxNum')
+      .select('MAX(CAST(SUBSTRING(reg.ticketNumber, 14) AS INTEGER))', 'maxNum')
       .where('reg.ticketNumber LIKE :pattern', { pattern: `IET/EVT/${year}/%` })
       .getRawOne();
 
