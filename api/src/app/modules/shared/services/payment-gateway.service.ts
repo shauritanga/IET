@@ -427,6 +427,12 @@ export class PaymentGatewayService {
   private async initiateSelcomCheckout(
     request: PaymentRequest,
   ): Promise<PaymentResponse> {
+    if (!request.email) {
+      throw new BadRequestException(
+        'Email address is required for Selcom card payments',
+      );
+    }
+
     const orderId = `IET-${request.reference}`;
     const apiUrl = `${this.selcomBaseUrl}/checkout/create-order`;
 

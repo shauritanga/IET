@@ -695,8 +695,13 @@ export const DashboardEventsPage = () => {
             })
             return { event, result: response.data?.data }
         },
-        onSuccess: async ({ event }) => {
-            toast.success(event.free ? "Registration confirmed." : "Payment recorded and registration confirmed.")
+        onSuccess: async ({ event, result }) => {
+            if (result?.paymentUrl) {
+                toast.success("Redirecting to payment gateway…")
+                window.location.href = result.paymentUrl
+                return
+            }
+            toast.success(event.free ? "Registration confirmed." : "Registration confirmed.")
             setRegisteredEventIds((current) => new Set(current).add(event.id))
             setSelectedEvent((current) => current?.id === event.id
                 ? {
