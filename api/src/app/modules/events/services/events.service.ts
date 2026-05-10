@@ -10,6 +10,8 @@ import { EventEntity, EventRegistrationEntity } from '../entities';
 import { UserEntity } from '../../user/entities/user.entity';
 import { EmailService } from '../../shared/services/email.service';
 import { SmsService } from '../../shared/services/sms.service';
+import { PaymentsService } from '../../payments/services/payments.service';
+import { PaymentType } from '../../../common/enums';
 import {
   EventQueryDto,
   CreateEventDto,
@@ -40,6 +42,7 @@ export class EventsService {
     private userRepository: Repository<UserEntity>,
     private emailService: EmailService,
     private smsService: SmsService,
+    private paymentsService: PaymentsService,
   ) {}
 
   /**
@@ -247,6 +250,7 @@ export class EventsService {
     eventTitle: string;
     status: EventRegistrationStatus;
     paymentId: string | null;
+    paymentUrl?: string;
     amount: number;
     currency: string;
   }> {
@@ -315,17 +319,38 @@ export class EventsService {
     registration.refundStatus = undefined;
 
     const eventYear = new Date(event.startDate).getFullYear();
-    registration.status = EventRegistrationStatus.CONFIRMED;
-    registration.confirmedAt = new Date();
-    registration.ticketNumber = await this.generateTicketNumber(eventYear);
-
     if (event.registrationFee > 0) {
-      registration.amountPaid = event.registrationFee;
-      registration.paymentMethod = dto.paymentMethod || PaymentMethod.MPESA;
-      registration.transactionRef = this.generateEventPaymentReference();
+      registration.status = EventRegistrationStatus.PENDING_PAYMENT;
+      registration.paymentMethod = dto.paymentMethod || PaymentMethod.SELCOM;
+    } else {
+      registration.status = EventRegistrationStatus.CONFIRMED;
+      registration.confirmedAt = new Date();
+      registration.ticketNumber = await this.generateTicketNumber(eventYear);
     }
 
     const savedReg = await this.registrationRepository.save(registration);
+
+    let paymentId: string | null = null;
+    let paymentUrl: string | undefined;
+
+    if (event.registrationFee > 0) {
+      const paymentResult = await this.paymentsService.initiatePayment(userId, {
+        paymentType: PaymentType.EVENT_REGISTRATION,
+        amount: event.registrationFee,
+        paymentMethod: dto.paymentMethod || PaymentMethod.SELCOM,
+        phoneNumber: dto.phoneNumber,
+        description: `Event Registration: ${event.title}`,
+        referenceId: savedReg.id,
+        referenceType: 'event_registration',
+        metadata: { eventId: event.id, registrationId: savedReg.id },
+      });
+
+      paymentId = paymentResult.paymentId;
+      paymentUrl = paymentResult.paymentUrl;
+
+      savedReg.paymentId = paymentId;
+      await this.registrationRepository.save(savedReg);
+    }
 
     this.logger.log(`User ${userId} registered for event ${eventId}`);
     await this.notifySuperAdminsOfEventRegistration(event, savedReg, userId);
@@ -335,7 +360,8 @@ export class EventsService {
       eventId: event.id,
       eventTitle: event.title,
       status: savedReg.status,
-      paymentId: savedReg.paymentId ?? null,
+      paymentId,
+      paymentUrl,
       amount: event.registrationFee,
       currency: 'TZS',
     };

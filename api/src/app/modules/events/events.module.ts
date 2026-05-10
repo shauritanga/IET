@@ -4,6 +4,7 @@ import { EventsController } from './controllers/events.controller';
 import { EventsService } from './services/events.service';
 import { EventEntity, EventRegistrationEntity } from './entities';
 import { UserEntity } from '../user/entities/user.entity';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { UserEntity } from '../user/entities/user.entity';
       EventRegistrationEntity,
       UserEntity,
     ]),
+    PaymentsModule,
   ],
   controllers: [EventsController],
   providers: [EventsService],

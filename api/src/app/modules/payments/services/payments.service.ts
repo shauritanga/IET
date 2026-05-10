@@ -25,10 +25,12 @@ import {
   PaymentType,
   RegistrationCategory,
   RegistrationStep,
+  EventRegistrationStatus,
 } from '../../../common/enums';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
 import { SmsService } from '../../shared/services/sms.service';
 import { EmailService } from '../../shared/services/email.service';
+import { EventRegistrationEntity } from '../../events/entities';
 import { v4 as uuid4 } from 'uuid';
 
 @Injectable()
@@ -52,6 +54,8 @@ export class PaymentsService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
+    @InjectRepository(EventRegistrationEntity)
+    private eventRegistrationRepository: Repository<EventRegistrationEntity>,
     private configService: ConfigService,
     private paymentGateway: PaymentGatewayService,
     private smsService: SmsService,
@@ -1088,6 +1092,15 @@ export class PaymentsService {
     payment: PaymentEntity,
   ): Promise<void> {
     if (
+      payment.paymentType === PaymentType.EVENT_REGISTRATION &&
+      payment.referenceType === 'event_registration' &&
+      payment.referenceId
+    ) {
+      await this.confirmEventRegistration(payment);
+      return;
+    }
+
+    if (
       payment.referenceType !== 'registration' ||
       !payment.referenceId ||
       payment.paymentType !== PaymentType.APPLICATION_FEE
@@ -1120,6 +1133,32 @@ export class PaymentsService {
     }
 
     await this.registrationRepository.save(registration);
+  }
+
+  private async confirmEventRegistration(
+    payment: PaymentEntity,
+  ): Promise<void> {
+    const eventReg = await this.eventRegistrationRepository.findOne({
+      where: { id: payment.referenceId },
+    });
+
+    if (!eventReg) {
+      return;
+    }
+
+    eventReg.paymentId = payment.id;
+
+    if (payment.status === PaymentStatus.COMPLETED) {
+      eventReg.status = EventRegistrationStatus.CONFIRMED;
+      eventReg.confirmedAt = new Date();
+      this.logger.log(
+        `Event registration ${eventReg.id} confirmed after payment ${payment.id}`,
+      );
+    } else if (payment.status === PaymentStatus.FAILED) {
+      eventReg.status = EventRegistrationStatus.CANCELLED;
+    }
+
+    await this.eventRegistrationRepository.save(eventReg);
   }
 
   private async generateReceiptNumber(): Promise<string> {
