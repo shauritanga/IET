@@ -7,7 +7,7 @@ export function useEvents(query: DashboardEventsQuery = {}) {
   return useQuery<ApiCollectionResponse<DashboardEvent>, TErrorMessage>({
     queryKey: ["dashboard-events", query],
     queryFn: () => getEvents(query),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }
