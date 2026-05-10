@@ -636,8 +636,12 @@ export const DashboardEventsPage = () => {
 
     // Persist registeredEventIds to localStorage whenever it changes
     useEffect(() => {
-        if (!storageKey || registeredEventIds.size === 0) return
-        localStorage.setItem(storageKey, JSON.stringify([...registeredEventIds]))
+        if (!storageKey) return
+        if (registeredEventIds.size === 0) {
+            localStorage.removeItem(storageKey)
+        } else {
+            localStorage.setItem(storageKey, JSON.stringify([...registeredEventIds]))
+        }
     }, [registeredEventIds, storageKey])
 
     const thirtyDaysAgo = new Date()
@@ -651,13 +655,13 @@ export const DashboardEventsPage = () => {
         search: query || undefined,
     })
 
-    // Seed from API response for any events the backend already marks as registered
+    // Sync registeredEventIds with API — source of truth is always the backend
     useEffect(() => {
         if (!data?.data) return
-        const fromApi = data.data.filter(e => e.isRegistered).map(e => e.id)
-        if (fromApi.length === 0) return
+        const fromApi = new Set(data.data.filter(e => e.isRegistered).map(e => e.id))
         setRegisteredEventIds(prev => {
-            const next = new Set(prev)
+            // Keep only IDs the API confirms; drop any stale local ones
+            const next = new Set([...prev].filter(id => fromApi.has(id)))
             fromApi.forEach(id => next.add(id))
             return next
         })
