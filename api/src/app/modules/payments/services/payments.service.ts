@@ -31,6 +31,7 @@ import { PaymentGatewayService } from '../../shared/services/payment-gateway.ser
 import { SmsService } from '../../shared/services/sms.service';
 import { EmailService } from '../../shared/services/email.service';
 import { EventRegistrationEntity } from '../../events/entities';
+import { GuestRegistrationEntity } from '../../guest/entities/guest-registration.entity';
 import { v4 as uuid4 } from 'uuid';
 
 @Injectable()
@@ -56,6 +57,8 @@ export class PaymentsService {
     private registrationRepository: Repository<RegistrationEntity>,
     @InjectRepository(EventRegistrationEntity)
     private eventRegistrationRepository: Repository<EventRegistrationEntity>,
+    @InjectRepository(GuestRegistrationEntity)
+    private guestRegistrationRepository: Repository<GuestRegistrationEntity>,
     private configService: ConfigService,
     private paymentGateway: PaymentGatewayService,
     private smsService: SmsService,
@@ -260,66 +263,33 @@ export class PaymentsService {
 
     const amount = this.getApplicationFeeAmount(dto.applicationType);
 
-    const reusablePayment = await this.paymentRepository.findOne({
-      where: {
-        userId,
-        referenceId: registration.id,
-        referenceType: 'registration',
-        paymentType: PaymentType.APPLICATION_FEE,
+    const result = await this.initiatePayment(userId, {
+      paymentType: PaymentType.APPLICATION_FEE,
+      amount,
+      paymentMethod: dto.paymentMethod,
+      phoneNumber: dto.phoneNumber,
+      referenceId: registration.id,
+      referenceType: 'registration',
+      metadata: {
+        applicationId: registration.id,
+        applicationType: dto.applicationType,
       },
-      order: { createdAt: 'DESC' },
     });
 
-    let completedPayment: PaymentEntity;
-
-    if (reusablePayment?.status === PaymentStatus.COMPLETED) {
-      completedPayment = reusablePayment;
-      await this.updateRegistrationPaymentStatus(completedPayment);
-    } else if (
-      reusablePayment &&
-      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
-        reusablePayment.status,
-      ) &&
-      !this.isOutdatedApplicationPaymentAmount(reusablePayment, amount)
-    ) {
-      completedPayment = await this.completeApplicationPaymentLocally(
-        reusablePayment,
-      );
-    } else {
-      if (
-        reusablePayment &&
-        [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
-          reusablePayment.status,
-        )
-      ) {
-        await this.markPaymentFailed(
-          reusablePayment.id,
-          `Superseded by locally completed application fee amount ${amount}`,
-        );
-      }
-
-      completedPayment = await this.createCompletedApplicationPayment(
-        userId,
-        registration.id,
-        dto,
-        amount,
-      );
-    }
-
     return {
-      paymentCompleted: true,
       applicationId: registration.id,
-      paymentId: completedPayment.id,
-      paymentStatus: completedPayment.status,
-      amount: completedPayment.amount,
-      currency: completedPayment.currency,
-      paymentMethod: completedPayment.paymentMethod,
-      paymentUrl: completedPayment.paymentUrl,
-      mobileMoneyRef: completedPayment.mobileMoneyRef,
-      phoneNumber: completedPayment.phoneNumber,
-      transactionRef: completedPayment.transactionRef,
+      paymentCompleted: false,
+      paymentId: result.paymentId,
+      paymentStatus: result.status,
+      amount: result.amount,
+      currency: result.currency,
+      paymentMethod: result.paymentMethod,
+      paymentUrl: result.paymentUrl,
+      mobileMoneyRef: result.mobileMoneyRef,
+      phoneNumber: dto.phoneNumber,
+      transactionRef: undefined,
       applicationType: dto.applicationType,
-      message: 'Application fee payment completed',
+      message: result.message,
     };
   }
 
@@ -549,16 +519,27 @@ export class PaymentsService {
    */
   async handleSelcomCallback(
     data: SelcomCallbackDto,
+    auth: string,
   ): Promise<{ status: string }> {
+    if (!this.verifySelcomWebhookToken(auth)) {
+      this.logger.warn('Selcom legacy callback rejected: invalid token');
+      return { status: 'OK' };
+    }
+
     try {
       const payment = await this.paymentRepository.findOne({
-        where: { id: data.reference },
+        where: { id: this.resolvePaymentId(data.reference) },
       });
 
       if (!payment) {
         this.logger.warn(
           `Selcom callback for unknown payment: ${data.reference}`,
         );
+        return { status: 'OK' };
+      }
+
+      if (payment.status === PaymentStatus.COMPLETED) {
+        this.logger.log(`Selcom payment ${payment.id} already completed`);
         return { status: 'OK' };
       }
 
@@ -610,7 +591,7 @@ export class PaymentsService {
     }
 
     const payment = await this.paymentRepository.findOne({
-      where: { id: data.utilityref },
+      where: { id: this.resolvePaymentId(data.utilityref) },
       relations: ['user'],
     });
 
@@ -654,7 +635,7 @@ export class PaymentsService {
     }
 
     const payment = await this.paymentRepository.findOne({
-      where: { id: data.utilityref },
+      where: { id: this.resolvePaymentId(data.utilityref) },
     });
 
     if (!payment) {
@@ -700,7 +681,7 @@ export class PaymentsService {
 
     try {
       const payment = await this.paymentRepository.findOne({
-        where: { id: data.utilityref },
+        where: { id: this.resolvePaymentId(data.utilityref) },
       });
 
       if (!payment) {
@@ -753,7 +734,8 @@ export class PaymentsService {
   private verifySelcomWebhookToken(auth: string): boolean {
     const webhookToken = this.configService.get<string>('SELCOM_WEBHOOK_TOKEN');
     if (!webhookToken) {
-      return true;
+      this.logger.warn('SELCOM_WEBHOOK_TOKEN not configured — rejecting webhook');
+      return false;
     }
     const expected = `Bearer ${webhookToken}`;
     const valid = auth === expected;
@@ -912,71 +894,13 @@ export class PaymentsService {
     return savedPayment;
   }
 
-  private async createCompletedApplicationPayment(
-    userId: string,
-    registrationId: string,
-    dto: InitiateApplicationPaymentDto,
-    amount: number,
-  ): Promise<PaymentEntity> {
-    const payment = new PaymentEntity();
-    payment.userId = userId;
-    payment.paymentType = PaymentType.APPLICATION_FEE;
-    payment.amount = amount;
-    payment.currency = 'TZS';
-    payment.status = PaymentStatus.COMPLETED;
-    payment.paymentMethod = dto.paymentMethod;
-    payment.description = `${this.getApplicationCategoryLabel(dto.applicationType)} Application Fee`;
-    payment.phoneNumber = dto.phoneNumber;
-    payment.referenceId = registrationId;
-    payment.referenceType = 'registration';
-    payment.providerResponse = {
-      mockPayment: true,
-      message: 'Application fee locally completed; payment gateway not integrated',
-    };
-    payment.metadata = {
-      applicationId: registrationId,
-      applicationType: dto.applicationType,
-      locallyCompleted: true,
-    };
-    payment.completedAt = new Date();
-    payment.receiptNumber = await this.generateReceiptNumber();
-    payment.idempotencyKey = uuid4();
-
-    const savedPayment = await this.paymentRepository.save(payment);
-    return this.completeApplicationPaymentLocally(savedPayment);
-  }
-
-  private async completeApplicationPaymentLocally(
-    payment: PaymentEntity,
-  ): Promise<PaymentEntity> {
-    if (payment.status !== PaymentStatus.COMPLETED) {
-      payment.status = PaymentStatus.COMPLETED;
-      payment.completedAt = new Date();
-    }
-
-    payment.transactionRef =
-      payment.transactionRef || `MOCK-APPLICATION-${payment.id}`;
-    payment.receiptNumber =
-      payment.receiptNumber || (await this.generateReceiptNumber());
-    payment.errorMessage = null;
-    payment.providerResponse = {
-      ...payment.providerResponse,
-      mockPayment: true,
-      message: 'Application fee locally completed; payment gateway not integrated',
-    };
-    payment.metadata = {
-      ...payment.metadata,
-      locallyCompleted: true,
-    };
-
-    const savedPayment = await this.paymentRepository.save(payment);
-    await this.updateRegistrationPaymentStatus(savedPayment);
-    return savedPayment;
-  }
-
   // ============================================
   // HELPER METHODS
   // ============================================
+
+  private resolvePaymentId(ref: string): string {
+    return ref?.startsWith('IET-') ? ref.slice(4) : ref;
+  }
 
   private isMobileMoneyMethod(method: PaymentMethod): boolean {
     return [
@@ -991,10 +915,6 @@ export class PaymentsService {
     return category === RegistrationCategory.GRADUATE
       ? Number(this.configService.get('APPLICATION_FEE_GRADUATE') || 5000)
       : Number(this.configService.get('APPLICATION_FEE_STANDARD') || 10000);
-  }
-
-  private getApplicationCategoryLabel(category: RegistrationCategory): string {
-    return category === RegistrationCategory.GRADUATE ? 'Graduate' : 'Standard';
   }
 
   private isOutdatedApplicationPaymentAmount(
@@ -1101,6 +1021,14 @@ export class PaymentsService {
     }
 
     if (
+      payment.referenceType === 'guest_registration' &&
+      payment.referenceId
+    ) {
+      await this.confirmGuestRegistration(payment);
+      return;
+    }
+
+    if (
       payment.referenceType !== 'registration' ||
       !payment.referenceId ||
       payment.paymentType !== PaymentType.APPLICATION_FEE
@@ -1159,6 +1087,34 @@ export class PaymentsService {
     }
 
     await this.eventRegistrationRepository.save(eventReg);
+  }
+
+  private async confirmGuestRegistration(
+    payment: PaymentEntity,
+  ): Promise<void> {
+    const guestReg = await this.guestRegistrationRepository.findOne({
+      where: { id: payment.referenceId },
+      relations: ['event'],
+    });
+
+    if (!guestReg) {
+      return;
+    }
+
+    if (payment.status === PaymentStatus.COMPLETED) {
+      guestReg.status = EventRegistrationStatus.CONFIRMED;
+      guestReg.paymentStatus = PaymentStatus.COMPLETED;
+      guestReg.transactionRef = payment.transactionRef || payment.mobileMoneyRef;
+      guestReg.receiptNumber = payment.receiptNumber;
+      guestReg.amountPaid = payment.amount;
+      this.logger.log(
+        `Guest registration ${guestReg.id} confirmed after payment ${payment.id}`,
+      );
+    } else if (payment.status === PaymentStatus.FAILED) {
+      guestReg.paymentStatus = PaymentStatus.FAILED;
+    }
+
+    await this.guestRegistrationRepository.save(guestReg);
   }
 
   private async generateReceiptNumber(): Promise<string> {

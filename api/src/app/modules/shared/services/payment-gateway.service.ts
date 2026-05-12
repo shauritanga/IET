@@ -462,7 +462,7 @@ export class PaymentGatewayService {
       'billing.state_or_region': 'Dar es Salaam',
       'billing.postcode_or_pobox': '00000',
       'billing.country': 'TZ',
-      'billing.phone': buyerPhone || request.email || '',
+      'billing.phone': buyerPhone || '',
       no_of_items: '1',
     };
 

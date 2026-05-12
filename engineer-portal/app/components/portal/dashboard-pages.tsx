@@ -611,10 +611,6 @@ export const DashboardEventsPage = () => {
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
     const [eventPaymentMethod, setEventPaymentMethod] = useState<EventPaymentMethod>("TIGO_PESA")
     const [paymentPhoneNumber, setPaymentPhoneNumber] = useState("")
-    const [cardNumber, setCardNumber] = useState("")
-    const [cardHolder, setCardHolder] = useState("")
-    const [cardExpiry, setCardExpiry] = useState("")
-    const [cardCvv, setCardCvv] = useState("")
 
     const { data: profileData } = useGetUserProfile()
     const profile = profileData?.data
@@ -671,34 +667,22 @@ export const DashboardEventsPage = () => {
             event,
             paymentMethod,
             phoneNumber,
-            cardNumber: cn,
-            cardHolder: ch,
-            cardExpiry: ce,
-            cardCvv: cv,
         }: {
             event: PortalEventCard
             paymentMethod?: EventPaymentMethod
             phoneNumber?: string
-            cardNumber?: string
-            cardHolder?: string
-            cardExpiry?: string
-            cardCvv?: string
         }) => {
             const response = await http.post(`/events/${event.id}/register`, {
                 attendeeType: "MEMBER",
                 ...(paymentMethod ? { paymentMethod } : {}),
                 ...(phoneNumber ? { phoneNumber } : {}),
-                ...(cn ? { cardNumber: cn } : {}),
-                ...(ch ? { cardHolder: ch } : {}),
-                ...(ce ? { cardExpiry: ce } : {}),
-                ...(cv ? { cardCvv: cv } : {}),
             })
             return { event, result: response.data?.data }
         },
         onSuccess: async ({ event, result }) => {
             if (result?.paymentUrl) {
                 toast.success("Redirecting to payment gateway…")
-                window.location.href = result.paymentUrl
+                window.open(result.paymentUrl, "_blank", "noopener,noreferrer")
                 return
             }
             toast.success(event.free ? "Registration confirmed." : "Registration confirmed.")
@@ -738,10 +722,6 @@ export const DashboardEventsPage = () => {
     const resetPaymentFields = () => {
         setEventPaymentMethod("TIGO_PESA")
         setPaymentPhoneNumber("")
-        setCardNumber("")
-        setCardHolder("")
-        setCardExpiry("")
-        setCardCvv("")
     }
 
     const openDrawer = (event: PortalEventCard) => {
@@ -805,18 +785,9 @@ export const DashboardEventsPage = () => {
         }
 
         if (eventPaymentMethod === "SELCOM") {
-            const rawNumber = cardNumber.replace(/\s/g, "")
-            if (!cardHolder.trim()) { toast.error("Cardholder name is required."); return }
-            if (rawNumber.length < 16) { toast.error("Enter a valid 16-digit card number."); return }
-            if (!/^\d{2}\/\d{2}$/.test(cardExpiry)) { toast.error("Enter expiry as MM/YY."); return }
-            if (cardCvv.length < 3) { toast.error("Enter a valid CVV."); return }
             registerMutation.mutate({
                 event: selectedEvent,
                 paymentMethod: eventPaymentMethod,
-                cardNumber: rawNumber,
-                cardHolder: cardHolder.trim(),
-                cardExpiry,
-                cardCvv,
             })
             return
         }
@@ -1131,64 +1102,8 @@ export const DashboardEventsPage = () => {
                             )}
 
                             {eventPaymentMethod === "SELCOM" && (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                    {/* Card number */}
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>Card Number</label>
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            maxLength={19}
-                                            value={cardNumber}
-                                            onChange={(e) => {
-                                                const digits = e.target.value.replace(/\D/g, "").slice(0, 16)
-                                                setCardNumber(digits.replace(/(.{4})/g, "$1 ").trim())
-                                            }}
-                                            placeholder="1234 5678 9012 3456"
-                                            style={{ width: "100%", border: "1.5px solid var(--iet-border)", borderRadius: 8, background: "var(--iet-bg)", padding: "10px 12px", fontSize: 13, fontFamily: "Montserrat,sans-serif", color: "var(--iet-text)", outline: "none", boxSizing: "border-box", letterSpacing: ".05em" }}
-                                        />
-                                    </div>
-                                    {/* Cardholder name */}
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>Cardholder Name</label>
-                                        <input
-                                            type="text"
-                                            value={cardHolder}
-                                            onChange={(e) => setCardHolder(e.target.value)}
-                                            placeholder="Name as it appears on card"
-                                            style={{ width: "100%", border: "1.5px solid var(--iet-border)", borderRadius: 8, background: "var(--iet-bg)", padding: "10px 12px", fontSize: 13, fontFamily: "Montserrat,sans-serif", color: "var(--iet-text)", outline: "none", boxSizing: "border-box" }}
-                                        />
-                                    </div>
-                                    {/* Expiry + CVV */}
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>Expiry Date</label>
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                maxLength={5}
-                                                value={cardExpiry}
-                                                onChange={(e) => {
-                                                    const digits = e.target.value.replace(/\D/g, "").slice(0, 4)
-                                                    setCardExpiry(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits)
-                                                }}
-                                                placeholder="MM/YY"
-                                                style={{ width: "100%", border: "1.5px solid var(--iet-border)", borderRadius: 8, background: "var(--iet-bg)", padding: "10px 12px", fontSize: 13, fontFamily: "Montserrat,sans-serif", color: "var(--iet-text)", outline: "none", boxSizing: "border-box" }}
-                                            />
-                                        </div>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>CVV</label>
-                                            <input
-                                                type="password"
-                                                inputMode="numeric"
-                                                maxLength={4}
-                                                value={cardCvv}
-                                                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                                                placeholder="•••"
-                                                style={{ width: "100%", border: "1.5px solid var(--iet-border)", borderRadius: 8, background: "var(--iet-bg)", padding: "10px 12px", fontSize: 13, fontFamily: "Montserrat,sans-serif", color: "var(--iet-text)", outline: "none", boxSizing: "border-box" }}
-                                            />
-                                        </div>
-                                    </div>
+                                <div style={{ padding: "10px 14px", background: "var(--iet-bg)", border: "1.5px solid var(--iet-border)", borderRadius: 8, fontSize: 12, color: "var(--iet-muted)", lineHeight: 1.5 }}>
+                                    You will be redirected to Selcom's secure checkout page to complete your card payment.
                                 </div>
                             )}
 

@@ -194,8 +194,11 @@ export class PaymentsController {
     description: 'Callback processed',
     schema: { example: { status: 'OK' } },
   })
-  async handleSelcomCallback(@Body() data: SelcomCallbackDto) {
-    return this.paymentsService.handleSelcomCallback(data);
+  async handleSelcomCallback(
+    @Body() data: SelcomCallbackDto,
+    @Headers('authorization') auth: string,
+  ) {
+    return this.paymentsService.handleSelcomCallback(data, auth);
   }
 
   @Post('webhooks/selcom/lookup')

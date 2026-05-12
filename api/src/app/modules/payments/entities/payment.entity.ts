@@ -17,13 +17,13 @@ import {
   where: '"transactionRef" IS NOT NULL',
 })
 export class PaymentEntity extends BaseEntity {
-  @ApiProperty({ description: 'User ID' })
-  @Column({ type: 'uuid' })
-  userId: string;
+  @ApiProperty({ description: 'User ID (null for guest payments)' })
+  @Column({ type: 'uuid', nullable: true })
+  userId: string | null;
 
-  @ManyToOne(() => UserEntity)
+  @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'userId' })
-  user: UserEntity;
+  user: UserEntity | null;
 
   @ApiProperty({
     example: 'MEMBERSHIP_FEE',

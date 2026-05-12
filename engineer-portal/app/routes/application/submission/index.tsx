@@ -78,7 +78,7 @@ const Submission = () => {
     );
     const amount =
         paymentState?.amount ??
-        (applicationType === "GRADUATE" ? 500 : 1000);
+        (applicationType === "GRADUATE" ? 5000 : 10000);
 
     const submitDeclaration = (value: DeclarationFormType) => {
         declarationMutation.mutate(value);
@@ -112,6 +112,8 @@ const Submission = () => {
                 onSuccess: (response) => {
                     if (response.data.paymentUrl) {
                         window.open(response.data.paymentUrl, "_blank", "noopener,noreferrer");
+                    } else {
+                        toast.success("Payment request sent. Please check your phone to confirm.");
                     }
                 },
             },
@@ -208,7 +210,7 @@ const Submission = () => {
                                     }`} />
                                     <span className="font-medium text-[var(--iet-red-dark)]">Card Payment</span>
                                 </div>
-                                <span className="text-sm text-[var(--iet-muted)]">Powered by ClickPesa</span>
+                                <span className="text-sm text-[var(--iet-muted)]">Powered by Selcom</span>
                             </button>
                         </div>
 

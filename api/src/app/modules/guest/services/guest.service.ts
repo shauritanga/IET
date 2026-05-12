@@ -21,10 +21,14 @@ import {
   EventRegistrationStatus,
   PaymentStatus,
   PaymentMethod,
+  PaymentType,
 } from '../../../common/enums';
+import { ConfigService } from '@nestjs/config';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
+import { PaymentEntity } from '../../payments/entities/payment.entity';
 import { SmsService } from '../../shared/services/sms.service';
 import { EmailService } from '../../shared/services/email.service';
+import { v4 as uuid4 } from 'uuid';
 
 @Injectable()
 export class GuestService {
@@ -37,7 +41,10 @@ export class GuestService {
     private developmentFeeRepository: Repository<DevelopmentFeeEntity>,
     @InjectRepository(EventEntity)
     private eventRepository: Repository<EventEntity>,
+    @InjectRepository(PaymentEntity)
+    private paymentRepository: Repository<PaymentEntity>,
     private paymentGateway: PaymentGatewayService,
+    private configService: ConfigService,
     private smsService: SmsService,
     private emailService: EmailService,
   ) {}
@@ -176,7 +183,34 @@ export class GuestService {
       );
     }
 
-    // Initiate payment
+    // Create a tracked PaymentEntity so webhook handlers can confirm this registration
+    const payment = new PaymentEntity();
+    payment.userId = null;
+    payment.paymentType = PaymentType.EVENT_REGISTRATION;
+    payment.amount = amount;
+    payment.currency = 'TZS';
+    payment.status = PaymentStatus.PENDING;
+    payment.paymentMethod = dto.paymentMethod;
+    payment.phoneNumber = phoneNumber;
+    payment.referenceId = registration.id;
+    payment.referenceType = 'guest_registration';
+    payment.description = `Guest Event Registration: ${registration.event.title}`;
+    payment.metadata = {
+      registrationType: 'GUEST_EVENT',
+      eventId: registration.eventId,
+      guestName: registration.fullName,
+    };
+    payment.idempotencyKey = uuid4();
+
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    const apiUrl = this.configService.get<string>('API_URL');
+    const callbackUrl = this.paymentGateway.getCallbackUrl(
+      dto.paymentMethod,
+      apiUrl,
+    );
+
+    // Initiate payment with the PaymentEntity ID as the reference
     const paymentResult = await this.paymentGateway.initiatePayment(
       dto.paymentMethod,
       {
@@ -184,8 +218,9 @@ export class GuestService {
         currency: 'TZS',
         phoneNumber,
         email: registration.email,
-        reference: registration.id,
-        description: `Event Registration: ${registration.event.title}`,
+        reference: savedPayment.id,
+        description: `Guest Event Registration: ${registration.event.title}`,
+        callbackUrl,
         metadata: {
           registrationType: 'GUEST_EVENT',
           eventId: registration.eventId,
@@ -194,13 +229,22 @@ export class GuestService {
       },
     );
 
+    // Persist gateway response to payment record
+    savedPayment.mobileMoneyRef = paymentResult.transactionId;
+    savedPayment.paymentUrl = paymentResult.paymentUrl;
+    savedPayment.providerResponse = paymentResult.rawResponse || {};
+    savedPayment.status = paymentResult.success
+      ? PaymentStatus.PROCESSING
+      : PaymentStatus.FAILED;
+    await this.paymentRepository.save(savedPayment);
+
     // Update registration
     registration.paymentMethod = dto.paymentMethod;
     registration.paymentStatus = PaymentStatus.PROCESSING;
     await this.guestRegistrationRepository.save(registration);
 
     return {
-      paymentId: paymentResult.transactionId,
+      paymentId: savedPayment.id,
       amount,
       currency: 'TZS',
       controlNumber: registration.controlNumber,
