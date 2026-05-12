@@ -681,8 +681,9 @@ export const DashboardEventsPage = () => {
         },
         onSuccess: async ({ event, result }) => {
             if (result?.paymentUrl) {
+                setPaymentDialogOpen(false)
                 toast.success("Redirecting to payment gateway…")
-                window.open(result.paymentUrl, "_blank", "noopener,noreferrer")
+                window.location.href = result.paymentUrl
                 return
             }
             toast.success(event.free ? "Registration confirmed." : "Registration confirmed.")

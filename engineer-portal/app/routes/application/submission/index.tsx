@@ -111,7 +111,7 @@ const Submission = () => {
             {
                 onSuccess: (response) => {
                     if (response.data.paymentUrl) {
-                        window.open(response.data.paymentUrl, "_blank", "noopener,noreferrer");
+                        window.location.href = response.data.paymentUrl;
                     } else {
                         toast.success("Payment request sent. Please check your phone to confirm.");
                     }
