@@ -321,7 +321,7 @@ export class EventsService {
     const eventYear = new Date(event.startDate).getFullYear();
     if (event.registrationFee > 0) {
       registration.status = EventRegistrationStatus.PENDING_PAYMENT;
-      registration.paymentMethod = dto.paymentMethod || PaymentMethod.SELCOM;
+      registration.paymentMethod = PaymentMethod.SELCOM;
     } else {
       registration.status = EventRegistrationStatus.CONFIRMED;
       registration.confirmedAt = new Date();
@@ -334,22 +334,32 @@ export class EventsService {
     let paymentUrl: string | undefined;
 
     if (event.registrationFee > 0) {
-      const paymentResult = await this.paymentsService.initiatePayment(userId, {
-        paymentType: PaymentType.EVENT_REGISTRATION,
-        amount: event.registrationFee,
-        paymentMethod: dto.paymentMethod || PaymentMethod.SELCOM,
-        phoneNumber: dto.phoneNumber,
-        description: `Event Registration: ${event.title}`,
-        referenceId: savedReg.id,
-        referenceType: 'event_registration',
-        metadata: { eventId: event.id, registrationId: savedReg.id },
-      });
+      try {
+        const paymentResult = await this.paymentsService.initiatePayment(userId, {
+          paymentType: PaymentType.EVENT_REGISTRATION,
+          amount: event.registrationFee,
+          paymentMethod: PaymentMethod.SELCOM,
+          description: `Event Registration: ${event.title}`,
+          referenceId: savedReg.id,
+          referenceType: 'event_registration',
+          metadata: { eventId: event.id, registrationId: savedReg.id },
+        });
 
-      paymentId = paymentResult.paymentId;
-      paymentUrl = paymentResult.paymentUrl;
+        paymentId = paymentResult.paymentId;
+        paymentUrl = paymentResult.paymentUrl;
 
-      savedReg.paymentId = paymentId;
-      await this.registrationRepository.save(savedReg);
+        savedReg.paymentId = paymentId;
+        await this.registrationRepository.save(savedReg);
+      } catch (error) {
+        savedReg.status = EventRegistrationStatus.CANCELLED;
+        savedReg.cancelledAt = new Date();
+        savedReg.cancellationReason =
+          error instanceof Error
+            ? `Payment initiation failed: ${error.message}`
+            : 'Payment initiation failed';
+        await this.registrationRepository.save(savedReg);
+        throw error;
+      }
     }
 
     this.logger.log(`User ${userId} registered for event ${eventId}`);

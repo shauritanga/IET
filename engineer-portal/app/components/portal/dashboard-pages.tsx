@@ -24,7 +24,7 @@ const EVENT_TYPE_FILTERS = [
     { value: "NETWORKING", label: "Networking" },
 ] as const
 
-type EventPaymentMethod = "AIRTEL_MONEY" | "TIGO_PESA" | "HALOPESA" | "MPESA" | "SELCOM"
+type EventPaymentMethod = "SELCOM"
 
 type DashboardNotification = {
     id: string
@@ -34,34 +34,6 @@ type DashboardNotification = {
     isRead: boolean
     createdAt: string
     actionUrl?: string | null
-}
-
-const EVENT_PAYMENT_METHOD_LABELS: Record<EventPaymentMethod, string> = {
-    TIGO_PESA: "Mixx by Yas",
-    HALOPESA: "Halopesa",
-    AIRTEL_MONEY: "Airtel Money",
-    MPESA: "M-Pesa",
-    SELCOM: "Card Payment",
-}
-
-const EVENT_MOBILE_PAYMENT_METHODS: EventPaymentMethod[] = ["TIGO_PESA", "HALOPESA", "AIRTEL_MONEY", "MPESA"]
-
-const normalizePaymentPhoneNumber = (value: string) => {
-    const digits = value.replace(/\D/g, "")
-
-    if (digits.startsWith("255") && digits.length === 12) {
-        return digits
-    }
-
-    if (digits.startsWith("0") && digits.length === 10) {
-        return `255${digits.slice(1)}`
-    }
-
-    if (digits.length === 9) {
-        return `255${digits}`
-    }
-
-    return digits
 }
 
 const iconMap = {
@@ -609,8 +581,7 @@ export const DashboardEventsPage = () => {
     const [drawerVisible, setDrawerVisible] = useState(false)
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
-    const [eventPaymentMethod, setEventPaymentMethod] = useState<EventPaymentMethod>("TIGO_PESA")
-    const [paymentPhoneNumber, setPaymentPhoneNumber] = useState("")
+    const eventPaymentMethod: EventPaymentMethod = "SELCOM"
 
     const { data: profileData } = useGetUserProfile()
     const profile = profileData?.data
@@ -666,16 +637,13 @@ export const DashboardEventsPage = () => {
         mutationFn: async ({
             event,
             paymentMethod,
-            phoneNumber,
         }: {
             event: PortalEventCard
             paymentMethod?: EventPaymentMethod
-            phoneNumber?: string
         }) => {
             const response = await http.post(`/events/${event.id}/register`, {
                 attendeeType: "MEMBER",
                 ...(paymentMethod ? { paymentMethod } : {}),
-                ...(phoneNumber ? { phoneNumber } : {}),
             })
             return { event, result: response.data?.data }
         },
@@ -686,7 +654,7 @@ export const DashboardEventsPage = () => {
                 window.location.href = result.paymentUrl
                 return
             }
-            toast.success(event.free ? "Registration confirmed." : "Registration confirmed.")
+            toast.success(event.free ? "Registration confirmed." : "Registration pending payment.")
             setRegisteredEventIds((current) => new Set(current).add(event.id))
             setSelectedEvent((current) => current?.id === event.id
                 ? {
@@ -720,15 +688,9 @@ export const DashboardEventsPage = () => {
         [cost, events],
     )
 
-    const resetPaymentFields = () => {
-        setEventPaymentMethod("TIGO_PESA")
-        setPaymentPhoneNumber("")
-    }
-
     const openDrawer = (event: PortalEventCard) => {
         setSelectedEvent({ ...event, isRegistered: event.isRegistered || registeredEventIds.has(event.id) })
         setPaymentDialogOpen(false)
-        resetPaymentFields()
         setDrawerVisible(true)
         requestAnimationFrame(() => setDrawerOpen(true))
     }
@@ -739,7 +701,6 @@ export const DashboardEventsPage = () => {
         setTimeout(() => {
             setDrawerVisible(false)
             setSelectedEvent(null)
-            resetPaymentFields()
         }, 280)
     }
 
@@ -761,37 +722,15 @@ export const DashboardEventsPage = () => {
     const closePaymentDialog = () => {
         setPaymentDialogOpen(false)
         setSelectedEvent(null)
-        resetPaymentFields()
     }
 
     const completePaidEventRegistration = () => {
         if (!selectedEvent || selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending) return
 
-        if (EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod)) {
-            const normalizedPhoneNumber = normalizePaymentPhoneNumber(paymentPhoneNumber)
-            if (!paymentPhoneNumber.trim()) {
-                toast.error("Phone number is required for mobile money payments.")
-                return
-            }
-            if (!/^255\d{9}$/.test(normalizedPhoneNumber)) {
-                toast.error("Use phone number format 255XXXXXXXXX.")
-                return
-            }
-            registerMutation.mutate({
-                event: selectedEvent,
-                paymentMethod: eventPaymentMethod,
-                phoneNumber: normalizedPhoneNumber,
-            })
-            return
-        }
-
-        if (eventPaymentMethod === "SELCOM") {
-            registerMutation.mutate({
-                event: selectedEvent,
-                paymentMethod: eventPaymentMethod,
-            })
-            return
-        }
+        registerMutation.mutate({
+            event: selectedEvent,
+            paymentMethod: eventPaymentMethod,
+        })
     }
 
     const registrationButtonLabel = selectedEvent?.isRegistered
@@ -1041,72 +980,9 @@ export const DashboardEventsPage = () => {
                                 </div>
                             )}
 
-                            {/* Payment method */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>Payment Method</label>
-                                <div style={{ position: "relative" }}>
-                                    <select
-                                        value={eventPaymentMethod}
-                                        onChange={(e) => setEventPaymentMethod(e.target.value as EventPaymentMethod)}
-                                        style={{
-                                            width: "100%",
-                                            appearance: "none",
-                                            border: "1.5px solid var(--iet-border)",
-                                            borderRadius: 8,
-                                            background: "var(--iet-bg)",
-                                            padding: "10px 36px 10px 12px",
-                                            fontSize: 13,
-                                            fontFamily: "Montserrat,sans-serif",
-                                            fontWeight: 600,
-                                            color: "var(--iet-text)",
-                                            cursor: "pointer",
-                                            outline: "none",
-                                        }}
-                                    >
-                                        <optgroup label="Mobile Money">
-                                            {EVENT_MOBILE_PAYMENT_METHODS.map((method) => (
-                                                <option key={method} value={method}>{EVENT_PAYMENT_METHOD_LABELS[method]}</option>
-                                            ))}
-                                        </optgroup>
-                                        <optgroup label="Card">
-                                            <option value="SELCOM">Card Payment (Selcom)</option>
-                                        </optgroup>
-                                    </select>
-                                    <ChevronDownIcon width="13" height="13" stroke="var(--iet-muted)" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-                                </div>
+                            <div style={{ padding: "10px 14px", background: "var(--iet-bg)", border: "1.5px solid var(--iet-border)", borderRadius: 8, fontSize: 12, color: "var(--iet-muted)", lineHeight: 1.5 }}>
+                                You will be redirected to Selcom's secure checkout page to complete your payment.
                             </div>
-
-                            {/* Phone number — mobile money only */}
-                            {EVENT_MOBILE_PAYMENT_METHODS.includes(eventPaymentMethod) && (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--iet-text)" }}>Mobile Number</label>
-                                    <input
-                                        type="tel"
-                                        value={paymentPhoneNumber}
-                                        onChange={(e) => setPaymentPhoneNumber(e.target.value)}
-                                        placeholder="255712000000"
-                                        style={{
-                                            width: "100%",
-                                            border: "1.5px solid var(--iet-border)",
-                                            borderRadius: 8,
-                                            background: "var(--iet-bg)",
-                                            padding: "10px 12px",
-                                            fontSize: 13,
-                                            fontFamily: "Montserrat,sans-serif",
-                                            color: "var(--iet-text)",
-                                            outline: "none",
-                                            boxSizing: "border-box",
-                                        }}
-                                    />
-                                    <p style={{ fontSize: 11, color: "var(--iet-muted)" }}>A payment prompt will be sent to this number.</p>
-                                </div>
-                            )}
-
-                            {eventPaymentMethod === "SELCOM" && (
-                                <div style={{ padding: "10px 14px", background: "var(--iet-bg)", border: "1.5px solid var(--iet-border)", borderRadius: 8, fontSize: 12, color: "var(--iet-muted)", lineHeight: 1.5 }}>
-                                    You will be redirected to Selcom's secure checkout page to complete your card payment.
-                                </div>
-                            )}
 
                             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                                 <button className="btn btn-outline" style={{ flex: 1, justifyContent: "center" }} onClick={closePaymentDialog}>

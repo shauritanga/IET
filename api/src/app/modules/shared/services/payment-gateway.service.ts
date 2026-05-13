@@ -495,7 +495,15 @@ export class PaymentGatewayService {
       );
     }
 
-    const paymentGatewayUrl = payload?.data?.[0]?.payment_gateway_url;
+    const paymentGatewayUrl = this.decodeSelcomUrl(
+      payload?.data?.[0]?.payment_gateway_url,
+    );
+
+    if (!paymentGatewayUrl) {
+      throw new BadRequestException(
+        'Selcom order creation did not return a checkout URL',
+      );
+    }
 
     return {
       success: true,
@@ -578,6 +586,23 @@ export class PaymentGatewayService {
       Timestamp: timestamp,
       'Signed-Fields': signedFields,
     };
+  }
+
+  private decodeSelcomUrl(value?: string): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (/^https?:\/\//i.test(value)) {
+      return value;
+    }
+
+    try {
+      const decoded = Buffer.from(value, 'base64').toString('utf8');
+      return /^https?:\/\//i.test(decoded) ? decoded : value;
+    } catch {
+      return value;
+    }
   }
 
   private isSelcomConfigured(): boolean {

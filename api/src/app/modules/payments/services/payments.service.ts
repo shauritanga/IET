@@ -127,24 +127,36 @@ export class PaymentsService {
     const apiUrl = this.configService.get<string>('API_URL');
 
     // Use PaymentGatewayService
-    const gatewayResult = await this.paymentGateway.initiatePayment(
-      dto.paymentMethod,
-      {
-        amount: dto.amount,
-        currency: 'TZS',
-        phoneNumber: dto.phoneNumber,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        reference: providerOrderReference,
-        description: payment.description,
-        callbackUrl: this.paymentGateway.getCallbackUrl(
-          dto.paymentMethod,
-          apiUrl,
-        ),
-        metadata: dto.metadata,
-      },
-    );
+    let gatewayResult;
+    try {
+      gatewayResult = await this.paymentGateway.initiatePayment(
+        dto.paymentMethod,
+        {
+          amount: dto.amount,
+          currency: 'TZS',
+          phoneNumber: dto.phoneNumber,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          reference: providerOrderReference,
+          description: payment.description,
+          callbackUrl: this.paymentGateway.getCallbackUrl(
+            dto.paymentMethod,
+            apiUrl,
+          ),
+          metadata: dto.metadata,
+        },
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Payment provider initiation failed';
+      savedPayment.status = PaymentStatus.FAILED;
+      savedPayment.errorMessage = message;
+      await this.paymentRepository.save(savedPayment);
+      throw error;
+    }
 
     // Update payment with provider response
     savedPayment.mobileMoneyRef = gatewayResult.transactionId;
@@ -251,7 +263,7 @@ export class PaymentsService {
           completedPayment?.amount ??
           this.getApplicationFeeAmount(dto.applicationType),
         currency: completedPayment?.currency ?? 'TZS',
-        paymentMethod: completedPayment?.paymentMethod ?? dto.paymentMethod,
+        paymentMethod: completedPayment?.paymentMethod ?? PaymentMethod.SELCOM,
         paymentUrl: completedPayment?.paymentUrl,
         mobileMoneyRef: completedPayment?.mobileMoneyRef,
         phoneNumber: completedPayment?.phoneNumber,
@@ -266,8 +278,7 @@ export class PaymentsService {
     const result = await this.initiatePayment(userId, {
       paymentType: PaymentType.APPLICATION_FEE,
       amount,
-      paymentMethod: dto.paymentMethod,
-      phoneNumber: dto.phoneNumber,
+      paymentMethod: PaymentMethod.SELCOM,
       referenceId: registration.id,
       referenceType: 'registration',
       metadata: {
@@ -283,10 +294,10 @@ export class PaymentsService {
       paymentStatus: result.status,
       amount: result.amount,
       currency: result.currency,
-      paymentMethod: result.paymentMethod,
+      paymentMethod: PaymentMethod.SELCOM,
       paymentUrl: result.paymentUrl,
       mobileMoneyRef: result.mobileMoneyRef,
-      phoneNumber: dto.phoneNumber,
+      phoneNumber: undefined,
       transactionRef: undefined,
       applicationType: dto.applicationType,
       message: result.message,
