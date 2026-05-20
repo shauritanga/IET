@@ -436,9 +436,7 @@ export class PaymentGatewayService {
     const orderId = `IET-${request.reference}`;
     const apiUrl = `${this.selcomBaseUrl}/checkout/create-order`;
 
-    const firstName = request.firstName || 'IET';
-    const lastName = request.lastName || 'Member';
-    const buyerName = `${firstName} ${lastName}`.trim();
+    const buyerName = `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim();
     const buyerPhone = request.phoneNumber
       ? this.formatTanzanianPhone(request.phoneNumber).replace(/^\+/, '')
       : '';
@@ -451,18 +449,9 @@ export class PaymentGatewayService {
       buyer_phone: buyerPhone,
       amount: String(request.amount),
       currency: request.currency,
-      payment_methods: 'ALL',
       redirect_url: Buffer.from(this.selcomRedirectUrl || '').toString('base64'),
       cancel_url: Buffer.from(this.selcomCancelUrl || '').toString('base64'),
       webhook: Buffer.from(request.callbackUrl || '').toString('base64'),
-      'billing.firstname': firstName,
-      'billing.lastname': lastName,
-      'billing.address_1': 'N/A',
-      'billing.city': 'Dar es Salaam',
-      'billing.state_or_region': 'Dar es Salaam',
-      'billing.postcode_or_pobox': '00000',
-      'billing.country': 'TZ',
-      'billing.phone': buyerPhone || '',
       no_of_items: '1',
     };
 
