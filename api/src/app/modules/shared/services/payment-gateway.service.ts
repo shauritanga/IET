@@ -441,7 +441,10 @@ export class PaymentGatewayService {
       ? this.formatTanzanianPhone(request.phoneNumber).replace(/^\+/, '')
       : '';
 
-    const fields: Record<string, any> = {
+    // Only core order fields are included in the HMAC signature.
+    // return_url / cancel_url must NOT be signed — Selcom rejects (406) if
+    // extra fields are included in the Signed-Fields digest.
+    const signedFields: Record<string, any> = {
       vendor: this.selcomVendor,
       order_id: orderId,
       buyer_email: request.email || '',
@@ -452,11 +455,17 @@ export class PaymentGatewayService {
       buyer_remarks: request.description || 'Payment',
       merchant_remarks: request.description || 'Payment',
       no_of_items: 1,
+    };
+
+    const headers = this.buildSelcomHeaders(signedFields);
+
+    // Merge redirect URLs into the body after signing so they reach Selcom
+    // but do not affect the signature.
+    const fields: Record<string, any> = {
+      ...signedFields,
       ...(this.selcomRedirectUrl && { return_url: this.selcomRedirectUrl }),
       ...(this.selcomCancelUrl && { cancel_url: this.selcomCancelUrl }),
     };
-
-    const headers = this.buildSelcomHeaders(fields);
 
     this.logger.log(
       `[SELCOM] Creating order ${orderId} for ${request.amount} ${request.currency}`,
