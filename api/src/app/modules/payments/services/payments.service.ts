@@ -134,7 +134,7 @@ export class PaymentsService {
         {
           amount: dto.amount,
           currency: 'TZS',
-          phoneNumber: dto.phoneNumber,
+          phoneNumber: dto.phoneNumber || user.phoneNumber,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
