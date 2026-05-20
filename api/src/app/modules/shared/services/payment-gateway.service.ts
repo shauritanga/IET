@@ -446,7 +446,7 @@ export class PaymentGatewayService {
       order_id: orderId,
       buyer_email: request.email || '',
       buyer_name: buyerName,
-      buyer_phone: buyerPhone,
+      ...(buyerPhone && { buyer_phone: buyerPhone }),
       amount: String(request.amount),
       currency: request.currency,
       redirect_url: Buffer.from(this.selcomRedirectUrl || '').toString('base64'),
