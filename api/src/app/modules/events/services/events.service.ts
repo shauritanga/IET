@@ -420,12 +420,20 @@ export class EventsService {
         startDate: reg.event.startDate,
         location: reg.event.isOnline ? 'Online' : reg.event.location,
         category: reg.event.category,
+        registrationFee: reg.event.registrationFee,
+        registrationOpen: reg.event.registrationOpen,
+        registrationDeadline: reg.event.registrationDeadline ?? null,
       },
       status: reg.status,
       registeredAt: reg.createdAt,
-      paymentStatus: reg.paymentId ? 'PAID' : 'PENDING',
+      paymentStatus:
+        reg.status === EventRegistrationStatus.CONFIRMED ||
+        reg.status === EventRegistrationStatus.ATTENDED
+          ? 'PAID'
+          : 'PENDING',
       ticketNumber: reg.ticketNumber,
       qrCode: reg.qrCodeUrl,
+      paymentExpiresAt: reg.paymentExpiresAt ?? null,
     }));
 
     return {
