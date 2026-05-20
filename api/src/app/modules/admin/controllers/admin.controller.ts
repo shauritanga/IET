@@ -483,6 +483,21 @@ export class AdminController {
     };
   }
 
+  @Post('maintenance/expire-pending-event-registrations')
+  @ApiOperation({
+    summary:
+      'Expire event registrations whose payment window has elapsed (run periodically)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Registrations expired' })
+  async expirePendingEventRegistrations() {
+    const count = await this.adminService.expirePendingEventRegistrations();
+    return {
+      success: true,
+      data: { expired: count },
+      message: `${count} pending event registration(s) marked as expired`,
+    };
+  }
+
   // ============================================
   // SETTINGS — FEE CONFIGURATION
   // ============================================

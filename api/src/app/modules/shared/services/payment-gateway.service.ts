@@ -452,6 +452,8 @@ export class PaymentGatewayService {
       buyer_remarks: request.description || 'Payment',
       merchant_remarks: request.description || 'Payment',
       no_of_items: 1,
+      ...(this.selcomRedirectUrl && { return_url: this.selcomRedirectUrl }),
+      ...(this.selcomCancelUrl && { cancel_url: this.selcomCancelUrl }),
     };
 
     const headers = this.buildSelcomHeaders(fields);

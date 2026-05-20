@@ -177,6 +177,7 @@ export enum EventRegistrationStatus {
   CANCELLED = 'CANCELLED',
   ATTENDED = 'ATTENDED',
   NO_SHOW = 'NO_SHOW',
+  EXPIRED = 'EXPIRED',
 }
 
 export enum AttendeeType {

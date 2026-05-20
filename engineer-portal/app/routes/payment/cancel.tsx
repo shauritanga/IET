@@ -1,27 +1,61 @@
 import { Link, useSearchParams } from "react-router";
 
 export default function PaymentCancel() {
-    const [params] = useSearchParams();
-    const orderId = params.get("order_id");
+  const [params] = useSearchParams();
+  const orderId = params.get("order_id");
 
-    return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 24, background: "var(--iet-bg, #f5f5f5)" }}>
-            <div style={{ background: "#fff", borderRadius: 12, padding: "40px 32px", maxWidth: 440, width: "100%", textAlign: "center", boxShadow: "0 2px 16px rgba(0,0,0,.08)" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>&#x274C;</div>
-                <h1 style={{ fontSize: 20, fontWeight: 700, color: "#b91c1c", marginBottom: 8 }}>Payment Cancelled</h1>
-                <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 }}>
-                    You cancelled the payment process. No charge has been made. You can try again from your dashboard whenever you are ready.
-                </p>
-                {orderId && (
-                    <p style={{ fontSize: 11, color: "#9ca3af", marginBottom: 16 }}>Reference: {orderId}</p>
-                )}
-                <Link
-                    to="/dashboard"
-                    style={{ display: "inline-block", background: "#9b1c1c", color: "#fff", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-                >
-                    Back to Dashboard
-                </Link>
-            </div>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="bg-white rounded-2xl shadow-md p-10 max-w-md w-full text-center">
+        <div className="flex justify-center mb-5">
+          <div className="size-16 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg
+              className="size-8 text-amber-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              />
+            </svg>
+          </div>
         </div>
-    );
+
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
+          Payment Cancelled
+        </h1>
+
+        <p className="text-sm text-gray-500 leading-relaxed mb-6">
+          Your payment was cancelled. No charge has been made to your account.
+          Your event registration is still pending — you can complete payment
+          whenever you are ready from your dashboard.
+        </p>
+
+        {orderId && (
+          <p className="text-xs text-gray-400 mb-6 font-mono">
+            Reference: {orderId}
+          </p>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            to="/dashboard/events/my-registrations"
+            className="inline-flex items-center justify-center rounded-lg bg-[#9b1c1c] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#7f1d1d] transition-colors"
+          >
+            Continue Payment
+          </Link>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 px-5 py-2.5 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }

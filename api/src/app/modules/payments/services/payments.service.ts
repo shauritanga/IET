@@ -1090,12 +1090,12 @@ export class PaymentsService {
     if (payment.status === PaymentStatus.COMPLETED) {
       eventReg.status = EventRegistrationStatus.CONFIRMED;
       eventReg.confirmedAt = new Date();
+      eventReg.paymentExpiresAt = undefined;
       this.logger.log(
         `Event registration ${eventReg.id} confirmed after payment ${payment.id}`,
       );
-    } else if (payment.status === PaymentStatus.FAILED) {
-      eventReg.status = EventRegistrationStatus.CANCELLED;
     }
+    // Failed payments keep the registration as PENDING_PAYMENT so the member can retry
 
     await this.eventRegistrationRepository.save(eventReg);
   }

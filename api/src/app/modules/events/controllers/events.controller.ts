@@ -279,4 +279,42 @@ export class EventsController {
       message: 'Feedback submitted successfully',
     };
   }
+
+  @Post('registrations/:registrationId/retry-payment')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Retry payment for a pending or expired event registration',
+  })
+  @ApiParam({ name: 'registrationId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'New payment initiated — redirect user to paymentUrl',
+  })
+  async retryEventPayment(
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @GetUser() user: UserEntity,
+  ) {
+    return this.eventsService.retryEventPayment(registrationId, user.id);
+  }
+
+  @Get('registrations/:registrationId/payment-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payment status for an event registration' })
+  @ApiParam({ name: 'registrationId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Registration payment status',
+  })
+  async getRegistrationPaymentStatus(
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @GetUser() user: UserEntity,
+  ) {
+    return this.eventsService.getRegistrationPaymentStatus(
+      registrationId,
+      user.id,
+    );
+  }
 }

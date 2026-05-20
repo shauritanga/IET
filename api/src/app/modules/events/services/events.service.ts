@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, LessThan } from 'typeorm';
 import { EventEntity, EventRegistrationEntity } from '../entities';
 import { UserEntity } from '../../user/entities/user.entity';
 import { EmailService } from '../../shared/services/email.service';
@@ -273,8 +273,7 @@ export class EventsService {
       throw new BadRequestException('Registration deadline has passed');
     }
 
-    // Check if already registered. Cancelled registrations can be reused
-    // because the table has a unique eventId/userId constraint.
+    // Check if already registered. Cancelled and expired registrations can be retried.
     const existingReg = await this.registrationRepository.findOne({
       where: {
         userId,
@@ -283,14 +282,15 @@ export class EventsService {
     });
     if (
       existingReg &&
-      existingReg.status !== EventRegistrationStatus.CANCELLED
+      existingReg.status !== EventRegistrationStatus.CANCELLED &&
+      existingReg.status !== EventRegistrationStatus.EXPIRED
     ) {
       throw new BadRequestException(
         'You are already registered for this event',
       );
     }
 
-    // Check capacity
+    // Check capacity — expired registrations do not hold seats
     if (event.maxParticipants) {
       const currentCount = await this.registrationRepository.count({
         where: {
@@ -322,9 +322,11 @@ export class EventsService {
     if (event.registrationFee > 0) {
       registration.status = EventRegistrationStatus.PENDING_PAYMENT;
       registration.paymentMethod = PaymentMethod.SELCOM;
+      registration.paymentExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
     } else {
       registration.status = EventRegistrationStatus.CONFIRMED;
       registration.confirmedAt = new Date();
+      registration.paymentExpiresAt = undefined;
       registration.ticketNumber = await this.generateTicketNumber(eventYear);
     }
 
@@ -934,5 +936,158 @@ export class EventsService {
 
     const nextNumber = (result?.maxNum || 0) + 1;
     return `IET/EVT/${year}/${nextNumber.toString().padStart(4, '0')}`;
+  }
+
+  async retryEventPayment(
+    registrationId: string,
+    userId: string,
+  ): Promise<{
+    registrationId: string;
+    eventId: string;
+    eventTitle: string;
+    status: EventRegistrationStatus;
+    paymentId: string;
+    paymentUrl: string;
+    amount: number;
+    currency: string;
+    paymentExpiresAt: Date;
+  }> {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: registrationId, userId },
+      relations: ['event'],
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    if (
+      registration.status !== EventRegistrationStatus.PENDING_PAYMENT &&
+      registration.status !== EventRegistrationStatus.EXPIRED
+    ) {
+      throw new BadRequestException(
+        'Payment can only be retried for pending or expired registrations',
+      );
+    }
+
+    const event = registration.event;
+
+    if (!event.isPublished || !event.registrationOpen) {
+      throw new BadRequestException(
+        'Registration is no longer open for this event',
+      );
+    }
+
+    if (
+      event.registrationDeadline &&
+      new Date() > new Date(event.registrationDeadline)
+    ) {
+      throw new BadRequestException('Registration deadline has passed');
+    }
+
+    // Check capacity (exclude expired registrations)
+    if (event.maxParticipants) {
+      const currentCount = await this.registrationRepository.count({
+        where: {
+          eventId: event.id,
+          status: In([
+            EventRegistrationStatus.PENDING_PAYMENT,
+            EventRegistrationStatus.CONFIRMED,
+            EventRegistrationStatus.ATTENDED,
+          ]),
+        },
+      });
+      // If this registration was EXPIRED it is not counted above, so the slot is available.
+      // If it was PENDING_PAYMENT it is already counted so we check strictly less than capacity.
+      const alreadyCounted =
+        registration.status === EventRegistrationStatus.PENDING_PAYMENT;
+      if (
+        alreadyCounted
+          ? currentCount > event.maxParticipants
+          : currentCount >= event.maxParticipants
+      ) {
+        throw new BadRequestException('Event is full');
+      }
+    }
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    const paymentResult = await this.paymentsService.initiatePayment(userId, {
+      paymentType: PaymentType.EVENT_REGISTRATION,
+      amount: event.registrationFee,
+      paymentMethod: PaymentMethod.SELCOM,
+      description: `Event Registration: ${event.title}`,
+      referenceId: registration.id,
+      referenceType: 'event_registration',
+      metadata: { eventId: event.id, registrationId: registration.id },
+    });
+
+    if (!paymentResult.paymentUrl) {
+      throw new BadRequestException('Failed to create payment. Please try again.');
+    }
+
+    registration.status = EventRegistrationStatus.PENDING_PAYMENT;
+    registration.paymentId = paymentResult.paymentId;
+    registration.paymentExpiresAt = expiresAt;
+    await this.registrationRepository.save(registration);
+
+    this.logger.log(
+      `User ${userId} retried payment for event registration ${registrationId}`,
+    );
+
+    return {
+      registrationId: registration.id,
+      eventId: event.id,
+      eventTitle: event.title,
+      status: registration.status,
+      paymentId: paymentResult.paymentId,
+      paymentUrl: paymentResult.paymentUrl,
+      amount: event.registrationFee,
+      currency: 'TZS',
+      paymentExpiresAt: expiresAt,
+    };
+  }
+
+  async getRegistrationPaymentStatus(
+    registrationId: string,
+    userId: string,
+  ): Promise<{
+    registrationId: string;
+    status: EventRegistrationStatus;
+    paymentUrl?: string;
+    paymentExpiresAt?: Date;
+  }> {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: registrationId, userId },
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    return {
+      registrationId: registration.id,
+      status: registration.status,
+      paymentUrl:
+        registration.status === EventRegistrationStatus.PENDING_PAYMENT
+          ? undefined
+          : undefined,
+      paymentExpiresAt: registration.paymentExpiresAt,
+    };
+  }
+
+  async expirePendingRegistrations(): Promise<number> {
+    const result = await this.registrationRepository.update(
+      {
+        status: EventRegistrationStatus.PENDING_PAYMENT,
+        paymentExpiresAt: LessThan(new Date()),
+      },
+      { status: EventRegistrationStatus.EXPIRED },
+    );
+    const count = result.affected ?? 0;
+    if (count > 0) {
+      this.logger.log(`Expired ${count} pending event registrations`);
+    }
+    return count;
   }
 }

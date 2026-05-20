@@ -173,4 +173,10 @@ export class EventRegistrationEntity extends BaseEntity {
   })
   @Column({ type: 'text', nullable: true })
   feedbackComment?: string;
+
+  @ApiProperty({
+    description: 'Timestamp when the pending payment expires',
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  paymentExpiresAt?: Date;
 }

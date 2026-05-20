@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, LessThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
@@ -56,6 +56,7 @@ import {
   UserRole,
   NotificationType,
   DocumentStatus,
+  EventRegistrationStatus,
 } from '../../../common/enums';
 
 type LegacyMemberImportResult = {
@@ -2259,6 +2260,19 @@ export class AdminService {
       `Maintenance: ${feesMarkedOverdue} fees marked overdue, ${membershipsExpired} memberships expired`,
     );
     return { feesMarkedOverdue, membershipsExpired };
+  }
+
+  async expirePendingEventRegistrations(): Promise<number> {
+    const result = await this.eventRegistrationRepository.update(
+      {
+        status: EventRegistrationStatus.PENDING_PAYMENT,
+        paymentExpiresAt: LessThan(new Date()),
+      },
+      { status: EventRegistrationStatus.EXPIRED },
+    );
+    const count = result.affected ?? 0;
+    this.logger.log(`Maintenance: ${count} pending event registration(s) marked as expired`);
+    return count;
   }
 
   async getFeeConfig(): Promise<Record<string, number>> {

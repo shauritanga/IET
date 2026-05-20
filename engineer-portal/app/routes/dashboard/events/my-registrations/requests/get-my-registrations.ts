@@ -8,12 +8,16 @@ export type MyRegistration = {
     startDate: string;
     location: string;
     category: string;
+    registrationFee?: number;
+    registrationOpen?: boolean;
+    registrationDeadline?: string | null;
   };
-  status: "PENDING_PAYMENT" | "CONFIRMED" | "CANCELLED" | "ATTENDED" | "NO_SHOW";
+  status: "PENDING_PAYMENT" | "CONFIRMED" | "CANCELLED" | "ATTENDED" | "NO_SHOW" | "EXPIRED";
   registeredAt: string;
   paymentStatus: "PAID" | "PENDING";
   ticketNumber?: string;
   qrCode?: string;
+  paymentExpiresAt?: string;
 };
 
 export async function getMyRegistrations(params?: {
