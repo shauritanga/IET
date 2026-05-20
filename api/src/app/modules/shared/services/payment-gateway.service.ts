@@ -453,6 +453,7 @@ export class PaymentGatewayService {
       cancel_url: Buffer.from(this.selcomCancelUrl || '').toString('base64'),
       webhook: Buffer.from(request.callbackUrl || '').toString('base64'),
       no_of_items: '1',
+      payment_methods: 'ALL',
     };
 
     const headers = this.buildSelcomHeaders(fields);
