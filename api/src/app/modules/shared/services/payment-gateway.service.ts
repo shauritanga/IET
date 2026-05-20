@@ -434,7 +434,7 @@ export class PaymentGatewayService {
     }
 
     const orderId = `IET-${request.reference}`;
-    const apiUrl = `${this.selcomBaseUrl}/v1/checkout/create-order-minimal`;
+    const apiUrl = `${this.selcomBaseUrl}/checkout/create-order-minimal`;
 
     const buyerName = `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim();
     const buyerPhone = request.phoneNumber
