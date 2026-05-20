@@ -434,26 +434,24 @@ export class PaymentGatewayService {
     }
 
     const orderId = `IET-${request.reference}`;
-    const apiUrl = `${this.selcomBaseUrl}/checkout/create-order`;
+    const apiUrl = `${this.selcomBaseUrl}/v1/checkout/create-order-minimal`;
 
     const buyerName = `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim();
     const buyerPhone = request.phoneNumber
       ? this.formatTanzanianPhone(request.phoneNumber).replace(/^\+/, '')
       : '';
 
-    const fields: Record<string, string> = {
+    const fields: Record<string, any> = {
       vendor: this.selcomVendor,
       order_id: orderId,
       buyer_email: request.email || '',
       buyer_name: buyerName,
       ...(buyerPhone && { buyer_phone: buyerPhone }),
-      amount: String(request.amount),
+      amount: request.amount,
       currency: request.currency,
-      redirect_url: Buffer.from(this.selcomRedirectUrl || '').toString('base64'),
-      cancel_url: Buffer.from(this.selcomCancelUrl || '').toString('base64'),
-      webhook: Buffer.from(request.callbackUrl || '').toString('base64'),
-      no_of_items: '1',
-      payment_methods: 'ALL',
+      buyer_remarks: request.description || 'Payment',
+      merchant_remarks: request.description || 'Payment',
+      no_of_items: 1,
     };
 
     const headers = this.buildSelcomHeaders(fields);
