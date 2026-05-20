@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useRef } from "react";
-import { User, UserId, SquareAcademicCap, UsersGroupRounded, FileCheck } from "@solar-icons/react";
+import { useEffect } from "react";
+import { User, UserId, SquareAcademicCap, UsersGroupRounded, FileCheck, Letter } from "@solar-icons/react";
 import { MoonStar, SunMedium } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -8,14 +8,43 @@ import { Spinner } from "~/components/ui/spinner";
 import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
 import { getApplicationRoute } from "~/routes/application/repository/useResumeApplication";
 import { useThemeMode } from "~/providers/theme";
+import type { ApplicationStep } from "~/routes/application/type";
+
+// Maps sidebar step index → backend RegistrationStep key
+const STEP_KEYS: ApplicationStep[] = [
+    "PERSONAL_DETAILS",
+    "REGISTRATION_DETAILS",
+    "EDUCATION_EXPERIENCE",
+    "REFERENCES",
+    "EMAIL_VERIFICATION",
+    "PAYMENT",
+];
+
+// Step URL segments in order — used for "is this path ahead of allowed?" check
+const STEP_PATHS = [
+    "/application/personal-details",
+    "/application/registration-details",
+    "/application/experience",
+    "/application/references",
+    "/application/verify-email",
+    "/application/submission",
+];
+
+function isAheadOfAllowedStep(currentPath: string, allowedPath: string): boolean {
+    const currentIdx = STEP_PATHS.findIndex((p) => currentPath.startsWith(p));
+    const allowedIdx = STEP_PATHS.findIndex((p) => allowedPath.startsWith(p));
+    if (currentIdx === -1 || allowedIdx === -1) return false;
+    return currentIdx > allowedIdx;
+}
 
 const RegisterLayout = () => {
     const path = useLocation();
     const navigate = useNavigate();
-    const hasAutoRedirected = useRef(false);
     const { theme, toggleTheme } = useThemeMode();
 
     const { isLoading: isDraftLoading, isError, data: draft } = useGetApplicationDraft();
+
+    const completedSteps: ApplicationStep[] = draft?.data?.completedSteps ?? [];
 
     const steps = [
         {
@@ -43,6 +72,12 @@ const RegisterLayout = () => {
             icon: <UsersGroupRounded weight={"BoldDuotone"} size={20} />,
         },
         {
+            label: "Verify Email",
+            link: "/application/verify-email",
+            description: "Confirm your email address",
+            icon: <Letter weight={"BoldDuotone"} size={20} />,
+        },
+        {
             label: "Declaration & Submission",
             link: "/application/submission",
             description: "Finalise registration submission",
@@ -51,32 +86,26 @@ const RegisterLayout = () => {
     ];
 
     const isWelcomePage = path.pathname.includes("/application/welcome");
-    const isCurrentStep = (step: string) => path.pathname.includes(step);
+    const isCurrentStep = (step: string) => path.pathname.startsWith(step);
     const currentStepIndex = isWelcomePage
         ? steps.length
         : steps.findIndex((step) => isCurrentStep(step.link));
-    const isStepCompleted = (stepIndex: number) => currentStepIndex > stepIndex;
-    const isConnectorActive = (stepIndex: number) => currentStepIndex > stepIndex;
 
+    // Sidebar completion driven by backend completedSteps, not URL position
+    const isStepCompleted = (stepIndex: number) =>
+        isWelcomePage || completedSteps.includes(STEP_KEYS[stepIndex]);
+
+    // Route guard: fires on every navigation
     useEffect(() => {
-        if (hasAutoRedirected.current || !draft?.data?.hasActiveRegistration) {
-            return;
-        }
+        if (!draft?.data?.hasActiveRegistration) return;
 
         const currentPath = path.pathname;
         const targetPath = getApplicationRoute(draft.data);
 
-        if (
-            currentPath === "/application" ||
-            currentPath === "/application/personal-details"
-        ) {
-            hasAutoRedirected.current = true;
-
-            if (targetPath !== currentPath) {
-                navigate(targetPath, { replace: true });
-            }
+        if (isAheadOfAllowedStep(currentPath, targetPath)) {
+            navigate(targetPath, { replace: true });
         }
-    }, [draft, navigate, path.pathname]);
+    }, [draft, path.pathname, navigate]);
 
     if (isDraftLoading) {
         return (
@@ -145,7 +174,7 @@ const RegisterLayout = () => {
                         )}
 
                         {steps.map((step, index) => {
-                            const completed = isStepCompleted(index) || isWelcomePage;
+                            const completed = isStepCompleted(index);
                             const active = isCurrentStep(step.link) && !isWelcomePage;
                             return (
                                 <div key={index} className="flex items-start">

@@ -809,6 +809,7 @@ export class RegistrationService {
       RegistrationStep.REGISTRATION_DETAILS,
       RegistrationStep.EDUCATION_EXPERIENCE,
       RegistrationStep.REFERENCES,
+      RegistrationStep.EMAIL_VERIFICATION,
     ];
 
     const missingSteps = requiredSteps.filter(

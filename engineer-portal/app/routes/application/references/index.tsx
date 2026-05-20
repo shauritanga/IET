@@ -8,13 +8,15 @@ import {
 } from "./forms/manage-reference-forms";
 import { useSubmitReferenceDetails } from "./repository/useSubmitReferenceDetails";
 import FormPageLayout from "~/routes/application/components/form-page-layout";
+import { mapServerErrors } from "~/utils/map-server-errors";
 
 const References = () => {
     const navigate = useNavigate();
     const form = useManageReferenceDetailsForm();
 
-    const mutation = useSubmitReferenceDetails(() =>
-        navigate("/application/submission", {replace: true})
+    const mutation = useSubmitReferenceDetails(
+        () => navigate("/application/verify-email", { replace: true }),
+        (error) => mapServerErrors(error, form),
     );
 
     const submit = (value: ReferenceDetailsFormType) => {

@@ -8,6 +8,7 @@ import {
 } from './form/manage-registration-details-form';
 import {useSubmitRegistrationDetails} from "./repository/useSubmitRegistrationDetails";
 import FormPageLayout from "~/routes/application/components/form-page-layout";
+import { mapServerErrors } from "~/utils/map-server-errors";
 
 const RegistrationDetails = () => {
     const navigate = useNavigate();
@@ -19,8 +20,9 @@ const RegistrationDetails = () => {
         removeInstitution
     } = useManageRegistrationDetailsForm();
 
-    const mutation = useSubmitRegistrationDetails(() =>
-        navigate("/application/experience", {replace: true})
+    const mutation = useSubmitRegistrationDetails(
+        () => navigate("/application/experience", { replace: true }),
+        (error) => mapServerErrors(error, formOptions),
     );
 
     const submit = (value: RegistrationDetailsFormType) => {

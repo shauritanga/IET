@@ -11,6 +11,7 @@ const orderedApplicationSteps: ApplicationStep[] = [
     "REGISTRATION_DETAILS",
     "EDUCATION_EXPERIENCE",
     "REFERENCES",
+    "EMAIL_VERIFICATION",
     "PAYMENT",
     "DECLARATION",
 ];
@@ -43,8 +44,9 @@ export const getApplicationRoute = (
             return "/application/experience";
         case "REFERENCES":
             return "/application/references";
-        case "DECLARATION":
         case "EMAIL_VERIFICATION":
+            return "/application/verify-email";
+        case "DECLARATION":
         case "PAYMENT":
             return "/application/submission";
         default:

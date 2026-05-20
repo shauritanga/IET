@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { PaymentEntity } from '../entities/payment.entity';
 import { UserEntity } from '../../user/entities/user.entity';
@@ -270,6 +270,36 @@ export class PaymentsService {
         transactionRef: completedPayment?.transactionRef,
         applicationType: dto.applicationType,
         message: 'Application fee is already completed',
+      };
+    }
+
+    // Return existing active payment instead of creating a duplicate
+    const existingPayment = await this.paymentRepository.findOne({
+      where: {
+        userId,
+        referenceId: registration.id,
+        referenceType: 'registration',
+        paymentType: PaymentType.APPLICATION_FEE,
+        status: In([PaymentStatus.PENDING, PaymentStatus.PROCESSING]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (existingPayment?.paymentUrl) {
+      return {
+        applicationId: registration.id,
+        paymentCompleted: false,
+        paymentId: existingPayment.id,
+        paymentStatus: existingPayment.status,
+        amount: existingPayment.amount,
+        currency: existingPayment.currency,
+        paymentMethod: PaymentMethod.SELCOM,
+        paymentUrl: existingPayment.paymentUrl,
+        mobileMoneyRef: existingPayment.mobileMoneyRef,
+        phoneNumber: undefined,
+        transactionRef: undefined,
+        applicationType: dto.applicationType,
+        message: 'Existing payment session resumed',
       };
     }
 
@@ -1072,6 +1102,10 @@ export class PaymentsService {
     }
 
     await this.registrationRepository.save(registration);
+
+    if (payment.status === PaymentStatus.COMPLETED) {
+      await this.sendPaymentNotifications(payment);
+    }
   }
 
   private async confirmEventRegistration(

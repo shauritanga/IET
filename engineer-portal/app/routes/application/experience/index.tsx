@@ -4,6 +4,7 @@ import ExperienceDetailsForm from "~/routes/application/experience/form/experien
 import {useManageExperienceForm, type ExperienceDetailsFormType} from "./form/manage-experience-details-form";
 import { useSubmitExperienceDetails } from './repository/useSubmitExperienceDetails';
 import FormPageLayout from "~/routes/application/components/form-page-layout";
+import { mapServerErrors } from "~/utils/map-server-errors";
 
 const Experience = () => {
     const navigate = useNavigate();
@@ -19,8 +20,9 @@ const Experience = () => {
         removeWorkExperience,
     } = useManageExperienceForm();
 
-    const mutation = useSubmitExperienceDetails(() =>
-        navigate("/application/references", {replace: true})
+    const mutation = useSubmitExperienceDetails(
+        () => navigate("/application/references", { replace: true }),
+        (error) => mapServerErrors(error, form),
     );
 
     const submit = (value: ExperienceDetailsFormType) => {

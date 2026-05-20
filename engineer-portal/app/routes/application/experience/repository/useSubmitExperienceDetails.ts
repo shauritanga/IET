@@ -6,7 +6,10 @@ import type {ApplicationResponse} from "~/routes/application/type";
 import type {ExperienceDetailsFormType} from "../form/manage-experience-details-form";
 import { submitExperienceDetails } from "../requests/submit-experience";
 
-export function useSubmitExperienceDetails(onSuccess: TSuccess<APIResponse<ApplicationResponse>>) {
+export function useSubmitExperienceDetails(
+    onSuccess: TSuccess<APIResponse<ApplicationResponse>>,
+    onValidationError?: (error: TErrorMessage) => void,
+) {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -17,6 +20,11 @@ export function useSubmitExperienceDetails(onSuccess: TSuccess<APIResponse<Appli
             onSuccess(data);
         },
         onError: (error: TErrorMessage) => {
+            if (error.response?.data.errors?.length && onValidationError) {
+                onValidationError(error);
+                toast.error("Please fix the highlighted fields and try again.");
+                return;
+            }
             toast.error(error.response?.data.message ?? "Something went wrong");
         },
     });

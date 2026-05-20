@@ -14,5 +14,8 @@ export type DeclarationFormType = z.infer<typeof DeclarationFormSchema>
 export const useManageDeclarationForm = () => {
     return useForm<DeclarationFormType>({
         resolver: zodResolver(DeclarationFormSchema),
+        defaultValues: {
+            declarationDate: new Date().toISOString(),
+        },
     });
 }
