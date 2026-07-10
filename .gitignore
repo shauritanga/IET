@@ -19,6 +19,10 @@ dist/
 .vite/
 coverage/
 
+# Runtime data / caches (app root doubles as service user's home on the server)
+.npm/
+uploads/
+
 # OS/editor noise
 .idea/
 .vscode/
