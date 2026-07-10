@@ -76,6 +76,8 @@ export class PaymentGatewayService {
   private readonly selcomVendor: string;
   private readonly selcomRedirectUrl: string;
   private readonly selcomCancelUrl: string;
+  private readonly selcomEngineerPortalUrl: string;
+  private readonly selcomTimeoutMs: number;
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
@@ -87,7 +89,16 @@ export class PaymentGatewayService {
     this.clickPesaUseChecksum = !!configService.get<boolean>(
       'CLICKPESA_USE_CHECKSUM',
     );
-    this.selcomBaseUrl = configService.get<string>('SELCOM_BASE_URL')!;
+    // Normalize the base URL: drop any trailing slash and a trailing `/v1`
+    // segment, because our request paths already include `/v1/...`. This keeps
+    // the integration working whether SELCOM_BASE_URL is set with or without
+    // `/v1` (matches the reference ICAFoW integration).
+    this.selcomBaseUrl = (
+      configService.get<string>('SELCOM_BASE_URL') ||
+      'https://apigw.selcommobile.com'
+    )
+      .replace(/\/+$/, '')
+      .replace(/\/v1$/i, '');
     this.selcomApiKey = configService.get<string>('SELCOM_API_KEY') || '';
     this.selcomApiSecret = configService.get<string>('SELCOM_API_SECRET') || '';
     this.selcomVendor = configService.get<string>('SELCOM_VENDOR') || '';
@@ -95,6 +106,12 @@ export class PaymentGatewayService {
       configService.get<string>('SELCOM_REDIRECT_URL') || '';
     this.selcomCancelUrl =
       configService.get<string>('SELCOM_CANCEL_URL') || '';
+    this.selcomEngineerPortalUrl = (
+      configService.get<string>('ENGINEER_PORTAL_URL') || ''
+    ).replace(/\/+$/, '');
+    this.selcomTimeoutMs = Number(
+      configService.get<string>('SELCOM_TIMEOUT_MS') || '15000',
+    );
   }
 
   /**
@@ -434,71 +451,97 @@ export class PaymentGatewayService {
     }
 
     const orderId = `IET-${request.reference}`;
-    const apiUrl = `${this.selcomBaseUrl}/checkout/create-order-minimal`;
+    const apiUrl = `${this.selcomBaseUrl}/v1/checkout/create-order-minimal`;
 
-    const buyerName = `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim();
+    const buyerName = this.toSelcomAscii(
+      `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim(),
+    );
     const buyerPhone = request.phoneNumber
-      ? this.formatTanzanianPhone(request.phoneNumber).replace(/^\+/, '')
+      ? this.normalizeSelcomMsisdn(request.phoneNumber)
       : '';
 
-    // create-order-minimal only accepts these core fields.
-    // return_url / cancel_url are not supported by this endpoint and cause
-    // Selcom to reject with 406 "Not Acceptable".
-    const fields: Record<string, any> = {
+    // create-order-minimal accepts base64-encoded redirect_url / cancel_url /
+    // webhook. Wiring these makes Selcom bounce the buyer back to our portal
+    // after payment and POST a server-to-server notification to our webhook.
+    // Settlement is still reconciled authoritatively via the order-status
+    // endpoint (checkSelcomOrderStatus). NOTE: the earlier 406 "Not Acceptable"
+    // errors were caused by the missing Accept/User-Agent headers and non-ASCII
+    // characters in text fields — NOT by these URLs (per the working ICAFoW
+    // integration), so they are included here.
+    const redirectUrl =
+      this.selcomRedirectUrl ||
+      (this.selcomEngineerPortalUrl
+        ? `${this.selcomEngineerPortalUrl}/payments/callback?ref=${encodeURIComponent(request.reference)}`
+        : '');
+    const cancelUrl =
+      this.selcomCancelUrl ||
+      (redirectUrl
+        ? `${redirectUrl}${redirectUrl.includes('?') ? '&' : '?'}cancel=1`
+        : '');
+    const webhookUrl = request.callbackUrl || '';
+
+    const fields: Record<string, string | number> = {
       vendor: this.selcomVendor,
       order_id: orderId,
-      buyer_email: request.email || '',
+      buyer_email: request.email,
       buyer_name: buyerName,
       ...(buyerPhone && { buyer_phone: buyerPhone }),
-      amount: request.amount,
+      amount: Math.round(request.amount),
       currency: request.currency,
-      buyer_remarks: request.description || 'Payment',
-      merchant_remarks: request.description || 'Payment',
+      ...(redirectUrl && { redirect_url: this.encodeSelcomUrl(redirectUrl) }),
+      ...(cancelUrl && { cancel_url: this.encodeSelcomUrl(cancelUrl) }),
+      ...(webhookUrl && { webhook: this.encodeSelcomUrl(webhookUrl) }),
+      buyer_remarks: this.toSelcomAscii(request.description || 'IET payment'),
+      merchant_remarks: 'IET Tanzania',
       no_of_items: 1,
     };
 
-    const headers = this.buildSelcomHeaders(fields);
-
     this.logger.log(
-      `[SELCOM] Creating order ${orderId} for ${request.amount} ${request.currency}`,
+      `[SELCOM] Creating order ${orderId} for ${fields.amount} ${request.currency}`,
     );
 
-    const response = await fetch(apiUrl, {
+    const response = await this.selcomFetch(apiUrl, {
       method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers: this.buildSelcomHeaders(fields),
       body: JSON.stringify(fields),
     });
 
-    const payload = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    let payload: any = {};
+    try {
+      payload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      payload = {};
+    }
 
     this.logger.log(
-      `[SELCOM] Create order response [${response.status}]: ${JSON.stringify(payload)}`,
+      `[SELCOM] Create order response [${response.status}]: ${rawText?.slice(0, 500)}`,
     );
 
-    if (!response.ok || payload?.resultcode !== '000') {
+    // Selcom returns result "SUCCESS" / resultcode "000" on success, with the
+    // hosted-checkout URL in data[0].payment_gateway_url (sometimes base64).
+    const ok =
+      response.ok &&
+      (payload?.result === 'SUCCESS' || payload?.resultcode === '000');
+    const data = Array.isArray(payload?.data) ? payload.data[0] : payload?.data;
+    const token = data?.payment_token;
+    const paymentGatewayUrl =
+      this.decodeSelcomUrl(data?.payment_gateway_url) ||
+      (token
+        ? `${this.selcomBaseUrl}/v1/checkout/payment-link?token=${encodeURIComponent(token)}`
+        : undefined);
+
+    if (!ok || !paymentGatewayUrl) {
       throw new BadRequestException(
         payload?.message ||
           `Selcom order creation failed (HTTP ${response.status})`,
       );
     }
 
-    const paymentGatewayUrl = this.decodeSelcomUrl(
-      payload?.data?.[0]?.payment_gateway_url,
-    );
-
-    if (!paymentGatewayUrl) {
-      throw new BadRequestException(
-        'Selcom order creation did not return a checkout URL',
-      );
-    }
-
     return {
       success: true,
       transactionId: orderId,
+      providerRef: data?.reference,
       paymentUrl: paymentGatewayUrl,
       status: 'PENDING',
       message:
@@ -510,12 +553,11 @@ export class PaymentGatewayService {
 
   async checkSelcomOrderStatus(orderId: string): Promise<PaymentStatusResponse> {
     const fields: Record<string, string> = { order_id: orderId };
-    const headers = this.buildSelcomHeaders(fields);
 
-    const url = `${this.selcomBaseUrl}/checkout/order-status?order_id=${encodeURIComponent(orderId)}`;
-    const response = await fetch(url, {
+    const url = `${this.selcomBaseUrl}/v1/checkout/order-status?order_id=${encodeURIComponent(orderId)}`;
+    const response = await this.selcomFetch(url, {
       method: 'GET',
-      headers: { ...headers, Accept: 'application/json' },
+      headers: this.buildSelcomHeaders(fields),
     });
 
     const payload = await response.json().catch(() => ({}));
@@ -557,25 +599,31 @@ export class PaymentGatewayService {
   }
 
   private buildSelcomHeaders(
-    orderedFields: Record<string, string>,
+    orderedFields: Record<string, string | number>,
   ): Record<string, string> {
     const timestamp = new Date().toISOString();
-    const signedFields = Object.keys(orderedFields).join(',');
-    const fieldPairs = Object.entries(orderedFields)
-      .map(([k, v]) => `${k}=${v}`)
-      .join('&');
-    const signingString = `timestamp=${timestamp}&${fieldPairs}`;
+    const signedFields = Object.keys(orderedFields);
+    let signingString = `timestamp=${timestamp}`;
+    for (const field of signedFields) {
+      signingString += `&${field}=${orderedFields[field]}`;
+    }
     const digest = createHmac('sha256', this.selcomApiSecret)
       .update(signingString)
       .digest('base64');
     const authorization = `SELCOM ${Buffer.from(this.selcomApiKey).toString('base64')}`;
 
     return {
+      'Content-Type': 'application/json',
+      // Selcom's API gateway rejects requests with HTTP 406 "Not Acceptable"
+      // when these content-negotiation/identity headers are absent. Node's
+      // fetch does not send them reliably, so set them explicitly.
+      Accept: 'application/json',
+      'User-Agent': 'IET-Tanzania/1.0',
       Authorization: authorization,
       'Digest-Method': 'HS256',
       Digest: digest,
       Timestamp: timestamp,
-      'Signed-Fields': signedFields,
+      'Signed-Fields': signedFields.join(','),
     };
   }
 
@@ -594,6 +642,68 @@ export class PaymentGatewayService {
     } catch {
       return value;
     }
+  }
+
+  /** Base64-encode a URL the way Selcom expects redirect/cancel/webhook URLs. */
+  private encodeSelcomUrl(url: string): string {
+    return Buffer.from(url).toString('base64');
+  }
+
+  /**
+   * Reduce a string to plain ASCII for Selcom text fields. Selcom rejects
+   * requests containing non-ASCII characters (e.g. an em-dash "—" or accented
+   * letters in a buyer's name) with HTTP 406 "Not Acceptable". We decompose
+   * accents, map common Unicode dashes to a hyphen, then drop anything outside
+   * printable ASCII.
+   */
+  private toSelcomAscii(value: string): string {
+    return (value || '')
+      .normalize('NFKD')
+      .replace(/[‐-―]/g, '-') // hyphen, figure/en/em dashes → "-"
+      .replace(/[^\x20-\x7E]/g, '') // strip remaining non-ASCII
+      .trim();
+  }
+
+  /** Normalize a Tanzanian phone number to 255XXXXXXXXX (no leading +). */
+  private normalizeSelcomMsisdn(phone: string): string {
+    const digits = (phone || '').replace(/\D/g, '');
+    if (digits.startsWith('255')) return digits;
+    if (digits.startsWith('0')) return '255' + digits.slice(1);
+    if (digits.length === 9) return '255' + digits;
+    return digits;
+  }
+
+  /**
+   * fetch with an abort timeout and one retry-with-backoff on network/5xx
+   * errors. Selcom create-order/order-status are safe to retry: create-order is
+   * keyed by a unique order_id (Selcom dedupes) and order-status is a read.
+   */
+  private async selcomFetch(
+    url: string,
+    init: RequestInit,
+    attempts = 2,
+  ): Promise<Response> {
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.selcomTimeoutMs);
+      try {
+        const res = await fetch(url, { ...init, signal: controller.signal });
+        if (res.status >= 500 && i < attempts - 1) {
+          lastErr = new Error(`Selcom ${res.status}`);
+        } else {
+          return res;
+        }
+      } catch (err) {
+        lastErr = err;
+      } finally {
+        clearTimeout(timer);
+      }
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error('Selcom request failed');
   }
 
   private isSelcomConfigured(): boolean {

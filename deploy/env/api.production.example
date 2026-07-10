@@ -49,5 +49,19 @@ CLICKPESA_CHECKSUM_KEY=
 CLICKPESA_USE_CHECKSUM=false
 CLICKPESA_CALLBACK_URL=
 
+# Selcom hosted-checkout (card + mobile money). When API_KEY/API_SECRET/VENDOR
+# are all set, Selcom takes precedence over ClickPesa for card/checkout.
+# Sandbox base: https://apigwtest2.selcommobile.com  Production: https://apigw.selcommobile.com
+SELCOM_BASE_URL=https://apigw.selcommobile.com
+SELCOM_API_KEY=
+SELCOM_API_SECRET=
+SELCOM_VENDOR=
+# Bearer token Selcom sends in C2B webhook Authorization header (rejects if unset)
+SELCOM_WEBHOOK_TOKEN=
+SELCOM_TIMEOUT_MS=15000
+# Where Selcom bounces the buyer after payment; blank => members-portal callback
+SELCOM_REDIRECT_URL=
+SELCOM_CANCEL_URL=
+
 APPLICATION_FEE_GRADUATE=500
 APPLICATION_FEE_STANDARD=1000

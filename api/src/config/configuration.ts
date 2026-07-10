@@ -54,14 +54,17 @@ export default () => ({
   DO_SPACES_CDN_URL: process.env.DO_SPACES_CDN_URL || '',
 
   // Selcom payment settings
+  // Sandbox: https://apigwtest2.selcommobile.com  Production: https://apigw.selcommobile.com
+  // A trailing /v1 is tolerated (stripped at runtime) since request paths add it.
   SELCOM_BASE_URL:
-    process.env.SELCOM_BASE_URL || 'https://apigw.selcommobile.com/v1',
+    process.env.SELCOM_BASE_URL || 'https://apigw.selcommobile.com',
   SELCOM_API_KEY: process.env.SELCOM_API_KEY || '',
   SELCOM_API_SECRET: process.env.SELCOM_API_SECRET || '',
   SELCOM_VENDOR: process.env.SELCOM_VENDOR || '',
   SELCOM_WEBHOOK_TOKEN: process.env.SELCOM_WEBHOOK_TOKEN || '',
   SELCOM_REDIRECT_URL: process.env.SELCOM_REDIRECT_URL || '',
   SELCOM_CANCEL_URL: process.env.SELCOM_CANCEL_URL || '',
+  SELCOM_TIMEOUT_MS: process.env.SELCOM_TIMEOUT_MS || '15000',
 
   // ClickPesa payment settings
   CLICKPESA_BASE_URL:
