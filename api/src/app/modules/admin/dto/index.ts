@@ -460,6 +460,20 @@ export class CreateMembershipCategoryDto {
   @Transform(({ value }) => value?.trim())
   name: string;
 
+  @ApiPropertyOptional({ example: 'MIET' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => value?.trim())
+  code?: string;
+
+  @ApiPropertyOptional({ example: 2, description: 'Relative category level for upgrade ordering' })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  level?: number;
+
   @ApiProperty({ example: 200000, description: 'Annual fee in TZS' })
   @IsNotEmpty()
   @IsNumber()
@@ -477,6 +491,11 @@ export class CreateMembershipCategoryDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class UpdateMembershipCategoryDto {
@@ -486,6 +505,20 @@ export class UpdateMembershipCategoryDto {
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   name?: string;
+
+  @ApiPropertyOptional({ example: 'MIET' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Transform(({ value }) => value?.trim())
+  code?: string;
+
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(0)
+  level?: number;
 
   @ApiPropertyOptional({ example: 200000 })
   @IsOptional()
@@ -504,6 +537,11 @@ export class UpdateMembershipCategoryDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class EngineeringInstitutionQueryDto {

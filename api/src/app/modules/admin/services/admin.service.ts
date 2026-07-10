@@ -2539,9 +2539,12 @@ export class AdminService {
     }
     const category = this.membershipCategoryRepository.create({
       name: dto.name,
+      code: dto.code ?? null,
+      level: dto.level ?? 0,
       yearlyFee: dto.yearlyFee,
       minYearsExperience: dto.minYearsExperience,
       description: dto.description ?? null,
+      isActive: dto.isActive ?? true,
     });
     const saved = await this.membershipCategoryRepository.save(category);
     return { success: true, data: saved };

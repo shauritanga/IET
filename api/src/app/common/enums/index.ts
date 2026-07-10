@@ -121,6 +121,13 @@ export enum RegistrationCategory {
   STANDARD = 'STANDARD', // Standard application
 }
 
+export enum UpgradeApplicationStatus {
+  PENDING = 'PENDING',     // Submitted, awaiting admin review
+  APPROVED = 'APPROVED',   // Admin approved; member category updated
+  REJECTED = 'REJECTED',   // Admin rejected with reason
+  CANCELLED = 'CANCELLED', // Member or admin cancelled
+}
+
 // ============================================
 // PAYMENT ENUMS
 // ============================================

@@ -1,0 +1,17 @@
+[Unit]
+Description=IET API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=iet
+WorkingDirectory=/var/www/iet/api
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=-/var/www/iet/api/.env
+ExecStart=/usr/bin/npm run start:prod
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

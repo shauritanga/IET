@@ -14,6 +14,12 @@ export class MembershipCategoryEntity {
   @Column({ unique: true })
   name: string;
 
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  code?: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  level: number;
+
   @Column({ type: 'int' })
   yearlyFee: number;
 
@@ -22,6 +28,9 @@ export class MembershipCategoryEntity {
 
   @Column({ nullable: true, type: 'text' })
   description: string | null;
+
+  @Column({ default: true })
+  isActive: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

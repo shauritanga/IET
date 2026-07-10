@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import toast from "react-hot-toast"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/components/ui/dialog"
 import { membershipBenefits, profileDocumentItems, type KpiItem } from "~/components/portal/mock-data"
@@ -11,6 +11,7 @@ import { useEvents } from "~/routes/dashboard/events/repositories/use-events"
 import { mapDashboardEventToCard, type PortalEventCard } from "~/routes/dashboard/events/utils"
 import { useGetUserProfile } from "~/routes/dashboard/profile/repositories/handle-get-user-profile"
 import { useMembershipFeeHistory } from "~/routes/dashboard/home/repositories/useMembershipFeeHistory"
+import { useUpgradeEligibility } from "~/routes/dashboard/membership/repositories/useUpgrade"
 import http from "~/utils/http"
 
 const EVENT_TYPE_FILTERS = [
@@ -392,7 +393,9 @@ const StatusBanner = ({ tone, children }: { tone: "info" | "warning" | "success"
 }
 
 export const DashboardMembershipPage = ({ onApplyForMembership }: { onApplyForMembership?: () => void }) => {
+    const navigate = useNavigate()
     const { data: profileData, isPending } = useGetUserProfile()
+    const { data: upgradeEligibility } = useUpgradeEligibility()
     const profile = profileData?.data
     const regStatus = profile?.registrationStatus ?? null
     const membershipStatus = (profile?.membershipStatus ?? "").toUpperCase()
@@ -433,6 +436,25 @@ export const DashboardMembershipPage = ({ onApplyForMembership }: { onApplyForMe
                     </div>
                 </div>
                 <BenefitsGrid />
+                {/* ── Upgrade Membership Button (eligibility-gated) ── */}
+                {upgradeEligibility?.canUpgrade && (
+                    <div className="card" style={{ marginBottom: 18 }}>
+                        <div className="card-head">
+                            <span className="card-title">Upgrade Membership</span>
+                        </div>
+                        <div className="card-body">
+                            <p style={{ fontSize: 12.5, color: "var(--iet-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+                                You are eligible to upgrade your membership grade. Upgrading gives you access to higher-level IET benefits and recognition.
+                            </p>
+                            <button
+                                className="btn btn-red"
+                                onClick={() => navigate("/dashboard/membership/upgrade")}
+                            >
+                                Upgrade Membership
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <div className="card">
                     <div className="card-head">
                         <span className="card-title">CPD Progress – 2024</span>

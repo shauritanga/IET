@@ -1,0 +1,5 @@
+VITE_API_BASE_URL=https://api.iet.or.tz/api/v1
+SESSION_SECRET=replace_with_random_session_secret
+BEEM_API_KEY=
+BEEM_SECRET_KEY=
+BEEM_SOURCE_ADDR=IET

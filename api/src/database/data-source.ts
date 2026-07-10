@@ -24,9 +24,7 @@ export const typeOrmAsyncConfig: TypeOrmModuleAsyncOptions = {
       database: configService.get<string>('DB_NAME'),
       password: configService.get<string>('DB_PASSWORD'),
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-      synchronize:
-        configService.get<string>('NODE_ENV') === 'development' ||
-        configService.get<string>('DB_SYNC') === 'true',
+      synchronize: configService.get<string>('DB_SYNC') === 'true', // Only sync when DB_SYNC=true
       logging: configService.get<string>('NODE_ENV') === 'development',
       migrations: [__dirname + '/migrations/**/*{.ts,.js}'],
       migrationsRun: false,

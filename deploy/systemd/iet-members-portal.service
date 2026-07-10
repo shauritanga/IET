@@ -1,0 +1,17 @@
+[Unit]
+Description=IET Members Portal
+After=network.target iet-api.service
+
+[Service]
+Type=simple
+User=iet
+WorkingDirectory=/var/www/iet/engineer-portal
+Environment=NODE_ENV=production
+Environment=PORT=4000
+EnvironmentFile=-/var/www/iet/engineer-portal/.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

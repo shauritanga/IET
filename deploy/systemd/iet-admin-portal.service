@@ -1,0 +1,17 @@
+[Unit]
+Description=IET Admin Portal
+After=network.target iet-api.service
+
+[Service]
+Type=simple
+User=iet
+WorkingDirectory=/var/www/iet/admin-portal
+Environment=NODE_ENV=production
+Environment=PORT=4100
+EnvironmentFile=-/var/www/iet/admin-portal/.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
