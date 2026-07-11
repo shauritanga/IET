@@ -66,15 +66,6 @@ export default () => ({
   SELCOM_CANCEL_URL: process.env.SELCOM_CANCEL_URL || '',
   SELCOM_TIMEOUT_MS: process.env.SELCOM_TIMEOUT_MS || '15000',
 
-  // ClickPesa payment settings
-  CLICKPESA_BASE_URL:
-    process.env.CLICKPESA_BASE_URL ||
-    'https://api.clickpesa.com/third-parties',
-  CLICKPESA_CLIENT_ID: process.env.CLICKPESA_CLIENT_ID || '',
-  CLICKPESA_API_KEY: process.env.CLICKPESA_API_KEY || '',
-  CLICKPESA_USE_CHECKSUM: process.env.CLICKPESA_USE_CHECKSUM === 'true',
-  CLICKPESA_CALLBACK_URL: process.env.CLICKPESA_CALLBACK_URL || '',
-
   // Beem Africa SMS settings
   BEEM_API_KEY: process.env.BEEM_API_KEY || '',
   BEEM_SECRET_KEY: process.env.BEEM_SECRET_KEY || '',

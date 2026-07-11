@@ -84,13 +84,6 @@ import * as Joi from 'joi';
         DO_SPACES_REGION: Joi.string().default('us-east-1'),
         DO_SPACES_BUCKET: Joi.string().optional().allow(''),
         DO_SPACES_CDN_URL: Joi.string().optional().allow(''),
-        CLICKPESA_BASE_URL: Joi.string().uri().default(
-          'https://api.clickpesa.com/third-parties',
-        ),
-        CLICKPESA_CLIENT_ID: Joi.string().optional().allow(''),
-        CLICKPESA_API_KEY: Joi.string().optional().allow(''),
-        CLICKPESA_USE_CHECKSUM: Joi.boolean().default(false),
-        CLICKPESA_CALLBACK_URL: Joi.string().optional().allow(''),
         APPLICATION_FEE_GRADUATE: Joi.number().default(5000),
         APPLICATION_FEE_STANDARD: Joi.number().default(10000),
       }),

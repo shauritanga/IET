@@ -270,21 +270,6 @@ export class PaymentsController {
     return this.paymentsService.handleSelcomNotification(data, auth);
   }
 
-  @Post('webhooks/clickpesa')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'ClickPesa payment callback' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Callback processed',
-    schema: {
-      example: { status: 'OK' },
-    },
-  })
-  async handleClickPesaCallback(@Body() data: any) {
-    return this.paymentsService.handleClickPesaCallback(data);
-  }
-
   @Post('webhooks/dpo')
   @Public()
   @HttpCode(HttpStatus.OK)

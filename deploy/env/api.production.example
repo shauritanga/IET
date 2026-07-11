@@ -42,15 +42,7 @@ DO_SPACES_REGION=sfo3
 DO_SPACES_BUCKET=
 DO_SPACES_CDN_URL=
 
-CLICKPESA_BASE_URL=https://api.clickpesa.com/third-parties
-CLICKPESA_CLIENT_ID=
-CLICKPESA_API_KEY=
-CLICKPESA_CHECKSUM_KEY=
-CLICKPESA_USE_CHECKSUM=false
-CLICKPESA_CALLBACK_URL=
-
-# Selcom hosted-checkout (card + mobile money). When API_KEY/API_SECRET/VENDOR
-# are all set, Selcom takes precedence over ClickPesa for card/checkout.
+# Selcom hosted checkout (card + mobile money) — the platform's payment gateway.
 # Sandbox base: https://apigwtest2.selcommobile.com  Production: https://apigw.selcommobile.com
 SELCOM_BASE_URL=https://apigw.selcommobile.com
 SELCOM_API_KEY=

@@ -110,20 +110,8 @@ export class PaymentsService {
     payment.metadata = dto.metadata || {};
     payment.idempotencyKey = uuid4();
 
-    let savedPayment = await this.paymentRepository.save(payment);
-    const providerOrderReference = this.paymentGateway.usesClickPesa(
-      dto.paymentMethod,
-    )
-      ? this.buildClickPesaOrderReference(savedPayment.id)
-      : savedPayment.id;
-
-    if (this.paymentGateway.usesClickPesa(dto.paymentMethod)) {
-      savedPayment.metadata = {
-        ...savedPayment.metadata,
-        providerOrderReference,
-      };
-      savedPayment = await this.paymentRepository.save(savedPayment);
-    }
+    const savedPayment = await this.paymentRepository.save(payment);
+    const providerOrderReference = savedPayment.id;
     const apiUrl = this.configService.get<string>('API_URL');
 
     // Use PaymentGatewayService
@@ -786,75 +774,6 @@ export class PaymentsService {
     return valid;
   }
 
-  async handleClickPesaCallback(data: any): Promise<{ status: string }> {
-    try {
-      const payload = Array.isArray(data) ? data[0] : data;
-      const orderReference =
-        payload?.orderReference || payload?.paymentReference || payload?.reference;
-
-      if (!orderReference) {
-        this.logger.warn('ClickPesa callback received without order reference');
-        return { status: 'OK' };
-      }
-
-      const paymentById = await this.paymentRepository.findOne({
-        where: { id: orderReference },
-      });
-      const payment =
-        paymentById ||
-        (await this.findPaymentByProviderOrderReference(orderReference));
-
-      if (!payment) {
-        this.logger.warn(
-          `ClickPesa callback for unknown payment: ${orderReference}`,
-        );
-        return { status: 'OK' };
-      }
-
-      const rawStatus = String(
-        payload?.status || payload?.paymentStatus || payload?.transactionStatus || '',
-      ).toUpperCase();
-
-      if (this.completedGatewayStatuses.has(rawStatus)) {
-        payment.status = PaymentStatus.COMPLETED;
-        payment.completedAt = payload?.updatedAt
-          ? new Date(payload.updatedAt)
-          : new Date();
-        payment.transactionRef =
-          payload?.paymentReference ||
-          payload?.transactionReference ||
-          payment.transactionRef;
-        payment.receiptNumber =
-          payment.receiptNumber || (await this.generateReceiptNumber());
-        await this.sendPaymentNotifications(payment);
-      } else if (rawStatus === 'FAILED') {
-        payment.status = PaymentStatus.FAILED;
-        payment.errorMessage = payload?.message || 'ClickPesa payment failed';
-      } else if (rawStatus === 'CANCELLED') {
-        payment.status = PaymentStatus.CANCELLED;
-        payment.errorMessage = payload?.message || 'ClickPesa payment cancelled';
-      } else {
-        payment.status = PaymentStatus.PROCESSING;
-      }
-
-      payment.providerResponse = {
-        ...payment.providerResponse,
-        clickpesaCallback: payload,
-      };
-
-      const savedPayment = await this.paymentRepository.save(payment);
-      await this.updateRegistrationPaymentStatus(savedPayment);
-
-      return { status: 'OK' };
-    } catch (error) {
-      this.logger.error(
-        `Error processing ClickPesa callback: ${error.message}`,
-        error.stack,
-      );
-      return { status: 'OK' };
-    }
-  }
-
   /**
    * Send payment confirmation notifications
    */
@@ -969,22 +888,6 @@ export class PaymentsService {
     );
   }
 
-  private buildClickPesaOrderReference(paymentId: string): string {
-    const compactId = paymentId.replace(/[^a-zA-Z0-9]/g, '');
-    return `PAY${compactId.slice(-17)}`;
-  }
-
-  private async findPaymentByProviderOrderReference(
-    orderReference: string,
-  ): Promise<PaymentEntity | null> {
-    return this.paymentRepository
-      .createQueryBuilder('payment')
-      .where(`payment.metadata ->> 'providerOrderReference' = :orderReference`, {
-        orderReference,
-      })
-      .getOne();
-  }
-
   private async syncPaymentState(payment: PaymentEntity): Promise<PaymentEntity> {
     if (
       ![PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(payment.status)
@@ -996,7 +899,6 @@ export class PaymentsService {
     const providerReference =
       payment.mobileMoneyRef ||
       payment.transactionRef ||
-      payment.metadata?.providerOrderReference ||
       payment.id;
 
     const gatewayStatus = await this.paymentGateway.checkPaymentStatus(
