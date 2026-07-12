@@ -70,7 +70,7 @@ export default function PaymentCancel() {
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
                         to={returnPath}
-                        className="inline-flex items-center justify-center rounded-lg bg-[#9b1c1c] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#7f1d1d] transition-colors"
+                        className="inline-flex items-center justify-center rounded-lg bg-[var(--iet-button-primary-bg)] px-5 py-2.5 text-sm font-semibold text-[var(--iet-button-primary-fg)] transition-colors hover:bg-[var(--iet-button-primary-hover)]"
                     >
                         {returnLabel}
                     </Link>

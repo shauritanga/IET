@@ -53,6 +53,15 @@
     --iet-muted:     #7A6060;
     --iet-border:    #E8D5D5;
     --iet-white:     #ffffff;
+    --iet-button-primary-bg: #390909;
+    --iet-button-primary-hover: #E20C0A;
+    --iet-button-primary-fg: #ffffff;
+    --iet-button-danger-bg: #E20C0A;
+    --iet-button-danger-hover: #c10a08;
+    --iet-button-danger-fg: #ffffff;
+    --iet-button-outline-bg: #ffffff;
+    --iet-button-outline-hover-bg: #FEF5F5;
+    --iet-button-outline-fg: #390909;
     --shadow-x: 0;
     --shadow-y: 1px;
     --shadow-blur: 3px;
@@ -134,6 +143,15 @@
     --iet-red-light: #4c1a1a;
     --iet-red-pale:  #2b1414;
     --iet-red-mid:   #ff3e3b;
+    --iet-button-primary-bg: #ff5a58;
+    --iet-button-primary-hover: #ff7b79;
+    --iet-button-primary-fg: #171414;
+    --iet-button-danger-bg: #ff5a58;
+    --iet-button-danger-hover: #ff7b79;
+    --iet-button-danger-fg: #171414;
+    --iet-button-outline-bg: #171414;
+    --iet-button-outline-hover-bg: #2b1414;
+    --iet-button-outline-fg: #ffd9d8;
 }
 
 @theme inline {
@@ -237,6 +255,11 @@
     .dark input::placeholder,
     .dark textarea::placeholder {
         color: var(--iet-muted);
+    }
+
+    .dark .bg-\[var\(--iet-red\)\].text-white,
+    .dark .bg-\[var\(--iet-red\)\] .text-white {
+        color: var(--iet-button-danger-fg) !important;
     }
 
     .dark .topbar,
@@ -2010,23 +2033,24 @@
     }
 
     .btn-red {
-        background: var(--iet-red);
-        color: white;
+        background: var(--iet-button-danger-bg);
+        color: var(--iet-button-danger-fg);
     }
 
     .btn-red:hover {
-        background: var(--iet-red-mid);
+        background: var(--iet-button-danger-hover);
     }
 
     .btn-outline {
-        background: transparent;
+        background: var(--iet-button-outline-bg);
         border: 1.5px solid var(--iet-border);
-        color: var(--iet-text);
+        color: var(--iet-button-outline-fg);
     }
 
     .btn-outline:hover {
         border-color: var(--iet-red);
-        color: var(--iet-red);
+        background: var(--iet-button-outline-hover-bg);
+        color: var(--iet-red-dark);
     }
 
     .btn-sm {
@@ -2604,8 +2628,8 @@
         padding: 13px;
         border: none;
         border-radius: 8px;
-        background: var(--iet-red);
-        color: white;
+        background: var(--iet-button-danger-bg);
+        color: var(--iet-button-danger-fg);
         font-family: "Montserrat", sans-serif;
         font-size: 13.5px;
         font-weight: 700;
@@ -2619,7 +2643,7 @@
     }
 
     .auth-btn-main:hover:not(:disabled) {
-        background: var(--iet-red-mid);
+        background: var(--iet-button-danger-hover);
     }
 
     .auth-btn-main:disabled {

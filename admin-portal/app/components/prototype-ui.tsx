@@ -57,12 +57,12 @@ export function Button({
 }) {
   const toneClass =
     tone === "dark"
-      ? "border-[var(--red-dark)] bg-[var(--red-dark)] text-[var(--on-red-dark)] hover:border-[var(--red)] hover:bg-[var(--red)]"
+      ? "border-[var(--button-primary-bg)] bg-[var(--button-primary-bg)] text-[var(--button-primary-fg)] hover:border-[var(--button-primary-hover)] hover:bg-[var(--button-primary-hover)]"
       : tone === "red"
-        ? "border-[var(--red)] bg-[var(--red)] text-white hover:bg-[var(--red-mid)] hover:border-[var(--red-mid)]"
+        ? "border-[var(--button-danger-bg)] bg-[var(--button-danger-bg)] text-[var(--button-danger-fg)] hover:border-[var(--button-danger-hover)] hover:bg-[var(--button-danger-hover)]"
         : tone === "green"
-          ? "border-[var(--success)] bg-[var(--success)] text-white hover:opacity-90"
-          : "border-[var(--border)] bg-white text-[var(--red-dark)] hover:border-[var(--red-light)] hover:bg-[var(--red-pale)]";
+          ? "border-[var(--button-success-bg)] bg-[var(--button-success-bg)] text-[var(--button-success-fg)] hover:opacity-90"
+          : "border-[var(--border)] bg-[var(--button-outline-bg)] text-[var(--button-outline-fg)] hover:border-[var(--red-light)] hover:bg-[var(--button-outline-hover-bg)]";
 
   return (
     <button

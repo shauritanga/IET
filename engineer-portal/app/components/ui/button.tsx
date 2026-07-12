@@ -9,11 +9,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[#390909] text-primary-foreground hover:bg-[#390909]/90 shadow-[0_0_8px_2px_rgba(255,142,142,0.4),0_0_4px_1px_rgba(205,0,0,0.4)] transition-shadow",
+        default: "bg-[var(--iet-button-primary-bg)] text-[var(--iet-button-primary-fg)] hover:bg-[var(--iet-button-primary-hover)] shadow-[0_0_8px_2px_rgba(255,142,142,0.4),0_0_4px_1px_rgba(205,0,0,0.4)] transition-shadow",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
+          "bg-[var(--iet-button-danger-bg)] text-[var(--iet-button-danger-fg)] hover:bg-[var(--iet-button-danger-hover)] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border border-[var(--iet-border)] bg-[var(--iet-button-outline-bg)] text-[var(--iet-button-outline-fg)] shadow-xs hover:bg-[var(--iet-button-outline-hover-bg)] hover:text-[var(--iet-red-dark)] dark:border-[var(--iet-border)]",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
