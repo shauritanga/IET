@@ -23,6 +23,7 @@ import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { MembershipService } from '../services/membership.service';
 import { InitiateFeePaymentDto } from '../dto';
+import { Public } from '../../../common/decorators/public.decorator';
 
 @ApiTags('Memberships')
 @Controller('memberships')
@@ -32,6 +33,7 @@ export class MembershipController {
   constructor(private membershipService: MembershipService) {}
 
   @Get('categories')
+  @Public()
   @ApiOperation({ summary: 'List available membership categories' })
   @ApiResponse({
     status: HttpStatus.OK,

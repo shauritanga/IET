@@ -2511,7 +2511,7 @@ export class AdminService {
     const skip = (page - 1) * limit;
 
     const [categories, total] = await this.membershipCategoryRepository.findAndCount({
-      order: { name: 'ASC' },
+      order: { level: 'ASC', name: 'ASC' },
       skip,
       take: limit,
     });

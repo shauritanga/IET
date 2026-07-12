@@ -114,13 +114,16 @@ export class MembershipService {
     Array<{
       id: string;
       name: string;
+      code?: string | null;
+      level: number;
       yearlyFee: number;
       minYearsExperience: number;
       description: string | null;
     }>
   > {
     return this.membershipCategoryRepository.find({
-      order: { minYearsExperience: 'ASC', name: 'ASC' },
+      where: { isActive: true },
+      order: { level: 'ASC', minYearsExperience: 'ASC', name: 'ASC' },
     });
   }
 

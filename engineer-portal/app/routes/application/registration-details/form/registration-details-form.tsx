@@ -19,6 +19,8 @@ import type {APIResponse} from "~/types/types";
 type MembershipCategory = {
     id: string;
     name: string;
+    code?: string | null;
+    level: number;
     yearlyFee: number;
     minYearsExperience: number;
     description: string | null;
@@ -166,6 +168,9 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
                         <p className="font-semibold text-[var(--iet-red-dark)]">{selectedCategory.name}</p>
                         {selectedCategory.description && <p className="mt-1">{selectedCategory.description}</p>}
                         <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full bg-[var(--iet-white)] px-3 py-1 font-medium text-[var(--iet-red-dark)]">
+                                Level {selectedCategory.level}
+                            </span>
                             <span className="rounded-full bg-[var(--iet-white)] px-3 py-1 font-medium text-[var(--iet-red-dark)]">
                                 {selectedCategory.minYearsExperience} year{selectedCategory.minYearsExperience === 1 ? "" : "s"} minimum experience
                             </span>
