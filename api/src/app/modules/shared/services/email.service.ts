@@ -417,20 +417,55 @@ export class EmailService implements OnModuleInit {
       verification: (ctx) => `
                 <!DOCTYPE html>
                 <html>
-                <head><meta charset="utf-8"><title>Verify Your Email</title></head>
-                <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; padding: 20px; background: #1a365d; color: white;">
-                        <h1>Email Verification</h1>
-                    </div>
-                    <div style="padding: 30px; background: #f7fafc;">
-                        <h2>Hello ${ctx.firstName},</h2>
-                        <p>Please use the following code to verify your email address:</p>
-                        <div style="text-align: center; margin: 30px 0;">
-                            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; background: #edf2f7; padding: 15px 30px; border-radius: 10px;">${ctx.code}</span>
-                        </div>
-                        <p style="color: #718096; font-size: 14px;">This code will expire in 10 minutes.</p>
-                        <p>If you didn't request this code, please ignore this email.</p>
-                    </div>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Verify Your Email</title>
+                </head>
+                <body style="margin: 0; padding: 0; background: #eef4f8; font-family: Arial, Helvetica, sans-serif; color: #172033;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #eef4f8; margin: 0; padding: 0; width: 100%;">
+                        <tr>
+                            <td align="center" style="padding: 24px 12px;">
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width: 100%; max-width: 600px; background: #ffffff; border-radius: 18px; overflow: hidden;">
+                                    <tr>
+                                        <td style="background: #163b66; padding: 32px 24px; text-align: center;">
+                                            <p style="margin: 0 0 8px; color: #b9d6ee; font-size: 13px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;">IET Tanzania</p>
+                                            <h1 style="margin: 0; color: #ffffff; font-size: 30px; line-height: 1.2; font-weight: 800;">Verify your email</h1>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 34px 28px 10px;">
+                                            <h2 style="margin: 0 0 14px; color: #111827; font-size: 24px; line-height: 1.3; font-weight: 800;">Hello ${ctx.firstName},</h2>
+                                            <p style="margin: 0; color: #344054; font-size: 16px; line-height: 1.6;">Use this verification code to confirm your email address and finish setting up your IET account.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td align="center" style="padding: 24px 18px 18px;">
+                                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; max-width: 420px; background: #f3f8fc; border: 1px solid #d7e7f2; border-radius: 16px;">
+                                                <tr>
+                                                    <td align="center" style="padding: 24px 14px 22px;">
+                                                        <p style="margin: 0 0 12px; color: #667085; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;">Verification code</p>
+                                                        <p style="margin: 0; color: #0b1220; font-family: Arial, Helvetica, sans-serif; font-size: 34px; line-height: 1.25; font-weight: 800; letter-spacing: 3px; word-break: break-word;">${ctx.code}</p>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 28px 32px;">
+                                            <p style="margin: 0 0 14px; color: #667085; font-size: 15px; line-height: 1.6;">This code will expire in <strong style="color: #344054;">10 minutes</strong>.</p>
+                                            <p style="margin: 0; color: #344054; font-size: 15px; line-height: 1.6;">If you did not request this code, you can safely ignore this email.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="background: #f8fafc; padding: 18px 24px; text-align: center; border-top: 1px solid #e4edf4;">
+                                            <p style="margin: 0; color: #667085; font-size: 12px; line-height: 1.5;">Institution of Engineers Tanzania (IET)<br>Dar es Salaam, Tanzania</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
                 </body>
                 </html>
             `,
