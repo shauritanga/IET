@@ -35,7 +35,9 @@ export class SmsService {
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
-    this.defaultSenderId = configService.get('BEEM_SOURCE_ADDR', 'IET');
+    this.defaultSenderId =
+      configService.get('BEEM_SOURCE_ADDR') ??
+      configService.get('SMS_SENDER_ID', 'IET');
   }
 
   /**
