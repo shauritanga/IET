@@ -170,7 +170,7 @@ export class AuthService {
     loginDTO: UserLoginDto,
   ): Promise<
     | { accessToken: string; refreshToken: string; user: Partial<UserEntity> & { registrationStatus?: string | null } }
-    | { validate2FA: string; message: string }
+    | { validate2FA: string; smsDestination?: string; message: string }
   > {
     try {
       // Check if account is locked
@@ -241,6 +241,7 @@ export class AuthService {
 
         return {
           validate2FA: user.id,
+          smsDestination: this.maskPhoneNumber(user.phoneNumber),
           message: 'A 6-digit code has been sent to your registered phone number',
         };
       }
@@ -543,6 +544,12 @@ export class AuthService {
    */
   async disable2FA(userId: string): Promise<UpdateResult> {
     return this.usersService.disable2FA(userId);
+  }
+
+  private maskPhoneNumber(phoneNumber: string): string {
+    const digits = phoneNumber.replace(/\D/g, '');
+    if (digits.length < 4) return 'your registered phone number';
+    return `+${digits.slice(0, 3)}****${digits.slice(-3)}`;
   }
 
   /**

@@ -53,7 +53,7 @@ const VerifyOtpForm = () => {
     const title = isEmailVerification ? "Verify your email" : "Complete sign in"
     const description = isEmailVerification
         ? `Enter the verification code sent to ${otpSession ? maskEmail(otpSession.email) : "your email"}.`
-        : "Enter the 6-digit code from your authenticator app to finish logging in."
+        : `Enter the 6-digit SMS code sent to ${otpSession?.smsDestination ?? "your registered phone number"} to finish logging in.`
     const codePlaceholder = isEmailVerification ? "IET-123456" : "123456"
 
     const normalizedCode = useMemo(() => {
@@ -104,7 +104,7 @@ const VerifyOtpForm = () => {
             })
 
             if (!result.verified || !result.accessToken || !result.refreshToken || !result.user) {
-                setError("Invalid authenticator code.")
+                setError("Invalid SMS code.")
                 return
             }
 
@@ -158,7 +158,7 @@ const VerifyOtpForm = () => {
 
             <form onSubmit={handleSubmit}>
                 <div className="auth-group" style={{ textAlign: "left", marginTop: 24 }}>
-                    <label className="auth-lbl">{isEmailVerification ? "Verification Code" : "Authenticator Code"}</label>
+                    <label className="auth-lbl">{isEmailVerification ? "Verification Code" : "SMS Code"}</label>
                     <input
                         className="auth-inp"
                         type="text"

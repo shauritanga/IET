@@ -12,9 +12,9 @@ export class ValidateTokenDTO {
 
   @ApiProperty({
     example: '123456',
-    description: '6-digit 2FA token from authenticator app',
+    description: '6-digit login code sent by SMS',
   })
   @IsString()
-  @IsNotEmpty({ message: '2FA token is required' })
+  @IsNotEmpty({ message: 'Login code is required' })
   token: string;
 }

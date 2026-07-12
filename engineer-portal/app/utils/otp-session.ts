@@ -10,6 +10,7 @@ export type OtpSession = {
     email: string;
     name: string;
     userId?: string;
+    smsDestination?: string;
     createdAt: number;
 };
 
@@ -39,12 +40,14 @@ export function createOtpSession(payload: {
     email: string;
     name: string;
     userId?: string;
+    smsDestination?: string;
 }) {
     const session: OtpSession = {
         flow: payload.flow,
         email: payload.email.trim(),
         name: payload.name.trim(),
         userId: payload.userId,
+        smsDestination: payload.smsDestination,
         createdAt: Date.now(),
     };
 
