@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, redirect, useNavigate, type LoaderFunctionArgs } from "react-router";
 import type { AxiosError } from "axios";
@@ -32,6 +32,7 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +46,7 @@ export default function AdminLoginPage() {
 
   const fieldClassName =
     "h-[44px] w-full rounded-[8px] border border-[var(--border)] bg-white px-[13px] text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--red-dark)]";
+  const passwordFieldClassName = `${fieldClassName} pr-[42px]`;
 
   async function handleSubmit() {
     if (submitting) return;
@@ -120,21 +122,32 @@ export default function AdminLoginPage() {
           <label htmlFor="password" className="mb-[6px] block text-[12.5px] font-semibold text-[var(--text)]">
             Password
           </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            placeholder="Password"
-            onChange={(event) => setPassword(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleSubmit();
-              }
-            }}
-            className={fieldClassName}
-            required
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              placeholder="Password"
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+              className={passwordFieldClassName}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-[12px] top-1/2 -translate-y-1/2 text-[var(--muted)] transition hover:text-[var(--text)]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-4">

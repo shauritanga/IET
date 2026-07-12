@@ -1,4 +1,5 @@
 import type { AxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -44,6 +45,7 @@ function NumberInput({
 }
 
 export default function SettingsPage() {
+  const [showPaymentSecrets, setShowPaymentSecrets] = useState(false);
   const [fiscalYear, setFiscalYear] = useState<FiscalYearSettings>({
     startMonth: 7,
     startDay: 11,
@@ -175,12 +177,25 @@ export default function SettingsPage() {
                 <label className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
                   {field.label}
                 </label>
-                <input
-                  readOnly
-                  type={index < 2 ? "password" : "text"}
-                  value={field.value}
-                  className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none"
-                />
+                <div className="relative">
+                  <input
+                    readOnly
+                    type={index < 2 && !showPaymentSecrets ? "password" : "text"}
+                    value={field.value}
+                    className={`w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none ${index < 2 ? "pr-10" : ""}`}
+                  />
+                  {index < 2 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentSecrets((value) => !value)}
+                      className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[var(--muted)] transition hover:text-[var(--text)]"
+                      aria-label={showPaymentSecrets ? "Hide secrets" : "Show secrets"}
+                      aria-pressed={showPaymentSecrets}
+                    >
+                      {showPaymentSecrets ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
             <div className="mb-[14px] flex items-center gap-2">

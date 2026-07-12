@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { Button, Card, PageHeader, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import { getStoredUser, USER_KEY } from "~/utils/auth";
@@ -65,16 +66,32 @@ function TextField({
   type?: string;
   readOnly?: boolean;
 }) {
+  const [showValue, setShowValue] = useState(false);
+  const isPassword = type === "password";
+
   return (
     <label className="block">
       <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">{label}</span>
-      <input
-        type={type}
-        value={value}
-        readOnly={readOnly}
-        onChange={(event) => onChange?.(event.target.value)}
-        className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white read-only:cursor-not-allowed read-only:opacity-70"
-      />
+      <div className="relative">
+        <input
+          type={isPassword && showValue ? "text" : type}
+          value={value}
+          readOnly={readOnly}
+          onChange={(event) => onChange?.(event.target.value)}
+          className={`h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white read-only:cursor-not-allowed read-only:opacity-70 ${isPassword ? "pr-10" : ""}`}
+        />
+        {isPassword ? (
+          <button
+            type="button"
+            onClick={() => setShowValue((value) => !value)}
+            className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[var(--muted)] transition hover:text-[var(--text)]"
+            aria-label={showValue ? "Hide password" : "Show password"}
+            aria-pressed={showValue}
+          >
+            {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        ) : null}
+      </div>
     </label>
   );
 }
