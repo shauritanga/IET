@@ -23,7 +23,7 @@ const PersonalDetailsForm = () => {
         formState: {errors},
     } = useFormContext<PersonalDetailsFormType>();
 
-    const {isLoading, countries} = useGetAllCountries();
+    const {isLoading, isError, countries} = useGetAllCountries();
 
 
     const genderOptions = [
@@ -150,6 +150,14 @@ const PersonalDetailsForm = () => {
                                 {isLoading ? (
                                     <SelectItem value="loading" disabled>
                                         <Spinner/>
+                                    </SelectItem>
+                                ) : isError ? (
+                                    <SelectItem value="countries-error" disabled>
+                                        Unable to load countries
+                                    </SelectItem>
+                                ) : !countries?.length ? (
+                                    <SelectItem value="countries-empty" disabled>
+                                        No countries available
                                     </SelectItem>
                                 ) : (
                                     countries?.map((country) => (
