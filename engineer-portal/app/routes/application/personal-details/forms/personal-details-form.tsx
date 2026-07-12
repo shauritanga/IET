@@ -1,4 +1,6 @@
+import {useState} from "react";
 import {Controller, useFormContext} from "react-hook-form";
+import {CheckIcon, ChevronsUpDown} from "lucide-react";
 import {
     Field,
     FieldError,
@@ -11,10 +13,15 @@ import {BirthDatePicker} from "~/components/custom/birth-date-picker";
 import {PhoneInput} from "~/components/custom/phone-input";
 import type {PersonalDetailsFormType} from "./manage-personal-details-form";
 import {useGetAllCountries} from "~/routes/application/personal-details/repository/useGetCountries";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "~/components/ui/select";
 import {Spinner} from "~/components/ui/spinner";
 import {ImagePicker} from "~/components/custom/file-pickers/image-picker";
 import PillRadioGroup from "~/components/custom/pill-radio-groups";
+import {Button} from "~/components/ui/button";
+import {Popover, PopoverContent, PopoverTrigger} from "~/components/ui/popover";
+import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from "~/components/ui/command";
+import {ScrollArea} from "~/components/ui/scroll-area";
+import {cn} from "~/lib/utils";
+import type {TCountries} from "~/routes/application/personal-details/requests/get-countries";
 
 const PersonalDetailsForm = () => {
     const {
@@ -142,32 +149,13 @@ const PersonalDetailsForm = () => {
                     name="nationality"
                     control={control}
                     render={({field}) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select nationality"/>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {isLoading ? (
-                                    <SelectItem value="loading" disabled>
-                                        <Spinner/>
-                                    </SelectItem>
-                                ) : isError ? (
-                                    <SelectItem value="countries-error" disabled>
-                                        Unable to load countries
-                                    </SelectItem>
-                                ) : !countries?.length ? (
-                                    <SelectItem value="countries-empty" disabled>
-                                        No countries available
-                                    </SelectItem>
-                                ) : (
-                                    countries?.map((country) => (
-                                        <SelectItem key={country.name} value={country.name}>
-                                            {country.name}
-                                        </SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
+                        <NationalityCombobox
+                            value={field.value}
+                            onChange={field.onChange}
+                            countries={countries ?? []}
+                            isLoading={isLoading}
+                            isError={isError}
+                        />
                     )}
                 />
                 {errors.nationality && <FieldError>{errors.nationality.message}</FieldError>}
@@ -209,5 +197,86 @@ const PersonalDetailsForm = () => {
     )
         ;
 };
+
+type NationalityComboboxProps = {
+    value?: string;
+    onChange: (value: string) => void;
+    countries: TCountries[];
+    isLoading: boolean;
+    isError: boolean;
+};
+
+function NationalityCombobox({
+                                value,
+                                onChange,
+                                countries,
+                                isLoading,
+                                isError,
+                            }: NationalityComboboxProps) {
+    const [open, setOpen] = useState(false);
+    const selectedCountry = countries.find((country) => country.name === value);
+    const isDisabled = isLoading || isError || countries.length === 0;
+
+    const label = isLoading
+        ? "Loading countries..."
+        : isError
+            ? "Unable to load countries"
+            : countries.length === 0
+                ? "No countries available"
+                : selectedCountry?.name || "Search and select nationality";
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    disabled={isDisabled}
+                    className="h-11 w-full justify-between rounded-lg px-3 shadow-none"
+                >
+                    <span className={cn("truncate", !selectedCountry && "text-[var(--iet-muted)]")}>{label}</span>
+                    {isLoading ? (
+                        <Spinner/>
+                    ) : (
+                        <ChevronsUpDown className="size-4 shrink-0 opacity-50"/>
+                    )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command>
+                    <CommandInput placeholder="Search nationality..."/>
+                    <CommandList>
+                        <ScrollArea className="h-72">
+                            <CommandEmpty>No country found.</CommandEmpty>
+                            <CommandGroup>
+                                {countries.map((country) => (
+                                    <CommandItem
+                                        key={country.iso2}
+                                        value={country.name}
+                                        onSelect={() => {
+                                            onChange(country.name);
+                                            setOpen(false);
+                                        }}
+                                    >
+                                        <span className="flex-1 truncate">{country.name}</span>
+                                        <span className="text-xs text-[var(--iet-muted)]">{country.iso2}</span>
+                                        <CheckIcon
+                                            className={cn(
+                                                "ml-1 size-4",
+                                                country.name === value ? "opacity-100" : "opacity-0",
+                                            )}
+                                        />
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        </ScrollArea>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
 
 export default PersonalDetailsForm;
