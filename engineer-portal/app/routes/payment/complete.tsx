@@ -11,8 +11,8 @@ export default function PaymentComplete() {
   const isPending = !isSuccess && !isFailed;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="bg-white rounded-2xl shadow-md p-10 max-w-md w-full text-center">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--iet-bg)] p-6 text-[var(--iet-text)]">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--iet-border)] bg-[var(--iet-white)] p-10 text-center shadow-md">
         <div className="flex justify-center mb-5">
           {isSuccess && (
             <div className="size-16 rounded-full bg-green-100 flex items-center justify-center">
@@ -40,7 +40,7 @@ export default function PaymentComplete() {
         {isSuccess && (
           <>
             <h1 className="text-xl font-bold text-green-700 mb-2">Payment Received</h1>
-            <p className="text-sm text-gray-500 leading-relaxed mb-6">
+            <p className="mb-6 text-sm leading-relaxed text-[var(--iet-muted)]">
               Your payment has been submitted and is being verified. You will receive a
               confirmation once it is processed. This may take a few minutes.
             </p>
@@ -50,7 +50,7 @@ export default function PaymentComplete() {
         {isFailed && (
           <>
             <h1 className="text-xl font-bold text-red-700 mb-2">Payment Not Completed</h1>
-            <p className="text-sm text-gray-500 leading-relaxed mb-6">
+            <p className="mb-6 text-sm leading-relaxed text-[var(--iet-muted)]">
               Your payment could not be completed. No charge has been made. You can retry
               payment from your dashboard.
             </p>
@@ -60,7 +60,7 @@ export default function PaymentComplete() {
         {isPending && (
           <>
             <h1 className="text-xl font-bold text-blue-700 mb-2">Confirming Payment…</h1>
-            <p className="text-sm text-gray-500 leading-relaxed mb-6">
+            <p className="mb-6 text-sm leading-relaxed text-[var(--iet-muted)]">
               Your payment is being verified. Please check{" "}
               <strong>My Registrations</strong> in a moment to see the updated status.
               If payment was successful, your registration will be confirmed automatically.
@@ -69,7 +69,7 @@ export default function PaymentComplete() {
         )}
 
         {orderId && (
-          <p className="text-xs text-gray-400 mb-6 font-mono">Reference: {orderId}</p>
+          <p className="mb-6 font-mono text-xs text-[var(--iet-muted)]">Reference: {orderId}</p>
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -81,7 +81,7 @@ export default function PaymentComplete() {
           </Link>
           <Link
             to="/dashboard"
-            className="inline-flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 px-5 py-2.5 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center justify-center rounded-lg border border-[var(--iet-border)] px-5 py-2.5 text-sm font-semibold text-[var(--iet-text)] transition-colors hover:bg-[var(--iet-red-pale)]"
           >
             Go to Dashboard
           </Link>

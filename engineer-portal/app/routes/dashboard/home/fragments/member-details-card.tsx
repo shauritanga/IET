@@ -40,16 +40,16 @@ const activities: ActivityItem[] = [
 ]
 
 const RecentActivity = () => (
-    <div className="bg-white rounded-[14px] border border-[#E8D5D5] overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between border-b border-[#E8D5D5]">
-            <span className="text-[13px] font-bold text-[#390909]">Recent Activity</span>
-            <span className="text-[11.5px] text-[#E20C0A] font-semibold cursor-pointer hover:underline">View all</span>
+    <div className="overflow-hidden rounded-[14px] border border-[var(--iet-border)] bg-[var(--iet-white)]">
+        <div className="flex items-center justify-between border-b border-[var(--iet-border)] px-5 py-4">
+            <span className="text-[13px] font-bold text-[var(--iet-red-dark)]">Recent Activity</span>
+            <span className="cursor-pointer text-[11.5px] font-semibold text-[var(--iet-red)] hover:underline">View all</span>
         </div>
         <div className="px-5 py-1">
             {activities.map((a, i) => (
                 <div
                     key={i}
-                    className={`flex items-start gap-[11px] py-[10px] ${i < activities.length - 1 ? "border-b border-[#E8D5D5]" : ""}`}
+                    className={`flex items-start gap-[11px] py-[10px] ${i < activities.length - 1 ? "border-b border-[var(--iet-border)]" : ""}`}
                 >
                     <div
                         className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center shrink-0"
@@ -61,8 +61,8 @@ const RecentActivity = () => (
                         {a.icon}
                     </div>
                     <div>
-                        <div className="text-[12px] text-[#1C1010] leading-[1.45]">{a.text}</div>
-                        <div className="text-[10.5px] text-[#7A6060] mt-[2px]">{a.time}</div>
+                        <div className="text-[12px] leading-[1.45] text-[var(--iet-text)]">{a.text}</div>
+                        <div className="mt-[2px] text-[10.5px] text-[var(--iet-muted)]">{a.time}</div>
                     </div>
                 </div>
             ))}

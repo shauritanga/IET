@@ -33,8 +33,8 @@ export default function PaymentCancel() {
         : "Your payment was cancelled. No charge has been made. Your event registration is still pending — you can complete payment whenever you are ready from your dashboard.";
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-            <div className="bg-white rounded-2xl shadow-md p-10 max-w-md w-full text-center">
+        <div className="flex min-h-screen items-center justify-center bg-[var(--iet-bg)] p-6 text-[var(--iet-text)]">
+            <div className="w-full max-w-md rounded-2xl border border-[var(--iet-border)] bg-[var(--iet-white)] p-10 text-center shadow-md">
                 <div className="flex justify-center mb-5">
                     <div className="size-16 rounded-full bg-amber-100 flex items-center justify-center">
                         <svg
@@ -53,16 +53,16 @@ export default function PaymentCancel() {
                     </div>
                 </div>
 
-                <h1 className="text-xl font-bold text-gray-900 mb-2">
+                <h1 className="mb-2 text-xl font-bold text-[var(--iet-red-dark)]">
                     Payment Cancelled
                 </h1>
 
-                <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                <p className="mb-6 text-sm leading-relaxed text-[var(--iet-muted)]">
                     {bodyText}
                 </p>
 
                 {orderId && (
-                    <p className="text-xs text-gray-400 mb-6 font-mono">
+                    <p className="mb-6 font-mono text-xs text-[var(--iet-muted)]">
                         Reference: {orderId}
                     </p>
                 )}
@@ -76,7 +76,7 @@ export default function PaymentCancel() {
                     </Link>
                     <Link
                         to="/dashboard"
-                        className="inline-flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 px-5 py-2.5 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        className="inline-flex items-center justify-center rounded-lg border border-[var(--iet-border)] px-5 py-2.5 text-sm font-semibold text-[var(--iet-text)] transition-colors hover:bg-[var(--iet-red-pale)]"
                     >
                         Back to Dashboard
                     </Link>

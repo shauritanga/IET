@@ -221,6 +221,24 @@
         background-color: var(--iet-white) !important;
     }
 
+    .dark .focus\:bg-white:focus,
+    .dark .focus-visible\:bg-white:focus-visible {
+        background-color: var(--iet-white) !important;
+    }
+
+    .dark input,
+    .dark textarea,
+    .dark select {
+        background-color: var(--iet-bg);
+        color: var(--iet-text);
+        border-color: var(--iet-border);
+    }
+
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: var(--iet-muted);
+    }
+
     .dark .topbar,
     .dark .sidebar,
     .dark .card,

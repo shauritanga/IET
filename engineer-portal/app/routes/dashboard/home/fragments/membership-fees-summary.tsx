@@ -59,15 +59,15 @@ const KpiGrid = () => (
         {kpis.map((kpi, i) => (
             <div
                 key={i}
-                className="bg-white rounded-[12px] border border-[#E8D5D5] p-[18px_18px_14px] hover:shadow-[0_6px_20px_rgba(226,12,10,.08)] hover:-translate-y-[2px] transition-all duration-200 cursor-default"
+                className="cursor-default rounded-[12px] border border-[var(--iet-border)] bg-[var(--iet-white)] p-[18px_18px_14px] transition-[box-shadow,transform] duration-200 hover:-translate-y-[2px] hover:shadow-[0_6px_20px_rgba(226,12,10,.08)]"
             >
-                <div className="w-9 h-9 rounded-[9px] bg-[#FADCDC] text-[#E20C0A] flex items-center justify-center mb-[10px]">
+                <div className="mb-[10px] flex h-9 w-9 items-center justify-center rounded-[9px] bg-[var(--iet-red-light)] text-[var(--iet-red)]">
                     {kpi.icon}
                 </div>
-                <div className={`font-serif font-bold text-[#390909] leading-none tracking-[-1px] ${kpi.smallValue ? "text-[20px]" : "text-[26px]"}`}>
+                <div className={`font-serif font-bold leading-none tracking-[-1px] text-[var(--iet-red-dark)] ${kpi.smallValue ? "text-[20px]" : "text-[26px]"}`}>
                     {kpi.value}
                 </div>
-                <div className="text-[11px] text-[#7A6060] mt-1 font-medium">
+                <div className="mt-1 text-[11px] font-medium text-[var(--iet-muted)]">
                     {kpi.label}
                 </div>
                 <div className="text-[10.5px] mt-[7px] text-[#1a6b3c] font-semibold">

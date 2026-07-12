@@ -88,6 +88,24 @@
     background-color: var(--white) !important;
   }
 
+  .dark .focus\:bg-white:focus,
+  .dark .focus\:bg-white:focus-visible {
+    background-color: var(--white) !important;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    background-color: var(--bg);
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: var(--muted);
+  }
+
   a[href],
   button,
   select,
