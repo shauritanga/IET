@@ -230,7 +230,7 @@ export default function AuthLayout() {
                             </svg>
                         </button>
                         <div className="topbar-crumb">
-                            IET Tanzania &rsaquo; <span>{pageLabel}</span>
+                            <span>{pageLabel}</span>
                         </div>
                     </div>
 

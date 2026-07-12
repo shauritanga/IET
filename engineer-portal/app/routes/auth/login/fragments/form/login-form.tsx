@@ -152,7 +152,7 @@ const LoginForm = () => {
             <div className="auth-switch" style={{ marginTop: 20 }}>
                 Don&apos;t have an account? <Link to="/auth/register">Click here to register</Link>
             </div>
-            <div className="auth-footer">&#169; 2025 Institute of Engineers Tanzania</div>
+            <div className="auth-footer">&#169; 2026 Institute of Engineers Tanzania</div>
         </div>
     )
 }

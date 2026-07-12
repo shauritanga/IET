@@ -65,7 +65,7 @@ export default function AuthLayout() {
             <Outlet />
           </div>
           <footer className="mt-6 text-center text-[11px] text-[var(--muted)]">
-            © 2025 Institution of Engineers Tanzania
+            © 2026 Institution of Engineers Tanzania
           </footer>
         </div>
       </div>

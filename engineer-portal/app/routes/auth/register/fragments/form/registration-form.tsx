@@ -223,7 +223,7 @@ const RegistrationForm = () => {
             </form>
 
             <div className="auth-switch">Already have an account? <Link to="/auth/login">Sign in</Link></div>
-            <div className="auth-footer">&#169; 2025 Institute of Engineers Tanzania</div>
+            <div className="auth-footer">&#169; 2026 Institute of Engineers Tanzania</div>
         </div>
     )
 }

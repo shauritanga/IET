@@ -579,9 +579,7 @@ export default function AdminShell() {
               <ToggleIcon />
             </button>
             <div className="min-w-0 text-[11px] text-[var(--muted)]">
-              <span className="block truncate">
-                IET Tanzania Admin › <span className="text-[11.5px] font-bold text-[var(--red)]">{pageLabel}</span>
-              </span>
+              <span className="block truncate text-[11.5px] font-bold text-[var(--red)]">{pageLabel}</span>
             </div>
           </div>
 

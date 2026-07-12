@@ -203,7 +203,7 @@ const VerifyOtpForm = () => {
                     &larr; Back to login
                 </button>
             </div>
-            <div className="auth-footer">&#169; 2025 Institute of Engineers Tanzania</div>
+            <div className="auth-footer">&#169; 2026 Institute of Engineers Tanzania</div>
         </div>
     )
 }
