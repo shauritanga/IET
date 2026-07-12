@@ -84,7 +84,10 @@ export class UpgradeService {
   // CORE ELIGIBILITY CHECK (used in multiple places)
   // ============================================================
 
-  async getEligibleUpgradeCategories(userId: string): Promise<EligibilityResult> {
+  async getEligibleUpgradeCategories(
+    userId: string,
+    options: { ignoreApplicationId?: string } = {},
+  ): Promise<EligibilityResult> {
     // 1. Load engineer profile
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -170,12 +173,15 @@ export class UpgradeService {
     }
 
     // 5. Check for existing PENDING upgrade application
-    const pendingApplication = await this.upgradeApplicationRepository.findOne({
+    const pendingApplications = await this.upgradeApplicationRepository.find({
       where: {
         userId,
         status: UpgradeApplicationStatus.PENDING,
       },
     });
+    const pendingApplication = pendingApplications.find(
+      (application) => application.id !== options.ignoreApplicationId,
+    );
 
     // 6. Resolve dynamic eligibility inputs.
     const [latestRegistration, cpdPoints] = await Promise.all([
@@ -311,11 +317,11 @@ export class UpgradeService {
     }
 
     // Confirm toCategoryId is in eligible categories (prevents arbitrary category selection)
-    const isEligibleTarget = eligibility.eligibleCategories.some(
+    const selectedCategory = eligibility.eligibleCategories.find(
       (cat) => cat.id === dto.toCategoryId,
     );
 
-    if (!isEligibleTarget) {
+    if (!selectedCategory) {
       throw new ForbiddenException(
         'The selected membership category is not an eligible upgrade target for your profile.',
       );
@@ -323,6 +329,14 @@ export class UpgradeService {
 
     // Load user to get current category
     const user = await this.userRepository.findOneOrFail({ where: { id: userId } });
+    const rule = await this.upgradeRuleRepository.findOne({
+      where: { id: selectedCategory.ruleId },
+      relations: ['toCategory'],
+    });
+
+    if (!rule) {
+      throw new BadRequestException('The selected upgrade rule is no longer available.');
+    }
 
     // Create the application
     const application = this.upgradeApplicationRepository.create({
@@ -330,14 +344,30 @@ export class UpgradeService {
       fromCategoryId: user.membershipCategoryId!,
       toCategoryId: dto.toCategoryId,
       applicantNotes: dto.applicantNotes,
-      status: UpgradeApplicationStatus.PENDING,
+      status: rule.requiresApproval
+        ? UpgradeApplicationStatus.PENDING
+        : UpgradeApplicationStatus.APPROVED,
       submittedAt: new Date(),
+      reviewedAt: rule.requiresApproval ? undefined : new Date(),
       createdBy: userId,
       updatedBy: userId,
     });
 
     try {
-      return await this.upgradeApplicationRepository.save(application);
+      return await this.upgradeApplicationRepository.manager.transaction(async (manager) => {
+        const savedApplication = await manager.save(UpgradeApplicationEntity, application);
+
+        if (!rule.requiresApproval) {
+          const membershipClass = this.resolveMembershipClassFromCategory(rule.toCategory);
+          await manager.update(UserEntity, userId, {
+            membershipCategoryId: dto.toCategoryId,
+            annualMembershipFee: rule.toCategory?.yearlyFee,
+            ...(membershipClass ? { membershipClass } : {}),
+          });
+        }
+
+        return savedApplication;
+      });
     } catch (error) {
       if (this.isUniqueConstraintViolation(error)) {
         throw new BadRequestException(
@@ -419,7 +449,9 @@ export class UpgradeService {
 
   async getUpgradeApplicationDetails(applicationId: string) {
     const app = await this.getUpgradeApplicationById(applicationId);
-    const eligibility = await this.getEligibleUpgradeCategories(app.userId);
+    const eligibility = await this.getEligibleUpgradeCategories(app.userId, {
+      ignoreApplicationId: app.id,
+    });
     return {
       ...app,
       eligibility,
@@ -435,14 +467,6 @@ export class UpgradeService {
     adminId: string,
     dto: ReviewUpgradeApplicationDto,
   ): Promise<UpgradeApplicationEntity> {
-    const app = await this.getUpgradeApplicationById(applicationId);
-
-    if (app.status !== UpgradeApplicationStatus.PENDING) {
-      throw new BadRequestException(
-        `This application has already been ${app.status.toLowerCase()} and cannot be reviewed again.`,
-      );
-    }
-
     if (
       dto.status !== UpgradeApplicationStatus.APPROVED &&
       dto.status !== UpgradeApplicationStatus.REJECTED
@@ -454,33 +478,49 @@ export class UpgradeService {
       throw new BadRequestException('A rejection reason is required when rejecting an application.');
     }
 
-    // Update the application
-    app.status = dto.status;
-    app.reviewedById = adminId;
-    app.reviewedAt = new Date();
-    app.updatedBy = adminId;
-
-    if (dto.status === UpgradeApplicationStatus.REJECTED) {
-      app.rejectionReason = dto.rejectionReason;
-    }
-
-    await this.upgradeApplicationRepository.save(app);
-
-    // On approval: update the member's category
-    if (dto.status === UpgradeApplicationStatus.APPROVED) {
-      const membershipClass = this.resolveMembershipClassFromCategory(app.toCategory);
-      await this.userRepository.update(app.userId, {
-        membershipCategoryId: app.toCategoryId,
-        annualMembershipFee: app.toCategory?.yearlyFee,
-        ...(membershipClass ? { membershipClass } : {}),
+    const reviewedApplication = await this.upgradeApplicationRepository.manager.transaction(async (manager) => {
+      const app = await manager.findOne(UpgradeApplicationEntity, {
+        where: { id: applicationId },
+        relations: ['user', 'fromCategory', 'toCategory', 'reviewedBy'],
       });
 
+      if (!app) {
+        throw new NotFoundException('Upgrade application not found.');
+      }
+
+      if (app.status !== UpgradeApplicationStatus.PENDING) {
+        throw new BadRequestException(
+          `This application has already been ${app.status.toLowerCase()} and cannot be reviewed again.`,
+        );
+      }
+
+      app.status = dto.status;
+      app.reviewedById = adminId;
+      app.reviewedAt = new Date();
+      app.updatedBy = adminId;
+
+      if (dto.status === UpgradeApplicationStatus.REJECTED) {
+        app.rejectionReason = dto.rejectionReason;
+      } else {
+        app.rejectionReason = undefined;
+        const membershipClass = this.resolveMembershipClassFromCategory(app.toCategory);
+        await manager.update(UserEntity, app.userId, {
+          membershipCategoryId: app.toCategoryId,
+          annualMembershipFee: app.toCategory?.yearlyFee,
+          ...(membershipClass ? { membershipClass } : {}),
+        });
+      }
+
+      return manager.save(UpgradeApplicationEntity, app);
+    });
+
+    if (reviewedApplication.status === UpgradeApplicationStatus.APPROVED) {
       this.logger.log(
-        `Upgrade approved: User ${app.userId} upgraded from category ${app.fromCategoryId} → ${app.toCategoryId}`,
+        `Upgrade approved: User ${reviewedApplication.userId} upgraded from category ${reviewedApplication.fromCategoryId} → ${reviewedApplication.toCategoryId}`,
       );
     }
 
-    return app;
+    return reviewedApplication;
   }
 
   // ============================================================
@@ -548,8 +588,32 @@ export class UpgradeService {
     adminId: string,
     dto: UpdateUpgradeRuleDto,
   ): Promise<UpgradeRuleEntity> {
-    const rule = await this.upgradeRuleRepository.findOne({ where: { id: ruleId } });
+    const rule = await this.upgradeRuleRepository.findOne({
+      where: { id: ruleId },
+      relations: ['fromCategory', 'toCategory'],
+    });
     if (!rule) throw new NotFoundException('Upgrade rule not found.');
+
+    const nextFromCategoryId = dto.fromCategoryId ?? rule.fromCategoryId;
+    const nextToCategoryId = dto.toCategoryId ?? rule.toCategoryId;
+
+    const fromCategory = await this.assertCategoryExists(nextFromCategoryId, 'Source');
+    const toCategory = await this.assertCategoryExists(nextToCategoryId, 'Target');
+
+    this.validateUpgradeRulePath(fromCategory, toCategory);
+
+    const existing = await this.upgradeRuleRepository.findOne({
+      where: {
+        fromCategoryId: nextFromCategoryId,
+        toCategoryId: nextToCategoryId,
+      },
+    });
+
+    if (existing && existing.id !== ruleId) {
+      throw new BadRequestException(
+        'An upgrade rule for this source → target path already exists.',
+      );
+    }
 
     Object.assign(rule, { ...dto, updatedBy: adminId });
     return this.upgradeRuleRepository.save(rule);
@@ -672,6 +736,23 @@ export class UpgradeService {
       throw new NotFoundException(`${label} membership category with ID "${id}" not found.`);
     }
     return category;
+  }
+
+  private validateUpgradeRulePath(
+    fromCategory: MembershipCategoryEntity,
+    toCategory: MembershipCategoryEntity,
+  ): void {
+    if (fromCategory.id === toCategory.id) {
+      throw new BadRequestException('Source and target categories cannot be the same.');
+    }
+
+    if (!fromCategory.isActive || !toCategory.isActive) {
+      throw new BadRequestException('Upgrade rules can only use active membership categories.');
+    }
+
+    if (toCategory.level <= fromCategory.level) {
+      throw new BadRequestException('Target category must be a higher level than the source category.');
+    }
   }
 
   private isUniqueConstraintViolation(error: unknown): boolean {

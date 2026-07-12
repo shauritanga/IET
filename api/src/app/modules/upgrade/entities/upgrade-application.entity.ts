@@ -17,6 +17,10 @@ import { UpgradeApplicationStatus } from '../../../common/enums';
 @Index(['fromCategoryId'])
 @Index(['toCategoryId'])
 @Index(['userId', 'status'])
+@Index('UQ_upgrade_applications_one_pending_per_user', ['userId'], {
+  unique: true,
+  where: `"status" = 'PENDING' AND "deletedAt" IS NULL`,
+})
 export class UpgradeApplicationEntity extends AuditableEntity {
   // ============================================
   // APPLICANT

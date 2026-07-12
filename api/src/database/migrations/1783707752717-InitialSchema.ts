@@ -28,6 +28,7 @@ export class InitialSchema1783707752717 implements MigrationInterface {
         await queryRunner.query(`CREATE INDEX "IDX_8f20db0bed145518e8fbd4eba5" ON "upgrade_applications" ("fromCategoryId") `);
         await queryRunner.query(`CREATE INDEX "IDX_f145ea19883c1a2d2f015b67f9" ON "upgrade_applications" ("status") `);
         await queryRunner.query(`CREATE INDEX "IDX_6185692b04b1557a7dae546045" ON "upgrade_applications" ("userId") `);
+        await queryRunner.query(`CREATE UNIQUE INDEX "UQ_upgrade_applications_one_pending_per_user" ON "upgrade_applications" ("userId") WHERE "status" = 'PENDING' AND "deletedAt" IS NULL`);
         await queryRunner.query(`CREATE TABLE "registration_experiences" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP WITH TIME ZONE, "registrationId" uuid NOT NULL, "employerName" character varying NOT NULL, "position" character varying NOT NULL, "startDate" date NOT NULL, "endDate" date, "isCurrent" boolean NOT NULL DEFAULT false, "responsibilities" text, "location" character varying, "department" character varying, "sortOrder" integer NOT NULL DEFAULT '0', CONSTRAINT "PK_9d0d1d106db393dbc40139bfe3e" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE INDEX "IDX_a77dcf24eb60816939bd282bcd" ON "registration_experiences" ("registrationId") `);
         await queryRunner.query(`CREATE TABLE "engineering_institutions" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, "country" character varying NOT NULL DEFAULT 'Tanzania', "institutionType" character varying NOT NULL DEFAULT 'UNIVERSITY', "recognitionStatus" character varying NOT NULL DEFAULT 'RECOGNIZED', "isActive" boolean NOT NULL DEFAULT true, "notes" text, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_72b0840122f44c81745b0ca265d" UNIQUE ("name"), CONSTRAINT "PK_b6a6768c3c0658fadf8a6d9b6d0" PRIMARY KEY ("id"))`);
@@ -263,6 +264,7 @@ export class InitialSchema1783707752717 implements MigrationInterface {
         await queryRunner.query(`DROP TABLE "engineering_institutions"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_a77dcf24eb60816939bd282bcd"`);
         await queryRunner.query(`DROP TABLE "registration_experiences"`);
+        await queryRunner.query(`DROP INDEX "public"."UQ_upgrade_applications_one_pending_per_user"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_6185692b04b1557a7dae546045"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_f145ea19883c1a2d2f015b67f9"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_8f20db0bed145518e8fbd4eba5"`);
