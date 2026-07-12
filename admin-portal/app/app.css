@@ -19,6 +19,7 @@
   --border: #e8d5d5;
   --success: #1a6b3c;
   --warn: #b45309;
+  --on-red-dark: #ffffff;
   --sidebar-w: 260px;
 }
 
@@ -37,6 +38,7 @@
   --border: #2d2626;
   --success: #65b37c;
   --warn: #e2a24b;
+  --on-red-dark: #171414;
 }
 
 .dark {
@@ -53,6 +55,7 @@
   --border: #2d2626;
   --success: #65b37c;
   --warn: #e2a24b;
+  --on-red-dark: #171414;
 }
 
 @layer base {

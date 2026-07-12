@@ -57,7 +57,7 @@ export function Button({
 }) {
   const toneClass =
     tone === "dark"
-      ? "border-[var(--red-dark)] bg-[var(--red-dark)] text-white hover:bg-[var(--red)] hover:border-[var(--red)]"
+      ? "border-[var(--red-dark)] bg-[var(--red-dark)] text-[var(--on-red-dark)] hover:border-[var(--red)] hover:bg-[var(--red)]"
       : tone === "red"
         ? "border-[var(--red)] bg-[var(--red)] text-white hover:bg-[var(--red-mid)] hover:border-[var(--red-mid)]"
         : tone === "green"
