@@ -28,10 +28,10 @@ function formatLabel(value?: string | null): string {
 
 function getApplicationAction(status?: string | null) {
     if (status === "DRAFT" || status === "CHANGES_REQUESTED") {
-        return { label: "Continue Application", to: "/application/personal-details" }
+        return { label: "Continue Application", to: "/application" }
     }
     if (status === "REJECTED") {
-        return { label: "Start New Application", to: "/application/personal-details" }
+        return { label: "Start New Application", to: "/application" }
     }
     return null
 }

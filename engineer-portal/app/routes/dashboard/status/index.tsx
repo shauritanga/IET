@@ -298,7 +298,7 @@ export default function ApplicationStatusPage() {
           </p>
         </div>
         {shouldShowMembershipApplicationCta(status) && !isLoading && (
-          <Link to="/application/personal-details">
+          <Link to="/application">
             <button
               type="button"
               style={{
@@ -355,7 +355,7 @@ export default function ApplicationStatusPage() {
           <p style={{ fontSize: 12.5, color: "var(--iet-muted)", marginBottom: 20, maxWidth: 340, margin: "0 auto 20px" }}>
             You haven't started a membership application yet. Apply to join IET Tanzania.
           </p>
-          <Link to="/application/personal-details">
+          <Link to="/application">
             <button
               type="button"
               style={{
@@ -501,7 +501,7 @@ export default function ApplicationStatusPage() {
                 Your application is still a draft. Complete all sections and submit to begin the
                 review process.
                 <div style={{ marginTop: 14 }}>
-                  <Link to="/application/personal-details">
+                  <Link to="/application">
                     <button
                       type="button"
                       style={{

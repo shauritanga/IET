@@ -37,6 +37,10 @@ function isAheadOfAllowedStep(currentPath: string, allowedPath: string): boolean
     return currentIdx > allowedIdx;
 }
 
+function getStepIndexFromPath(stepPath: string): number {
+    return STEP_PATHS.findIndex((path) => stepPath.startsWith(path));
+}
+
 const RegisterLayout = () => {
     const path = useLocation();
     const navigate = useNavigate();
@@ -90,6 +94,8 @@ const RegisterLayout = () => {
     const currentStepIndex = isWelcomePage
         ? steps.length
         : steps.findIndex((step) => isCurrentStep(step.link));
+    const allowedPath = draft?.data ? getApplicationRoute(draft.data) : "/application/personal-details";
+    const allowedStepIndex = getStepIndexFromPath(allowedPath);
 
     // Sidebar completion driven by backend completedSteps, not URL position
     const isStepCompleted = (stepIndex: number) =>
@@ -176,8 +182,19 @@ const RegisterLayout = () => {
                         {steps.map((step, index) => {
                             const completed = isStepCompleted(index);
                             const active = isCurrentStep(step.link) && !isWelcomePage;
+                            const canNavigateToStep = completed || index <= allowedStepIndex;
                             return (
-                                <div key={index} className="flex items-start">
+                                <button
+                                    key={index}
+                                    type="button"
+                                    disabled={!canNavigateToStep}
+                                    onClick={() => canNavigateToStep && navigate(step.link)}
+                                    className={cn(
+                                        "flex w-full items-start text-left transition-opacity",
+                                        canNavigateToStep ? "cursor-pointer hover:opacity-85" : "cursor-not-allowed opacity-65",
+                                    )}
+                                    title={completed ? "Edit this completed step" : canNavigateToStep ? "Continue this step" : "Complete earlier steps first"}
+                                >
                                     <div className="flex flex-col items-center mr-3 shrink-0">
                                         <div
                                             className={cn(
@@ -227,7 +244,7 @@ const RegisterLayout = () => {
                                             {step.description}
                                         </p>
                                     </div>
-                                </div>
+                                </button>
                             );
                         })}
                     </div>
