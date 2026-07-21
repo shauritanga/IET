@@ -334,6 +334,51 @@ export default function PaymentsPage() {
   const startItem = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const endItem = Math.min(total, safePage * PAGE_SIZE);
 
+  // Shared action buttons (used by both the desktop table and the mobile cards).
+  function renderActions(p: PaymentRecord) {
+    if (!isAdmin) return null;
+    const hasAny = canCheckStatus(p) || canSendLink(p) || canDelete(p);
+    return (
+      <div className="flex items-center gap-2">
+        {canCheckStatus(p) && (
+          <button
+            type="button"
+            onClick={() => void handleCheckStatus(p)}
+            disabled={checkingId === p.id}
+            title="Check payment status"
+            aria-label="Check payment status"
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)] disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={checkingId === p.id ? "animate-spin" : ""} />
+          </button>
+        )}
+        {canSendLink(p) && (
+          <button
+            type="button"
+            onClick={() => setSendLinkTarget(p)}
+            title="Send payment link (email + SMS)"
+            aria-label="Send payment link"
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)]"
+          >
+            <Send size={13} />
+          </button>
+        )}
+        {canDelete(p) && (
+          <button
+            type="button"
+            onClick={() => setDeleteTarget(p)}
+            title="Delete payment"
+            aria-label="Delete payment"
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[#f0b0b0] hover:bg-[#fef2f2] hover:text-[#dc2626]"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+        {!hasAny && <span className="text-[11px] text-[var(--muted)]">—</span>}
+      </div>
+    );
+  }
+
   return (
     <section>
       <div className="mb-[18px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -343,14 +388,14 @@ export default function PaymentsPage() {
             Track all member payments, imported fee records, and subscriptions
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <select
             value={yearFilter}
             onChange={(e) => {
               setPage(1);
               setYearFilter(e.target.value);
             }}
-            className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             <option value={YEAR_OPTION_ALL}>All Years</option>
             {years.map((year) => (
@@ -365,7 +410,7 @@ export default function PaymentsPage() {
               setPage(1);
               setTypeFilter(e.target.value);
             }}
-            className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -377,7 +422,7 @@ export default function PaymentsPage() {
               setPage(1);
               setStatusFilter(e.target.value);
             }}
-            className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o}>{o}</option>
@@ -421,7 +466,8 @@ export default function PaymentsPage() {
         />
       </div>
 
-      <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+      {/* Desktop / tablet: table */}
+      <section className="hidden overflow-hidden rounded-[12px] border border-[var(--border)] bg-white md:block">
         <div className="overflow-x-auto">
           {loading ? (
             <table className="table-proto min-w-full border-separate border-spacing-0">
@@ -512,49 +558,7 @@ export default function PaymentsPage() {
                         <span className="text-[11px] text-[var(--muted)]">—</span>
                       )}
                     </td>
-                    {isAdmin && (
-                      <td>
-                        <div className="flex items-center gap-2">
-                          {canCheckStatus(p) && (
-                            <button
-                              type="button"
-                              onClick={() => void handleCheckStatus(p)}
-                              disabled={checkingId === p.id}
-                              title="Check payment status"
-                              aria-label="Check payment status"
-                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)] disabled:opacity-50"
-                            >
-                              <RefreshCw size={13} className={checkingId === p.id ? "animate-spin" : ""} />
-                            </button>
-                          )}
-                          {canSendLink(p) && (
-                            <button
-                              type="button"
-                              onClick={() => setSendLinkTarget(p)}
-                              title="Send payment link (email + SMS)"
-                              aria-label="Send payment link"
-                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)]"
-                            >
-                              <Send size={13} />
-                            </button>
-                          )}
-                          {canDelete(p) && (
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(p)}
-                              title="Delete payment"
-                              aria-label="Delete payment"
-                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[#f0b0b0] hover:bg-[#fef2f2] hover:text-[#dc2626]"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                          {!canCheckStatus(p) && !canSendLink(p) && !canDelete(p) && (
-                            <span className="text-[11px] text-[var(--muted)]">—</span>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                    {isAdmin && <td>{renderActions(p)}</td>}
                   </tr>
                 ))}
                 {!loading && payments.length === 0 && (
@@ -574,8 +578,107 @@ export default function PaymentsPage() {
             </table>
           )}
         </div>
+      </section>
+
+      {/* Mobile: card list */}
+      <div className="md:hidden">
+        {loading ? (
+          <div className="space-y-2.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5">
+                <div className="skeleton-bar mb-2 h-[14px] w-1/2" />
+                <div className="skeleton-bar mb-3 h-[12px] w-1/3" />
+                <div className="skeleton-bar h-[12px] w-2/3" />
+              </div>
+            ))}
+          </div>
+        ) : payments.length === 0 ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-12 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--red-pale)] text-[var(--red)]">
+              <Wallet size={22} />
+            </div>
+            <p className="text-[13px] font-bold text-[var(--red-dark)]">No payments found</p>
+            <p className="mt-1 text-[11.5px] text-[var(--muted)]">Try adjusting the filters above.</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {payments.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-[12px] border border-[var(--border)] bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-bold text-[var(--text)]">{p.memberName}</div>
+                    {p.memberEmail && (
+                      <div className="truncate text-[10.5px] text-[var(--muted)]">{p.memberEmail}</div>
+                    )}
+                  </div>
+                  <StatusBadge tone={statusTone(p.status)}>{p.status}</StatusBadge>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className="text-[18px] font-extrabold tracking-[-0.5px] text-[var(--red-dark)]">
+                    {formatMoney(p.amount, p.currency)}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-[3px] text-[10.5px] font-semibold ${
+                      p.source === "MEMBERSHIP_FEE"
+                        ? "bg-[#f0fdf4] text-[#166534]"
+                        : "bg-[#eff6ff] text-[#1d4ed8]"
+                    }`}
+                  >
+                    {SOURCE_LABELS[p.source] ?? p.sourceLabel ?? p.source}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
+                  {[
+                    ["Type", TYPE_LABELS[p.paymentType] ?? p.paymentType],
+                    ["Method", METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod],
+                    ["Date", formatDate(p.completedAt ?? p.createdAt)],
+                    ["Ref", p.transactionRef],
+                  ].map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <div className="text-[9px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+                        {label}
+                      </div>
+                      <div
+                        className={`mt-[1px] truncate text-[11.5px] font-semibold text-[var(--text)] ${
+                          label === "Ref" ? "font-mono text-[10.5px]" : ""
+                        }`}
+                      >
+                        {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {(p.receiptUrl || isAdmin) && (
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+                    {p.receiptUrl ? (
+                      <a
+                        href={p.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11.5px] font-semibold text-[var(--red)] hover:underline"
+                      >
+                        View receipt
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-[var(--muted)]">No receipt</span>
+                    )}
+                    {renderActions(p)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {!loading && total > 0 && (
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-2">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-[12px] border border-[var(--border)] bg-white px-4 py-2.5">
           <span className="text-[11px] text-[var(--muted)]">
             Showing <strong>{startItem}</strong>-<strong>{endItem}</strong> of <strong>{total}</strong> payments
           </span>
@@ -622,7 +725,6 @@ export default function PaymentsPage() {
           </div>
         </div>
       )}
-      </section>
 
       {toast && (
         <div className="animate-toast-in fixed right-5 top-5 z-[6000] rounded-[10px] bg-[#111] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
