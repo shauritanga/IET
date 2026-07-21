@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   HttpStatus,
+  HttpCode,
   ParseUUIDPipe,
   Res,
   Header,
@@ -576,6 +577,28 @@ export class AdminController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.adminService.deletePayment(admin, id);
+  }
+
+  @Post('payments/:id/check-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Re-check a payment status against the gateway' })
+  async checkPaymentStatus(
+    @GetUser() admin: UserEntity,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.adminService.checkPaymentStatus(admin, id);
+  }
+
+  @Post('payments/:id/resend-link')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Regenerate and send a payment link by email + SMS (super admin)',
+  })
+  async resendPaymentLink(
+    @GetUser() admin: UserEntity,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.adminService.resendPaymentLink(admin, id);
   }
 
   // ============================================

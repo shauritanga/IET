@@ -458,6 +458,128 @@ export class PaymentsService {
     return this.syncPaymentState(payment);
   }
 
+  /**
+   * Admin: reconcile a single payment against the gateway's authoritative
+   * status (Selcom order-status) and return the refreshed record.
+   */
+  async adminSyncPaymentStatus(paymentId: string): Promise<PaymentEntity> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    return this.syncPaymentState(payment);
+  }
+
+  /**
+   * Admin: regenerate a hosted checkout link for an unpaid payment and send it
+   * to the member by email and/or SMS. Reuses the same order reference so the
+   * gateway dedupes; a failed/cancelled payment is re-opened as PENDING.
+   */
+  async adminResendPaymentLink(
+    paymentId: string,
+    opts?: { sendEmail?: boolean; sendSms?: boolean },
+  ): Promise<{ paymentUrl: string; sentEmail: boolean; sentSms: boolean }> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId },
+      relations: ['user'],
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status === PaymentStatus.COMPLETED) {
+      throw new BadRequestException('This payment is already completed');
+    }
+    if (payment.status === PaymentStatus.REFUNDED) {
+      throw new BadRequestException('This payment has been refunded');
+    }
+    const user = payment.user;
+    if (!user) {
+      throw new BadRequestException('Payment has no associated member');
+    }
+
+    const apiUrl = this.configService.get<string>('API_URL');
+    const gatewayResult = await this.paymentGateway.initiatePayment(
+      payment.paymentMethod,
+      {
+        amount: Number(payment.amount),
+        currency: payment.currency || 'TZS',
+        phoneNumber: payment.phoneNumber || user.phoneNumber,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        reference: payment.id,
+        description: payment.description,
+        callbackUrl: this.paymentGateway.getCallbackUrl(
+          payment.paymentMethod,
+          apiUrl,
+        ),
+        metadata: payment.metadata,
+      },
+    );
+
+    if (!gatewayResult.paymentUrl) {
+      throw new BadRequestException(
+        gatewayResult.message || 'Could not generate a payment link',
+      );
+    }
+
+    payment.paymentUrl = gatewayResult.paymentUrl;
+    payment.mobileMoneyRef =
+      gatewayResult.transactionId || payment.mobileMoneyRef;
+    if (
+      [PaymentStatus.FAILED, PaymentStatus.CANCELLED].includes(payment.status)
+    ) {
+      payment.status = PaymentStatus.PENDING;
+      payment.errorMessage = null;
+    }
+    await this.paymentRepository.save(payment);
+
+    const link = gatewayResult.paymentUrl;
+    const amountLabel = `${payment.currency} ${Number(payment.amount).toLocaleString()}`;
+    const purpose = payment.description || 'IET payment';
+    let sentEmail = false;
+    let sentSms = false;
+
+    if (opts?.sendEmail !== false && user.email) {
+      try {
+        await this.emailService.send({
+          to: user.email,
+          subject: 'Complete your IET payment',
+          html: `
+            <p>Hello ${user.firstName ?? 'Member'},</p>
+            <p>Here is your secure link to complete your ${purpose} of <strong>${amountLabel}</strong>.</p>
+            <p><a href="${link}">Complete Payment</a></p>
+            <p>If the button does not work, copy this link into your browser:<br/>${link}</p>
+          `,
+        });
+        sentEmail = true;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to email payment link for ${payment.id}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    const phone = payment.phoneNumber || user.phoneNumber;
+    if (opts?.sendSms !== false && phone) {
+      try {
+        await this.smsService.send({
+          to: phone,
+          message: `Complete your IET payment of ${amountLabel}: ${link}`,
+        });
+        sentSms = true;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to SMS payment link for ${payment.id}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    return { paymentUrl: link, sentEmail, sentSms };
+  }
+
   private getPaymentDescription(type: PaymentType): string {
     const descriptions: Record<PaymentType, string> = {
       [PaymentType.MEMBERSHIP_FEE]: 'Annual Membership Fee',

@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState } from "react";
+import { RefreshCw, Send } from "lucide-react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
@@ -196,10 +197,20 @@ export default function PaymentsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
-  const isSuperAdmin = getStoredUser()?.role === "SUPER_ADMIN";
+  const currentRole = getStoredUser()?.role;
+  const isSuperAdmin = currentRole === "SUPER_ADMIN";
+  const isAdmin = isSuperAdmin || currentRole === "ADMIN";
   const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [sendLinkTarget, setSendLinkTarget] = useState<PaymentRecord | null>(null);
+  const [sendingLink, setSendingLink] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(message: string, ms = 3500) {
+    setToast(message);
+    setTimeout(() => setToast(null), ms);
+  }
 
   // Only actual (failed/cancelled) payment records may be deleted — never
   // membership-fee rows or completed/in-flight payments.
@@ -211,21 +222,68 @@ export default function PaymentsPage() {
     );
   }
 
+  // A payment link can be (re)sent for any unpaid real payment.
+  function canSendLink(p: PaymentRecord) {
+    return (
+      isSuperAdmin &&
+      p.source === "PAYMENT" &&
+      p.status !== "COMPLETED" &&
+      p.status !== "REFUNDED"
+    );
+  }
+
+  const canCheckStatus = (p: PaymentRecord) => isAdmin && p.source === "PAYMENT";
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       await http.delete(`/admin/payments/${deleteTarget.id}`);
       setDeleteTarget(null);
-      setToast("Payment deleted.");
-      setTimeout(() => setToast(null), 3000);
+      showToast("Payment deleted.");
       await loadPayments();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setToast(apiError.response?.data?.message ?? "Failed to delete payment.");
-      setTimeout(() => setToast(null), 4000);
+      showToast(apiError.response?.data?.message ?? "Failed to delete payment.", 4000);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleCheckStatus(p: PaymentRecord) {
+    setCheckingId(p.id);
+    try {
+      const res = await http.post<ApiEnvelope<{ id: string; status: string }>>(
+        `/admin/payments/${p.id}/check-status`,
+      );
+      const status = res.data.data?.status;
+      showToast(status ? `Status: ${status}` : "Status refreshed.");
+      await loadPayments();
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      showToast(apiError.response?.data?.message ?? "Failed to check status.", 4000);
+    } finally {
+      setCheckingId(null);
+    }
+  }
+
+  async function handleSendLink() {
+    if (!sendLinkTarget) return;
+    setSendingLink(true);
+    try {
+      const res = await http.post<
+        ApiEnvelope<{ sentEmail: boolean; sentSms: boolean }>
+      >(`/admin/payments/${sendLinkTarget.id}/resend-link`);
+      const { sentEmail, sentSms } = res.data.data ?? {};
+      const channels = [sentEmail && "email", sentSms && "SMS"].filter(Boolean).join(" & ");
+      setSendLinkTarget(null);
+      showToast(channels ? `Payment link sent by ${channels}.` : "Payment link generated.");
+      await loadPayments();
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      showToast(apiError.response?.data?.message ?? "Failed to send payment link.", 4000);
+    } finally {
+      setSendingLink(false);
     }
   }
 
@@ -380,7 +438,7 @@ export default function PaymentsPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Receipt</th>
-                  {isSuperAdmin && <th>Actions</th>}
+                  {isAdmin && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -425,26 +483,52 @@ export default function PaymentsPage() {
                         <span className="text-[11px] text-[var(--muted)]">—</span>
                       )}
                     </td>
-                    {isSuperAdmin && (
+                    {isAdmin && (
                       <td>
-                        {canDelete(p) ? (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(p)}
-                            className="text-[11.5px] font-semibold text-[#dc2626] hover:underline"
-                          >
-                            Delete
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-[var(--muted)]">—</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {canCheckStatus(p) && (
+                            <button
+                              type="button"
+                              onClick={() => void handleCheckStatus(p)}
+                              disabled={checkingId === p.id}
+                              title="Check payment status"
+                              aria-label="Check payment status"
+                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)] disabled:opacity-50"
+                            >
+                              <RefreshCw size={13} className={checkingId === p.id ? "animate-spin" : ""} />
+                            </button>
+                          )}
+                          {canSendLink(p) && (
+                            <button
+                              type="button"
+                              onClick={() => setSendLinkTarget(p)}
+                              title="Send payment link (email + SMS)"
+                              aria-label="Send payment link"
+                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[var(--red-light)] hover:text-[var(--red)]"
+                            >
+                              <Send size={13} />
+                            </button>
+                          )}
+                          {canDelete(p) && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(p)}
+                              className="text-[11.5px] font-semibold text-[#dc2626] hover:underline"
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {!canCheckStatus(p) && !canSendLink(p) && !canDelete(p) && (
+                            <span className="text-[11px] text-[var(--muted)]">—</span>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
                 ))}
                 {!loading && payments.length === 0 && (
                   <tr>
-                    <td colSpan={isSuperAdmin ? 10 : 9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
                       No payments found.
                     </td>
                   </tr>
@@ -537,6 +621,40 @@ export default function PaymentsPage() {
             <p className="text-[11px] text-[var(--muted)]">
               This removes the payment record only. It does not affect the member&rsquo;s
               application or event registration, which can still be paid again.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title="Send Payment Link"
+        open={Boolean(sendLinkTarget)}
+        onClose={() => setSendLinkTarget(null)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button tone="outline" onClick={() => setSendLinkTarget(null)} disabled={sendingLink}>
+              Cancel
+            </Button>
+            <Button tone="dark" onClick={() => void handleSendLink()} disabled={sendingLink}>
+              {sendingLink ? "Sending..." : "Generate & Send"}
+            </Button>
+          </div>
+        }
+      >
+        {sendLinkTarget ? (
+          <div className="space-y-3">
+            <p className="text-[12px] text-[var(--text)]">
+              Generate a fresh payment link and send it to
+              {sendLinkTarget.memberName ? <> <strong>{sendLinkTarget.memberName}</strong></> : " the member"} by
+              <strong> email and SMS</strong>?
+            </p>
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px] text-[var(--muted)]">
+              {sendLinkTarget.memberEmail && <div>Email: {sendLinkTarget.memberEmail}</div>}
+              <div>Amount: {formatMoney(sendLinkTarget.amount, sendLinkTarget.currency)}</div>
+              <div>Current status: {sendLinkTarget.status}</div>
+            </div>
+            <p className="text-[11px] text-[var(--muted)]">
+              A failed or cancelled payment is re-opened so the member can complete it.
             </p>
           </div>
         ) : null}

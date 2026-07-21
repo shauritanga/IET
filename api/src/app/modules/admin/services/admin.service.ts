@@ -27,6 +27,7 @@ import { UserDisciplineEntity } from '../../user/entities/user-discipline.entity
 import { UserService } from '../../user/services/user.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../shared/services/email.service';
+import { PaymentsService } from '../../payments/services/payments.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
@@ -165,6 +166,7 @@ export class AdminService {
     private userService: UserService,
     private notificationsService: NotificationsService,
     private emailService: EmailService,
+    private paymentsService: PaymentsService,
   ) {}
 
   private hasThreeConsecutiveUnpaidFeeYears(
@@ -2174,6 +2176,40 @@ export class AdminService {
       `Payment ${paymentId} (${payment.status}) deleted by super admin ${actor.id}`,
     );
     return { success: true, message: 'Payment deleted successfully' };
+  }
+
+  /**
+   * Re-check a payment's status against the gateway and reconcile it.
+   * Available to admins and super admins.
+   */
+  async checkPaymentStatus(actor: UserEntity, paymentId: string) {
+    if (!this.isFullWorkflowAdmin(actor.role)) {
+      throw new ForbiddenException(
+        'You are not allowed to check payment status',
+      );
+    }
+    const payment = await this.paymentsService.adminSyncPaymentStatus(paymentId);
+    return {
+      success: true,
+      data: {
+        id: payment.id,
+        status: payment.status,
+        completedAt: payment.completedAt ?? null,
+      },
+    };
+  }
+
+  /**
+   * Regenerate a checkout link for an unpaid payment and send it to the member
+   * by email and SMS. Super admin only.
+   */
+  async resendPaymentLink(actor: UserEntity, paymentId: string) {
+    this.assertSuperAdmin(actor);
+    const result = await this.paymentsService.adminResendPaymentLink(paymentId, {
+      sendEmail: true,
+      sendSms: true,
+    });
+    return { success: true, data: result };
   }
 
   async importMembers(file: Express.Multer.File): Promise<LegacyMemberImportResult> {
