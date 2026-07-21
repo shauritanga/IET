@@ -1,6 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState } from "react";
-import { RefreshCw, Send } from "lucide-react";
+import { RefreshCw, Send, Trash2, Wallet } from "lucide-react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
@@ -336,7 +336,7 @@ export default function PaymentsPage() {
 
   return (
     <section>
-      <div className="mb-[18px] flex items-center justify-between">
+      <div className="mb-[18px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Payments</h1>
           <p className="mt-[2px] text-[11px] text-[var(--muted)]">
@@ -424,7 +424,36 @@ export default function PaymentsPage() {
       <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
         <div className="overflow-x-auto">
           {loading ? (
-            <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading payments…</div>
+            <table className="table-proto min-w-full border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Member</th>
+                  <th>Type</th>
+                  <th>Source</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Receipt</th>
+                  {isAdmin && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: isAdmin ? 10 : 9 }).map((__, j) => (
+                      <td key={j}>
+                        <div
+                          className="skeleton-bar h-[12px]"
+                          style={{ width: j === 1 ? "70%" : j === 0 ? "60%" : "45%" }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
             <table className="table-proto min-w-full border-separate border-spacing-0">
               <thead>
@@ -513,9 +542,11 @@ export default function PaymentsPage() {
                             <button
                               type="button"
                               onClick={() => setDeleteTarget(p)}
-                              className="text-[11.5px] font-semibold text-[#dc2626] hover:underline"
+                              title="Delete payment"
+                              aria-label="Delete payment"
+                              className="flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border border-[var(--border)] text-[var(--muted)] transition-colors hover:border-[#f0b0b0] hover:bg-[#fef2f2] hover:text-[#dc2626]"
                             >
-                              Delete
+                              <Trash2 size={13} />
                             </button>
                           )}
                           {!canCheckStatus(p) && !canSendLink(p) && !canDelete(p) && (
@@ -528,8 +559,14 @@ export default function PaymentsPage() {
                 ))}
                 {!loading && payments.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
-                      No payments found.
+                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-12 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--red-pale)] text-[var(--red)]">
+                        <Wallet size={22} />
+                      </div>
+                      <p className="text-[13px] font-bold text-[var(--red-dark)]">No payments found</p>
+                      <p className="mt-1 text-[11.5px] text-[var(--muted)]">
+                        Try adjusting the year, type, or status filters above.
+                      </p>
                     </td>
                   </tr>
                 )}
@@ -588,7 +625,7 @@ export default function PaymentsPage() {
       </section>
 
       {toast && (
-        <div className="fixed right-5 top-5 z-[6000] rounded-[10px] bg-[#111] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+        <div className="animate-toast-in fixed right-5 top-5 z-[6000] rounded-[10px] bg-[#111] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
           {toast}
         </div>
       )}
