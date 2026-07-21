@@ -423,6 +423,34 @@ export class PaymentsService {
     };
   }
 
+  /**
+   * Reconcile an event registration's latest payment against the authoritative
+   * Selcom order-status endpoint. syncPaymentState() also updates the linked
+   * event registration (confirmEventRegistration) as a side effect, so callers
+   * can re-read the registration afterwards to observe the new status. Returns
+   * the synced payment, or null when no payment has been initiated yet.
+   */
+  async syncEventRegistrationPayment(
+    userId: string,
+    registrationId: string,
+  ): Promise<PaymentEntity | null> {
+    const payment = await this.paymentRepository.findOne({
+      where: {
+        userId,
+        referenceId: registrationId,
+        referenceType: 'event_registration',
+        paymentType: PaymentType.EVENT_REGISTRATION,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!payment) {
+      return null;
+    }
+
+    return this.syncPaymentState(payment);
+  }
+
   private getPaymentDescription(type: PaymentType): string {
     const descriptions: Record<PaymentType, string> = {
       [PaymentType.MEMBERSHIP_FEE]: 'Annual Membership Fee',

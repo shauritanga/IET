@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { Calendar, MapPoint, Ticket } from "@solar-icons/react/ssr";
@@ -19,6 +19,7 @@ import {
   type MyRegistration,
 } from "~/routes/dashboard/events/my-registrations/requests/get-my-registrations";
 import { retryEventPayment } from "~/routes/dashboard/events/my-registrations/requests/retry-event-payment";
+import { getEventPaymentStatus } from "~/routes/dashboard/events/my-registrations/requests/get-event-payment-status";
 
 const STATUS_LABELS: Record<MyRegistration["status"], string> = {
   CONFIRMED: "Confirmed",
@@ -68,6 +69,25 @@ function RegistrationCard({ reg }: { reg: MyRegistration }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // While a registration is awaiting payment, poll the authoritative status
+  // endpoint (which reconciles against Selcom). When it settles as paid, refresh
+  // the list so the card flips to Confirmed.
+  const isPendingPayment = reg.status === "PENDING_PAYMENT";
+  const { data: paymentStatus } = useQuery({
+    queryKey: ["event-payment-status", reg.registrationId],
+    queryFn: () => getEventPaymentStatus(reg.registrationId),
+    enabled: isPendingPayment,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) =>
+      query.state.data?.data.paymentStatus === "PENDING" ? 5000 : false,
+  });
+
+  useEffect(() => {
+    if (isPendingPayment && paymentStatus?.data.paymentStatus === "PAID") {
+      queryClient.invalidateQueries({ queryKey: ["my-registrations"] });
+    }
+  }, [isPendingPayment, paymentStatus?.data.paymentStatus, queryClient]);
 
   const retryMutation = useMutation({
     mutationFn: () => retryEventPayment(reg.registrationId),

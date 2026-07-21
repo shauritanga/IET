@@ -1062,8 +1062,12 @@ export class EventsService {
   ): Promise<{
     registrationId: string;
     status: EventRegistrationStatus;
-    paymentUrl?: string;
+    paymentStatus: 'PAID' | 'PENDING';
+    paymentId?: string;
+    amount?: number;
+    currency: string;
     paymentExpiresAt?: Date;
+    message: string;
   }> {
     const registration = await this.registrationRepository.findOne({
       where: { id: registrationId, userId },
@@ -1073,14 +1077,34 @@ export class EventsService {
       throw new NotFoundException('Registration not found');
     }
 
+    // Reconcile against the authoritative Selcom order-status before reporting.
+    // This also confirms the event registration when payment has settled, so we
+    // re-read the registration below to pick up any status change.
+    const payment = await this.paymentsService.syncEventRegistrationPayment(
+      userId,
+      registrationId,
+    );
+
+    const fresh =
+      (await this.registrationRepository.findOne({
+        where: { id: registrationId, userId },
+      })) ?? registration;
+
+    const isPaid =
+      fresh.status === EventRegistrationStatus.CONFIRMED ||
+      fresh.status === EventRegistrationStatus.ATTENDED;
+
     return {
-      registrationId: registration.id,
-      status: registration.status,
-      paymentUrl:
-        registration.status === EventRegistrationStatus.PENDING_PAYMENT
-          ? undefined
-          : undefined,
-      paymentExpiresAt: registration.paymentExpiresAt,
+      registrationId: fresh.id,
+      status: fresh.status,
+      paymentStatus: isPaid ? 'PAID' : 'PENDING',
+      paymentId: payment?.id ?? fresh.paymentId ?? undefined,
+      amount: payment?.amount,
+      currency: payment?.currency ?? 'TZS',
+      paymentExpiresAt: fresh.paymentExpiresAt,
+      message: isPaid
+        ? 'Event registration payment completed'
+        : payment?.errorMessage || 'Payment is awaiting confirmation',
     };
   }
 
