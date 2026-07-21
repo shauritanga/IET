@@ -1,8 +1,8 @@
 import { NavLink } from "react-router";
-import { Building2, CalendarRange, CreditCard, LayoutDashboard, PanelLeft, Tags, TrendingUp, Users } from "lucide-react";
+import { Building2, CalendarRange, CreditCard, LayoutDashboard, Network, PanelLeft, Tags, TrendingUp, Users } from "lucide-react";
 import { getStoredUser } from "~/utils/auth";
 
-type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories" | "institutions" | "upgrades";
+type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories" | "institutions" | "upgrades" | "disciplines";
 
 const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: boolean }> = [
   { label: "Dashboard", icon: "dashboard", to: "/dashboard", end: true },
@@ -10,6 +10,7 @@ const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: 
   { label: "Members", icon: "members", to: "/dashboard/members" },
   { label: "Upgrades", icon: "upgrades", to: "/dashboard/upgrade-applications" },
   { label: "Categories", icon: "categories", to: "/dashboard/membership-categories" },
+  { label: "Disciplines", icon: "disciplines", to: "/dashboard/disciplines" },
   { label: "Institutions", icon: "institutions", to: "/dashboard/engineering-institutions" },
   { label: "Event & Training", icon: "training", to: "/dashboard/events" },
 ];
@@ -47,6 +48,10 @@ function sidebarIcon(name: SidebarIconName) {
 
   if (name === "categories") {
     return <Tags aria-hidden="true" />;
+  }
+
+  if (name === "disciplines") {
+    return <Network aria-hidden="true" />;
   }
 
   if (name === "institutions") {

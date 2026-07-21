@@ -50,6 +50,9 @@ import {
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
+  DisciplineQueryDto,
+  CreateDisciplineDto,
+  UpdateDisciplineDto,
   EngineeringInstitutionQueryDto,
   CreateEngineeringInstitutionDto,
   UpdateEngineeringInstitutionDto,
@@ -711,6 +714,37 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete a membership category' })
   async deleteMembershipCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteMembershipCategory(id);
+  }
+
+  // ============================================
+  // DISCIPLINES (admin-managed tree)
+  // ============================================
+
+  @Get('disciplines')
+  @ApiOperation({ summary: 'List disciplines (flat or tree)' })
+  async getDisciplines(@Query() query: DisciplineQueryDto) {
+    return this.adminService.getDisciplines(query);
+  }
+
+  @Post('disciplines')
+  @ApiOperation({ summary: 'Create a discipline' })
+  async createDiscipline(@Body() dto: CreateDisciplineDto) {
+    return this.adminService.createDiscipline(dto);
+  }
+
+  @Patch('disciplines/:id')
+  @ApiOperation({ summary: 'Update a discipline' })
+  async updateDiscipline(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDisciplineDto,
+  ) {
+    return this.adminService.updateDiscipline(id, dto);
+  }
+
+  @Delete('disciplines/:id')
+  @ApiOperation({ summary: 'Delete a discipline' })
+  async deleteDiscipline(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.deleteDiscipline(id);
   }
 
   // ============================================

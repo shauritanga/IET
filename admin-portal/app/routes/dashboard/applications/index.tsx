@@ -28,9 +28,16 @@ type ApplicationRow = {
   reviewStage?: ReviewStage;
   queueOwnerRole?: string;
   assignedEvaluatorId?: string;
+  stageClaimedById?: string | null;
   submittedAt?: string;
   stageUpdatedAt?: string;
 };
+
+const CLAIMABLE_STAGES: ReviewStage[] = [
+  "EVALUATOR_REVIEW",
+  "MPDC_REVIEW",
+  "COUNCIL_REVIEW",
+];
 
 const STAGE_LABELS: Record<ReviewStage, string> = {
   SECRETARIAT_REVIEW: "Secretariat Review",
@@ -247,7 +254,20 @@ export default function ApplicationsPage() {
                         </StatusBadge>
                       ) : <span className="text-[var(--muted)]">-</span>}
                     </td>
-                    <td className="text-[11.5px]">{row.queueOwnerRole ?? "-"}</td>
+                    <td className="text-[11.5px]">
+                      {row.queueOwnerRole ?? "-"}
+                      {row.reviewStage && CLAIMABLE_STAGES.includes(row.reviewStage) && (
+                        <span
+                          className={`ml-2 rounded-[5px] px-[6px] py-[1px] text-[10px] font-bold ${
+                            row.stageClaimedById
+                              ? "bg-[#f1f1f1] text-[var(--muted)]"
+                              : "bg-[#dcfce7] text-[#166534]"
+                          }`}
+                        >
+                          {row.stageClaimedById ? "Claimed" : "Available"}
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <StatusBadge tone={STATUS_TONES[row.status]}>
                         {STATUS_LABELS[row.status]}

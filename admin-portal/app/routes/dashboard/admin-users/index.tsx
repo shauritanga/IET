@@ -6,6 +6,15 @@ import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
 import type { AdminRole, ApiEnvelope } from "~/types";
 
+type DisciplineTag = { id: string; name: string };
+
+type Discipline = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  isActive: boolean;
+};
+
 type AdminUser = {
   id: string;
   email: string;
@@ -16,6 +25,7 @@ type AdminUser = {
   role: AdminRole;
   isActive: boolean;
   profilePhotoUrl?: string | null;
+  disciplines?: DisciplineTag[];
   updatedAt?: string | null;
 };
 
@@ -27,6 +37,7 @@ type AdminUserForm = {
   role: AdminRole;
   isActive: boolean;
   password: string;
+  disciplineIds: string[];
 };
 
 const ROLE_OPTIONS: AdminRole[] = [
@@ -38,6 +49,12 @@ const ROLE_OPTIONS: AdminRole[] = [
   "SUPER_ADMIN",
 ];
 
+const PANEL_ROLES: AdminRole[] = ["EVALUATOR", "MPDC", "COUNCIL"];
+
+function isPanelRole(role: AdminRole): boolean {
+  return PANEL_ROLES.includes(role);
+}
+
 const EMPTY_FORM: AdminUserForm = {
   email: "",
   firstName: "",
@@ -46,6 +63,7 @@ const EMPTY_FORM: AdminUserForm = {
   role: "SECRETARIAT",
   isActive: true,
   password: "",
+  disciplineIds: [],
 };
 
 function roleLabel(role?: string | null) {
@@ -159,6 +177,7 @@ export default function AdminUsersPage() {
   const [form, setForm] = useState<AdminUserForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [disciplines, setDisciplines] = useState<Discipline[]>([]);
 
   async function loadUsers() {
     if (!canManage) {
@@ -188,6 +207,18 @@ export default function AdminUsersPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, roleFilter, canManage]);
+
+  useEffect(() => {
+    if (!canManage) return;
+    void (async () => {
+      try {
+        const { data } = await http.get<ApiEnvelope<Discipline[]>>("/admin/disciplines?activeOnly=true");
+        setDisciplines(data.data ?? []);
+      } catch {
+        // Disciplines are optional; ignore load failures here.
+      }
+    })();
+  }, [canManage]);
 
   useEffect(() => {
     const closeMenu = (event: MouseEvent) => {
@@ -235,6 +266,7 @@ export default function AdminUsersPage() {
       role: user.role,
       isActive: user.isActive,
       password: "",
+      disciplineIds: (user.disciplines ?? []).map((d) => d.id),
     });
     setFormError(null);
     setModalOpen(true);
@@ -299,6 +331,7 @@ export default function AdminUsersPage() {
     setFormError(null);
 
     try {
+      const disciplineIds = isPanelRole(form.role) ? form.disciplineIds : [];
       if (editing) {
         await http.patch(`/admin/users/${editing.id}`, {
           firstName: form.firstName,
@@ -306,6 +339,7 @@ export default function AdminUsersPage() {
           phoneNumber: form.phoneNumber || undefined,
           role: form.role,
           isActive: form.isActive,
+          disciplineIds,
         });
       } else {
         await http.post("/admin/users", {
@@ -315,7 +349,8 @@ export default function AdminUsersPage() {
           phoneNumber: form.phoneNumber || undefined,
           role: form.role,
           isActive: form.isActive,
-          password: form.password,
+          password: form.password || undefined,
+          disciplineIds,
         });
       }
       setModalOpen(false);
@@ -512,7 +547,12 @@ export default function AdminUsersPage() {
           </div>
           <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} />
           {!editing && (
-            <TextField label="Initial Password" value={form.password} onChange={(value) => setForm((prev) => ({ ...prev, password: value }))} type="password" required />
+            <div>
+              <TextField label="Initial Password" value={form.password} onChange={(value) => setForm((prev) => ({ ...prev, password: value }))} type="password" />
+              <p className="mt-1 text-[10.5px] text-[var(--muted)]">
+                Leave blank to auto-generate a temporary password and email login credentials to the user.
+              </p>
+            </div>
           )}
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block">
@@ -543,6 +583,57 @@ export default function AdminUsersPage() {
               </select>
             </label>
           </div>
+
+          {isPanelRole(form.role) && (
+            <div className="block">
+              <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+                Disciplines
+              </span>
+              <p className="mb-2 text-[10.5px] text-[var(--muted)]">
+                Applications are routed to evaluators whose disciplines match the applicant&rsquo;s field.
+              </p>
+              {disciplines.length === 0 ? (
+                <p className="text-[11px] text-[var(--muted)]">No disciplines defined yet.</p>
+              ) : (
+                <div className="max-h-[180px] overflow-y-auto rounded-[8px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] p-2">
+                  {disciplines
+                    .filter((d) => !d.parentId)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .flatMap((parent) => [
+                      parent,
+                      ...disciplines
+                        .filter((c) => c.parentId === parent.id)
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                    ])
+                    .map((d) => {
+                      const checked = form.disciplineIds.includes(d.id);
+                      return (
+                        <label
+                          key={d.id}
+                          className="flex cursor-pointer items-center gap-2 py-[3px] text-[12px] text-[var(--text)]"
+                          style={{ paddingLeft: d.parentId ? 18 : 0 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                disciplineIds: event.target.checked
+                                  ? [...prev.disciplineIds, d.id]
+                                  : prev.disciplineIds.filter((id) => id !== d.id),
+                              }))
+                            }
+                          />
+                          {d.parentId && <span className="text-[var(--muted)]">↳</span>}
+                          {d.name}
+                        </label>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
         </form>
       </Modal>
 

@@ -29,6 +29,9 @@ type ApplicationDetail = {
   status: AppStatus;
   reviewStage?: ReviewStage;
   assignedEvaluatorId?: string;
+  stageClaimedById?: string | null;
+  stageClaimedByName?: string | null;
+  stageClaimedAt?: string | null;
   submittedAt?: string;
   stageUpdatedAt?: string;
   reviewComments?: string;
@@ -127,20 +130,41 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function getPrimaryAction(stage?: ReviewStage, role?: string | null) {
+const REVIEW_STAGE_CONFIG: Partial<
+  Record<ReviewStage, { roles: string[]; recommend: string }>
+> = {
+  EVALUATOR_REVIEW: { roles: ["EVALUATOR", "REVIEWER"], recommend: "EVALUATOR_RECOMMEND" },
+  MPDC_REVIEW: { roles: ["MPDC"], recommend: "MPDC_RECOMMEND" },
+  COUNCIL_REVIEW: { roles: ["COUNCIL"], recommend: "COUNCIL_RECOMMEND" },
+};
+
+function getPrimaryAction(
+  detail?: ApplicationDetail | null,
+  user?: { id?: string; role?: string | null } | null,
+) {
+  const stage = detail?.reviewStage;
+  const role = user?.role;
   const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
   const isSecretariat = role === "SECRETARIAT" || isAdmin;
-  if (stage === "EVALUATOR_REVIEW" && (role === "EVALUATOR" || role === "REVIEWER" || isAdmin)) {
-    return { action: "EVALUATOR_RECOMMEND", label: "Submit Recommendation to Secretariat" };
+
+  const cfg = stage ? REVIEW_STAGE_CONFIG[stage] : undefined;
+  if (cfg && (isAdmin || (role && cfg.roles.includes(role)))) {
+    // Full admins can act without claiming.
+    if (isAdmin) {
+      return { action: cfg.recommend, label: "Submit Recommendation to Secretariat" };
+    }
+    const claimedBy = detail?.stageClaimedById ?? null;
+    if (!claimedBy) {
+      return { action: "CLAIM", label: "Claim this Application" };
+    }
+    if (claimedBy === user?.id) {
+      return { action: cfg.recommend, label: "Submit Recommendation to Secretariat" };
+    }
+    return null; // Claimed by another reviewer — locked.
   }
-  if (stage === "MPDC_REVIEW" && (role === "MPDC" || isAdmin)) {
-    return { action: "MPDC_RECOMMEND", label: "Submit Recommendation to Secretariat" };
-  }
-  if (stage === "COUNCIL_REVIEW" && (role === "COUNCIL" || isAdmin)) {
-    return { action: "COUNCIL_RECOMMEND", label: "Submit Recommendation to Secretariat" };
-  }
+
   if (!isSecretariat) return null;
-  if (stage === "SECRETARIAT_REVIEW") return { action: "ASSIGN_EVALUATOR", label: "Assign Evaluator" };
+  if (stage === "SECRETARIAT_REVIEW") return { action: "ADVANCE_TO_EVALUATOR", label: "Advance to Evaluator Review" };
   if (stage === "SECRETARIAT_EVALUATOR_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_MPDC", label: "Advance to MPDC" };
   if (stage === "SECRETARIAT_MPDC_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_COUNCIL", label: "Advance to Council" };
   if (stage === "SECRETARIAT_COUNCIL_RECOMMENDATION") return { action: "APPROVE", label: "Approve and Notify" };
@@ -193,12 +217,24 @@ export default function ApplicationReviewPage() {
   }, [applicationId]);
 
   const primaryAction = useMemo(
-    () => getPrimaryAction(detail?.reviewStage, currentUser?.role),
-    [detail?.reviewStage, currentUser?.role],
+    () => getPrimaryAction(detail, currentUser),
+    [detail, currentUser],
   );
   const isSecretariat = currentUser?.role === "SECRETARIAT" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN";
   const canAct = detail?.status === "IN_REVIEW" && primaryAction;
   const canTerminate = detail?.status === "IN_REVIEW" && isSecretariat && detail.reviewStage?.startsWith("SECRETARIAT");
+  // A review-stage application that this reviewer could act on, but which another
+  // panel member has already claimed.
+  const isReviewStage = detail?.reviewStage
+    ? Boolean(REVIEW_STAGE_CONFIG[detail.reviewStage])
+    : false;
+  const lockedByOther =
+    detail?.status === "IN_REVIEW" &&
+    isReviewStage &&
+    !isSecretariat &&
+    !!detail?.stageClaimedById &&
+    detail.stageClaimedById !== currentUser?.id;
+  const claimAction = primaryAction?.action === "CLAIM";
 
   async function performAction(action: string) {
     if (!detail) return;
@@ -219,6 +255,7 @@ export default function ApplicationReviewPage() {
       };
       if (action === "ASSIGN_EVALUATOR") payload.evaluatorId = selectedEvaluatorId;
       if (action === "APPROVE") payload.membershipClass = membershipClass;
+      if (action === "CLAIM") payload.comments = undefined;
       await http.patch(`/admin/applications/${detail.id}/stage`, payload);
       setComments("");
       await loadDetail();
@@ -363,20 +400,18 @@ export default function ApplicationReviewPage() {
               <p className="text-[12px] font-semibold text-[var(--muted)]">This application is {STATUS_LABELS[detail.status]}.</p>
             ) : (
               <>
-                {detail.reviewStage === "SECRETARIAT_REVIEW" && (
-                  <label className="block">
-                    <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Evaluator</span>
-                    <select
-                      value={selectedEvaluatorId}
-                      onChange={(e) => setSelectedEvaluatorId(e.target.value)}
-                      className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
-                    >
-                      <option value="">Select evaluator...</option>
-                      {evaluators.map((evaluator) => (
-                        <option key={evaluator.id} value={evaluator.id}>{evaluatorName(evaluator)} - {evaluator.email}</option>
-                      ))}
-                    </select>
-                  </label>
+                {detail.reviewStage === "SECRETARIAT_REVIEW" && isSecretariat && (
+                  <p className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11.5px] text-[var(--muted)]">
+                    Advancing notifies every evaluator whose discipline matches{" "}
+                    <strong>{detail.engineeringDiscipline ?? "the applicant"}</strong>. The first to claim it will handle the review.
+                  </p>
+                )}
+
+                {detail.stageClaimedByName && isReviewStage && (
+                  <p className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11.5px] text-[var(--muted)]">
+                    Claimed by <strong>{detail.stageClaimedByName}</strong>
+                    {detail.stageClaimedById === currentUser?.id ? " (you)" : ""}.
+                  </p>
                 )}
 
                 {detail.reviewStage === "SECRETARIAT_COUNCIL_RECOMMENDATION" && (
@@ -392,16 +427,18 @@ export default function ApplicationReviewPage() {
                   </label>
                 )}
 
-                <label className="block">
-                  <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Recommendation / Reason</span>
-                  <textarea
-                    rows={5}
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    placeholder="Add recommendation notes or decision reason..."
-                    className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)]"
-                  />
-                </label>
+                {!claimAction && (
+                  <label className="block">
+                    <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Recommendation / Reason</span>
+                    <textarea
+                      rows={5}
+                      value={comments}
+                      onChange={(e) => setComments(e.target.value)}
+                      placeholder="Add recommendation notes or decision reason..."
+                      className="w-full resize-y rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)]"
+                    />
+                  </label>
+                )}
 
                 {actionError && (
                   <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
@@ -411,7 +448,7 @@ export default function ApplicationReviewPage() {
 
                 <div className="space-y-2">
                   {canAct && primaryAction && (
-                    <Button tone="green" className="w-full" disabled={actionPending} onClick={() => void performAction(primaryAction.action)}>
+                    <Button tone={claimAction ? "dark" : "green"} className="w-full" disabled={actionPending} onClick={() => void performAction(primaryAction.action)}>
                       {actionPending ? "Saving..." : primaryAction.label}
                     </Button>
                   )}
@@ -425,7 +462,12 @@ export default function ApplicationReviewPage() {
                       </Button>
                     </>
                   )}
-                  {!canAct && !canTerminate && (
+                  {lockedByOther && (
+                    <p className="text-[12px] font-semibold text-[var(--muted)]">
+                      This application has been claimed by another reviewer and is locked.
+                    </p>
+                  )}
+                  {!canAct && !canTerminate && !lockedByOther && (
                     <p className="text-[12px] font-semibold text-[var(--muted)]">No workflow action is available for your role at this stage.</p>
                   )}
                 </div>

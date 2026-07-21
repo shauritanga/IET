@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, LessThan } from 'typeorm';
@@ -21,6 +22,8 @@ import { PaymentEntity } from '../../payments/entities/payment.entity';
 import { SystemSettingEntity } from '../entities/system-setting.entity';
 import { MembershipCategoryEntity } from '../entities/membership-category.entity';
 import { EngineeringInstitutionEntity } from '../entities/engineering-institution.entity';
+import { DisciplineEntity } from '../entities/discipline.entity';
+import { UserDisciplineEntity } from '../../user/entities/user-discipline.entity';
 import { UserService } from '../../user/services/user.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { EmailService } from '../../shared/services/email.service';
@@ -42,6 +45,9 @@ import {
   CreateEngineeringInstitutionDto,
   UpdateEngineeringInstitutionDto,
   RenewMemberDto,
+  DisciplineQueryDto,
+  CreateDisciplineDto,
+  UpdateDisciplineDto,
 } from '../dto';
 import {
   MembershipStatus,
@@ -94,6 +100,17 @@ const PORTAL_ROLES = [
   UserRole.REVIEWER,
 ] as const;
 
+// Roles for which discipline tagging is meaningful (review-panel members).
+const PANEL_ROLES = [
+  UserRole.EVALUATOR,
+  UserRole.MPDC,
+  UserRole.COUNCIL,
+  UserRole.REVIEWER,
+] as const;
+
+const isPanelRole = (role: UserRole): boolean =>
+  PANEL_ROLES.includes(role as (typeof PANEL_ROLES)[number]);
+
 const FISCAL_YEAR_SETTING_KEY = 'membership_fiscal_year';
 const DEFAULT_FISCAL_YEAR_SETTINGS: FiscalYearSettingsDto = {
   startMonth: 7,
@@ -127,6 +144,10 @@ export class AdminService {
     private membershipCategoryRepository: Repository<MembershipCategoryEntity>,
     @InjectRepository(EngineeringInstitutionEntity)
     private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
+    @InjectRepository(DisciplineEntity)
+    private disciplineRepository: Repository<DisciplineEntity>,
+    @InjectRepository(UserDisciplineEntity)
+    private userDisciplineRepository: Repository<UserDisciplineEntity>,
     private userService: UserService,
     private notificationsService: NotificationsService,
     private emailService: EmailService,
@@ -281,7 +302,10 @@ export class AdminService {
     }
   }
 
-  private toAdminUserSummary(user: UserEntity) {
+  private toAdminUserSummary(
+    user: UserEntity,
+    disciplines: { id: string; name: string }[] = [],
+  ) {
     return {
       id: user.id,
       email: user.email,
@@ -292,9 +316,81 @@ export class AdminService {
       role: user.role,
       isActive: user.isActive,
       profilePhotoUrl: user.profilePhotoUrl,
+      disciplines,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  /** Discipline tags ({id,name}) for one panel-member user. */
+  private async getUserDisciplines(
+    userId: string,
+  ): Promise<{ id: string; name: string }[]> {
+    const tags = await this.userDisciplineRepository.find({
+      where: { userId },
+    });
+    if (!tags.length) {
+      return [];
+    }
+    const disciplines = await this.disciplineRepository.find({
+      where: { id: In(tags.map((t) => t.disciplineId)) },
+      order: { name: 'ASC' },
+    });
+    return disciplines.map((d) => ({ id: d.id, name: d.name }));
+  }
+
+  /** Discipline tags keyed by userId, for a batch of users (list views). */
+  private async getUserDisciplinesMap(
+    userIds: string[],
+  ): Promise<Map<string, { id: string; name: string }[]>> {
+    const map = new Map<string, { id: string; name: string }[]>();
+    if (!userIds.length) {
+      return map;
+    }
+    const tags = await this.userDisciplineRepository.find({
+      where: { userId: In(userIds) },
+    });
+    if (!tags.length) {
+      return map;
+    }
+    const disciplines = await this.disciplineRepository.find({
+      where: { id: In([...new Set(tags.map((t) => t.disciplineId))]) },
+    });
+    const byId = new Map(disciplines.map((d) => [d.id, d]));
+    for (const tag of tags) {
+      const discipline = byId.get(tag.disciplineId);
+      if (!discipline) continue;
+      const list = map.get(tag.userId) ?? [];
+      list.push({ id: discipline.id, name: discipline.name });
+      map.set(tag.userId, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return map;
+  }
+
+  /** Replace a user's discipline tags with the given set (validates ids exist). */
+  private async setUserDisciplines(
+    userId: string,
+    disciplineIds: string[],
+  ): Promise<void> {
+    await this.userDisciplineRepository.delete({ userId });
+    const uniqueIds = [...new Set(disciplineIds)];
+    if (!uniqueIds.length) {
+      return;
+    }
+    const found = await this.disciplineRepository.find({
+      where: { id: In(uniqueIds) },
+    });
+    if (found.length !== uniqueIds.length) {
+      throw new BadRequestException('One or more disciplines were not found');
+    }
+    await this.userDisciplineRepository.save(
+      uniqueIds.map((disciplineId) =>
+        this.userDisciplineRepository.create({ userId, disciplineId }),
+      ),
+    );
   }
 
   private resolveMembershipClassFromCategoryName(
@@ -369,8 +465,14 @@ export class AdminService {
       .take(pageSize)
       .getManyAndCount();
 
+    const disciplinesByUser = await this.getUserDisciplinesMap(
+      users.map((u) => u.id),
+    );
+
     return {
-      items: users.map((user) => this.toAdminUserSummary(user)),
+      items: users.map((user) =>
+        this.toAdminUserSummary(user, disciplinesByUser.get(user.id) ?? []),
+      ),
       total,
       page,
       pageSize,
@@ -387,6 +489,11 @@ export class AdminService {
       throw new BadRequestException('User with this email already exists');
     }
 
+    // When no password is supplied, generate a temporary one and email the
+    // login credentials to the panel member (same pattern as createMember).
+    const plainPassword = dto.password || this.generateTemporaryPassword();
+    const sendCredentials = !dto.password;
+
     const user = this.userRepository.create({
       email: dto.email,
       firstName: dto.firstName,
@@ -401,11 +508,37 @@ export class AdminService {
       emailPreferences: {},
       smsPreferences: {},
       pushPreferences: {},
-      password: await bcrypt.hash(dto.password, 10),
+      password: await bcrypt.hash(plainPassword, 10),
     });
 
     const saved = await this.userRepository.save(user);
-    return this.toAdminUserSummary(saved);
+
+    if (isPanelRole(dto.role) && dto.disciplineIds) {
+      await this.setUserDisciplines(saved.id, dto.disciplineIds);
+    }
+
+    if (sendCredentials) {
+      void this.emailService
+        .send({
+          to: saved.email,
+          subject: 'Your IET portal account has been created',
+          html: `
+        <p>Hello ${saved.firstName ?? 'there'},</p>
+        <p>An IET portal account has been created for you (${saved.role}).</p>
+        <p><strong>Login email:</strong> ${saved.email}</p>
+        <p><strong>Temporary password:</strong> ${plainPassword}</p>
+        <p>Please sign in and change your password immediately.</p>
+      `,
+        })
+        .catch((error: any) => {
+          this.logger.warn(
+            `Failed to send portal credentials email to ${saved.email}: ${error.message}`,
+          );
+        });
+    }
+
+    const disciplines = await this.getUserDisciplines(saved.id);
+    return this.toAdminUserSummary(saved, disciplines);
   }
 
   async listEvaluators() {
@@ -419,7 +552,12 @@ export class AdminService {
       .addOrderBy('user.email', 'ASC')
       .getMany();
 
-    return users.map((user) => this.toAdminUserSummary(user));
+    const disciplinesByUser = await this.getUserDisciplinesMap(
+      users.map((u) => u.id),
+    );
+    return users.map((user) =>
+      this.toAdminUserSummary(user, disciplinesByUser.get(user.id) ?? []),
+    );
   }
 
   async updateAdminUser(
@@ -453,7 +591,19 @@ export class AdminService {
     if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
 
     const saved = await this.userRepository.save(user);
-    return this.toAdminUserSummary(saved);
+
+    // Replace discipline tags when provided. Non-panel roles carry no tags.
+    if (dto.disciplineIds !== undefined) {
+      await this.setUserDisciplines(
+        saved.id,
+        isPanelRole(saved.role) ? dto.disciplineIds : [],
+      );
+    } else if (!isPanelRole(saved.role)) {
+      await this.setUserDisciplines(saved.id, []);
+    }
+
+    const disciplines = await this.getUserDisciplines(saved.id);
+    return this.toAdminUserSummary(saved, disciplines);
   }
 
   async getAdminUser(actor: UserEntity, userId: string) {
@@ -464,7 +614,8 @@ export class AdminService {
       throw new NotFoundException('Admin portal user not found');
     }
 
-    return this.toAdminUserSummary(user);
+    const disciplines = await this.getUserDisciplines(user.id);
+    return this.toAdminUserSummary(user, disciplines);
   }
 
   async deleteAdminUser(actor: UserEntity, userId: string): Promise<void> {
@@ -911,7 +1062,7 @@ export class AdminService {
     if (reviewStage) {
       queryBuilder.andWhere('reg.reviewStage = :reviewStage', { reviewStage });
     }
-    this.applyApplicationRoleScope(queryBuilder, actor);
+    await this.applyApplicationRoleScope(queryBuilder, actor);
 
     const [registrations, total] = await queryBuilder
       .orderBy('reg.submittedAt', 'ASC')
@@ -930,6 +1081,8 @@ export class AdminService {
       reviewStage: reg.reviewStage,
       queueOwnerRole: this.getQueueOwnerRole(reg.reviewStage),
       assignedEvaluatorId: reg.assignedEvaluatorId,
+      stageClaimedById: reg.stageClaimedById ?? null,
+      stageClaimedAt: reg.stageClaimedAt ?? null,
       stageUpdatedAt: reg.stageUpdatedAt,
       submittedAt: reg.submittedAt,
       createdAt: reg.createdAt,
@@ -961,7 +1114,13 @@ export class AdminService {
     if (!registration) {
       throw new NotFoundException('Application not found');
     }
-    this.assertCanViewApplication(actor, registration);
+    await this.assertCanViewApplication(actor, registration);
+
+    const claimer = registration.stageClaimedById
+      ? await this.userRepository.findOneBy({
+          id: registration.stageClaimedById,
+        })
+      : null;
 
     return {
       id: registration.id,
@@ -971,6 +1130,9 @@ export class AdminService {
       queueOwnerRole: this.getQueueOwnerRole(registration.reviewStage),
       assignedEvaluatorId: registration.assignedEvaluatorId,
       assignedAt: registration.assignedAt,
+      stageClaimedById: registration.stageClaimedById ?? null,
+      stageClaimedByName: claimer?.fullName ?? null,
+      stageClaimedAt: registration.stageClaimedAt ?? null,
       submittedAt: registration.submittedAt,
       stageUpdatedAt: registration.stageUpdatedAt,
       councilApprovedAt: registration.councilApprovedAt,
@@ -1028,7 +1190,13 @@ export class AdminService {
     }
 
     this.assertAllowedStageAction(currentStage, dto.action);
-    this.assertCanPerformStageAction(actor, registration, dto.action);
+    await this.assertCanPerformStageAction(actor, registration, dto.action);
+
+    // CLAIM is a self-contained action: it locks the current review stage to
+    // the acting panel member without advancing the application.
+    if (dto.action === 'CLAIM') {
+      return this.claimApplicationStage(registration, actor);
+    }
 
     let newStatus: ApplicationStatus = registration.status;
     let newStage: ApplicationReviewStage = currentStage;
@@ -1058,6 +1226,12 @@ export class AdminService {
       | 'NOTICE_SENT' = 'ADVANCED';
 
     switch (dto.action) {
+      case 'ADVANCE_TO_EVALUATOR':
+        // Advance to the evaluator stage without picking an evaluator; every
+        // discipline-matched evaluator is emailed and one claims it.
+        newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
+        historyAction = 'ADVANCED';
+        break;
       case 'ASSIGN_EVALUATOR':
         if (!dto.evaluatorId) {
           throw new BadRequestException(
@@ -1132,6 +1306,22 @@ export class AdminService {
 
       default:
         throw new BadRequestException('Invalid action');
+    }
+
+    // Leaving a stage drops any claim held on it so the next stage starts fresh.
+    if (newStage !== currentStage) {
+      registration.stageClaimedById = null;
+      registration.stageClaimedAt = null;
+      if (currentStage === ApplicationReviewStage.EVALUATOR_REVIEW) {
+        registration.assignedEvaluatorId = null;
+      }
+    }
+
+    // A directly-assigned evaluator is treated as having already claimed the
+    // evaluator stage (re-applied after the clear above).
+    if (dto.action === 'ASSIGN_EVALUATOR') {
+      registration.stageClaimedById = dto.evaluatorId;
+      registration.stageClaimedAt = now;
     }
 
     registration.status = newStatus;
@@ -1404,8 +1594,16 @@ export class AdminService {
     return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
   }
 
-  private applyApplicationRoleScope(queryBuilder: any, actor: UserEntity): void {
+  private async applyApplicationRoleScope(
+    queryBuilder: any,
+    actor: UserEntity,
+  ): Promise<void> {
     if (this.isFullWorkflowAdmin(actor.role)) return;
+
+    // A review-panel member sees an application at their stage only while it is
+    // unclaimed or claimed by them (the claim locks out peers).
+    const unclaimedOrMine =
+      '(reg.stageClaimedById IS NULL OR reg.stageClaimedById = :actorId)';
 
     switch (actor.role) {
       case UserRole.SECRETARIAT:
@@ -1414,61 +1612,100 @@ export class AdminService {
         });
         break;
       case UserRole.EVALUATOR:
-      case UserRole.REVIEWER:
+      case UserRole.REVIEWER: {
+        const disciplineNames =
+          await this.getEvaluatorApplicationDisciplineNames(actor.id);
+        if (!disciplineNames.length) {
+          queryBuilder.andWhere('1 = 0');
+          break;
+        }
         queryBuilder
           .andWhere('reg.reviewStage = :actorStage', {
             actorStage: ApplicationReviewStage.EVALUATOR_REVIEW,
           })
-          .andWhere('reg.assignedEvaluatorId = :actorId', {
-            actorId: actor.id,
+          .andWhere(unclaimedOrMine, { actorId: actor.id })
+          .andWhere('reg.engineeringDiscipline IN (:...disciplineNames)', {
+            disciplineNames,
           });
         break;
+      }
       case UserRole.MPDC:
-        queryBuilder.andWhere('reg.reviewStage = :actorStage', {
-          actorStage: ApplicationReviewStage.MPDC_REVIEW,
-        });
+        queryBuilder
+          .andWhere('reg.reviewStage = :actorStage', {
+            actorStage: ApplicationReviewStage.MPDC_REVIEW,
+          })
+          .andWhere(unclaimedOrMine, { actorId: actor.id });
         break;
       case UserRole.COUNCIL:
-        queryBuilder.andWhere('reg.reviewStage = :actorStage', {
-          actorStage: ApplicationReviewStage.COUNCIL_REVIEW,
-        });
+        queryBuilder
+          .andWhere('reg.reviewStage = :actorStage', {
+            actorStage: ApplicationReviewStage.COUNCIL_REVIEW,
+          })
+          .andWhere(unclaimedOrMine, { actorId: actor.id });
         break;
       default:
         queryBuilder.andWhere('1 = 0');
     }
   }
 
-  private assertCanViewApplication(
+  private async assertCanViewApplication(
     actor: UserEntity,
     registration: RegistrationEntity,
-  ): void {
+  ): Promise<void> {
     if (this.isFullWorkflowAdmin(actor.role)) return;
 
     const stage = registration.reviewStage;
-    const allowed =
-      (actor.role === UserRole.SECRETARIAT &&
-        !!stage &&
-        this.getSecretariatStages().includes(stage)) ||
-      ((actor.role === UserRole.EVALUATOR || actor.role === UserRole.REVIEWER) &&
-        stage === ApplicationReviewStage.EVALUATOR_REVIEW &&
-        registration.assignedEvaluatorId === actor.id) ||
-      (actor.role === UserRole.MPDC &&
-        stage === ApplicationReviewStage.MPDC_REVIEW) ||
-      (actor.role === UserRole.COUNCIL &&
-        stage === ApplicationReviewStage.COUNCIL_REVIEW);
+    // Unclaimed, or claimed by this actor.
+    const claimOpen =
+      !registration.stageClaimedById ||
+      registration.stageClaimedById === actor.id;
+
+    let allowed = false;
+    if (
+      actor.role === UserRole.SECRETARIAT &&
+      !!stage &&
+      this.getSecretariatStages().includes(stage)
+    ) {
+      allowed = true;
+    } else if (
+      (actor.role === UserRole.EVALUATOR ||
+        actor.role === UserRole.REVIEWER) &&
+      stage === ApplicationReviewStage.EVALUATOR_REVIEW &&
+      claimOpen
+    ) {
+      // Evaluators may only view applications in a discipline they cover.
+      const disciplineNames =
+        await this.getEvaluatorApplicationDisciplineNames(actor.id);
+      allowed =
+        !!registration.engineeringDiscipline &&
+        disciplineNames.includes(registration.engineeringDiscipline);
+    } else if (
+      actor.role === UserRole.MPDC &&
+      stage === ApplicationReviewStage.MPDC_REVIEW &&
+      claimOpen
+    ) {
+      allowed = true;
+    } else if (
+      actor.role === UserRole.COUNCIL &&
+      stage === ApplicationReviewStage.COUNCIL_REVIEW &&
+      claimOpen
+    ) {
+      allowed = true;
+    }
 
     if (!allowed) {
       throw new ForbiddenException('You do not have access to this application');
     }
   }
 
-  private assertCanPerformStageAction(
+  private async assertCanPerformStageAction(
     actor: UserEntity,
     registration: RegistrationEntity,
     action: UpdateApplicationStageDto['action'],
-  ): void {
-    this.assertCanViewApplication(actor, registration);
+  ): Promise<void> {
+    await this.assertCanViewApplication(actor, registration);
     const secretariatActions: UpdateApplicationStageDto['action'][] = [
+      'ADVANCE_TO_EVALUATOR',
       'ASSIGN_EVALUATOR',
       'SECRETARIAT_ADVANCE_TO_MPDC',
       'SECRETARIAT_ADVANCE_TO_COUNCIL',
@@ -1476,9 +1713,103 @@ export class AdminService {
       'REJECT',
       'RETURN_FOR_CHANGES',
     ];
-    if (secretariatActions.includes(action) && !this.isFullWorkflowAdmin(actor.role) && actor.role !== UserRole.SECRETARIAT) {
-      throw new ForbiddenException('Only Secretariat can perform this workflow action');
+    if (
+      secretariatActions.includes(action) &&
+      !this.isFullWorkflowAdmin(actor.role) &&
+      actor.role !== UserRole.SECRETARIAT
+    ) {
+      throw new ForbiddenException(
+        'Only Secretariat can perform this workflow action',
+      );
     }
+
+    // A recommendation can only be submitted by the panel member who claimed
+    // the application at the current stage.
+    const recommendActions: UpdateApplicationStageDto['action'][] = [
+      'EVALUATOR_RECOMMEND',
+      'MPDC_RECOMMEND',
+      'COUNCIL_RECOMMEND',
+    ];
+    if (
+      recommendActions.includes(action) &&
+      !this.isFullWorkflowAdmin(actor.role)
+    ) {
+      if (registration.stageClaimedById !== actor.id) {
+        throw new ForbiddenException(
+          'You must claim this application before submitting a recommendation',
+        );
+      }
+    }
+  }
+
+  /**
+   * Claim the current review stage for a panel member. Uses a conditional
+   * UPDATE so two members cannot both claim the same application; the first
+   * writer wins and later claimers get a 409.
+   */
+  private async claimApplicationStage(
+    registration: RegistrationEntity,
+    actor: UserEntity,
+  ): Promise<{
+    applicationId: string;
+    status: ApplicationStatus;
+    reviewStage?: ApplicationReviewStage;
+    reviewedBy?: string;
+    reviewedAt?: Date;
+    membershipId?: string;
+  }> {
+    const stage = registration.reviewStage as ApplicationReviewStage;
+    const now = new Date();
+    const isEvaluatorStage = stage === ApplicationReviewStage.EVALUATOR_REVIEW;
+
+    const result = await this.registrationRepository
+      .createQueryBuilder()
+      .update(RegistrationEntity)
+      .set({
+        stageClaimedById: actor.id,
+        stageClaimedAt: now,
+        ...(isEvaluatorStage
+          ? { assignedEvaluatorId: actor.id, assignedAt: now }
+          : {}),
+      })
+      .where(
+        'id = :id AND "reviewStage" = :stage AND "stageClaimedById" IS NULL',
+        { id: registration.id, stage },
+      )
+      .execute();
+
+    if (!result.affected) {
+      throw new ConflictException(
+        'This application has already been claimed by another reviewer',
+      );
+    }
+
+    registration.stageClaimedById = actor.id;
+    registration.stageClaimedAt = now;
+    if (isEvaluatorStage) {
+      registration.assignedEvaluatorId = actor.id;
+      registration.assignedAt = now;
+    }
+
+    await this.recordStageHistory(registration, {
+      fromStage: stage,
+      toStage: stage,
+      action: 'CLAIMED',
+      actedByUserId: actor.id,
+    });
+
+    this.logger.log(
+      `Application ${registration.id} claimed by ${actor.id} at stage ${stage}`,
+    );
+
+    return {
+      applicationId: registration.id,
+      status: registration.status,
+      reviewStage: registration.reviewStage,
+      reviewedBy: actor.id,
+      reviewedAt: now,
+      membershipId: undefined,
+    };
   }
 
   private async assertAssignableEvaluator(evaluatorId: string): Promise<void> {
@@ -1520,11 +1851,13 @@ export class AdminService {
   ): void {
     const allowedActions: Record<ApplicationReviewStage, UpdateApplicationStageDto['action'][]> = {
       [ApplicationReviewStage.SECRETARIAT_REVIEW]: [
+        'ADVANCE_TO_EVALUATOR',
         'ASSIGN_EVALUATOR',
         'RETURN_FOR_CHANGES',
         'REJECT',
       ],
       [ApplicationReviewStage.EVALUATOR_REVIEW]: [
+        'CLAIM',
         'EVALUATOR_RECOMMEND',
       ],
       [ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION]: [
@@ -1533,6 +1866,7 @@ export class AdminService {
         'REJECT',
       ],
       [ApplicationReviewStage.MPDC_REVIEW]: [
+        'CLAIM',
         'MPDC_RECOMMEND',
       ],
       [ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION]: [
@@ -1541,6 +1875,7 @@ export class AdminService {
         'REJECT',
       ],
       [ApplicationReviewStage.COUNCIL_REVIEW]: [
+        'CLAIM',
         'COUNCIL_RECOMMEND',
       ],
       [ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION]: [
@@ -2407,6 +2742,34 @@ export class AdminService {
       );
     }
 
+    // Discipline-filtered evaluator broadcast: every active evaluator whose
+    // disciplines cover the application's discipline (family) is emailed; the
+    // first to claim locks it.
+    if (action === 'ADVANCE_TO_EVALUATOR') {
+      const discipline = registration.engineeringDiscipline;
+      const evaluatorIds = discipline
+        ? await this.getMatchingEvaluatorUserIds(discipline)
+        : [];
+      if (evaluatorIds.length) {
+        await this.notificationsService.sendAdminWorkflowNotificationToUsers(
+          evaluatorIds,
+          NotificationType.APPLICATION_UPDATE,
+          'Application Ready for Evaluator Review',
+          `Application ${reference} (${discipline}) is ready for evaluator review. The first evaluator to claim it will handle the review.`,
+          {
+            actionUrl: applicationUrl,
+            data: { applicationId: registration.id, action, actedBy: actor.id },
+            sendEmail: true,
+            sendSms: true,
+          },
+        );
+      } else {
+        this.logger.warn(
+          `No matching evaluators for application ${reference} discipline "${discipline}"; it will sit unclaimed in the evaluator queue.`,
+        );
+      }
+    }
+
     const queueRoleByAction: Partial<Record<UpdateApplicationStageDto['action'], UserRole>> = {
       SECRETARIAT_ADVANCE_TO_MPDC: UserRole.MPDC,
       SECRETARIAT_ADVANCE_TO_COUNCIL: UserRole.COUNCIL,
@@ -2447,6 +2810,7 @@ export class AdminService {
     }
 
     const applicantTitleByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      ADVANCE_TO_EVALUATOR: 'Application Under Evaluation',
       ASSIGN_EVALUATOR: 'Application Under Evaluation',
       EVALUATOR_RECOMMEND: 'Application Advanced',
       SECRETARIAT_ADVANCE_TO_MPDC: 'Application Advanced to MPDC Review',
@@ -2455,6 +2819,7 @@ export class AdminService {
       COUNCIL_RECOMMEND: 'Council Recommendation Submitted',
     };
     const applicantMessageByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
+      ADVANCE_TO_EVALUATOR: `Your application ${reference} has been forwarded for evaluator review.`,
       ASSIGN_EVALUATOR: `Your application ${reference} has been assigned to an evaluator for review.`,
       EVALUATOR_RECOMMEND: `Your application ${reference} has completed evaluator review and is now back with Secretariat.`,
       SECRETARIAT_ADVANCE_TO_MPDC: `Your application ${reference} has been forwarded to MPDC for further review.`,
@@ -2668,5 +3033,220 @@ export class AdminService {
     institution.isActive = false;
     await this.engineeringInstitutionRepository.save(institution);
     return { success: true, message: 'Institution disabled successfully' };
+  }
+
+  // ============================================
+  // DISCIPLINES (admin-managed tree)
+  // ============================================
+
+  async getDisciplines(query: DisciplineQueryDto) {
+    const where: Record<string, unknown> = {};
+    if (query.activeOnly) {
+      where.isActive = true;
+    }
+    const disciplines = await this.disciplineRepository.find({
+      where,
+      order: { name: 'ASC' },
+    });
+    if (query.tree) {
+      return { success: true, data: this.buildDisciplineTree(disciplines) };
+    }
+    return { success: true, data: disciplines };
+  }
+
+  private buildDisciplineTree(list: DisciplineEntity[]) {
+    const byId = new Map(
+      list.map((d) => [d.id, { ...d, children: [] as unknown[] }]),
+    );
+    const roots: unknown[] = [];
+    for (const node of byId.values()) {
+      const parent = node.parentId ? byId.get(node.parentId) : undefined;
+      if (parent) {
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return roots;
+  }
+
+  async createDiscipline(dto: CreateDisciplineDto) {
+    const existing = await this.disciplineRepository.findOne({
+      where: { name: dto.name },
+    });
+    if (existing) {
+      throw new BadRequestException(`Discipline "${dto.name}" already exists`);
+    }
+    if (dto.parentId) {
+      const parent = await this.disciplineRepository.findOne({
+        where: { id: dto.parentId },
+      });
+      if (!parent) {
+        throw new BadRequestException('Parent discipline not found');
+      }
+      if (parent.parentId) {
+        throw new BadRequestException(
+          'Disciplines can only be nested one level deep',
+        );
+      }
+    }
+    const discipline = this.disciplineRepository.create({
+      name: dto.name,
+      parentId: dto.parentId ?? null,
+      isActive: dto.isActive ?? true,
+    });
+    const saved = await this.disciplineRepository.save(discipline);
+    return { success: true, data: saved };
+  }
+
+  async updateDiscipline(id: string, dto: UpdateDisciplineDto) {
+    const discipline = await this.disciplineRepository.findOne({ where: { id } });
+    if (!discipline) {
+      throw new NotFoundException('Discipline not found');
+    }
+    if (dto.name && dto.name !== discipline.name) {
+      const existing = await this.disciplineRepository.findOne({
+        where: { name: dto.name },
+      });
+      if (existing) {
+        throw new BadRequestException(`Discipline "${dto.name}" already exists`);
+      }
+    }
+    if (dto.parentId) {
+      if (dto.parentId === id) {
+        throw new BadRequestException('A discipline cannot be its own parent');
+      }
+      const parent = await this.disciplineRepository.findOne({
+        where: { id: dto.parentId },
+      });
+      if (!parent) {
+        throw new BadRequestException('Parent discipline not found');
+      }
+      if (parent.parentId) {
+        throw new BadRequestException(
+          'Disciplines can only be nested one level deep',
+        );
+      }
+      const childCount = await this.disciplineRepository.count({
+        where: { parentId: id },
+      });
+      if (childCount > 0) {
+        throw new BadRequestException(
+          'A discipline with sub-disciplines cannot itself be nested',
+        );
+      }
+    }
+    Object.assign(discipline, dto);
+    const saved = await this.disciplineRepository.save(discipline);
+    return { success: true, data: saved };
+  }
+
+  async deleteDiscipline(id: string) {
+    const discipline = await this.disciplineRepository.findOne({ where: { id } });
+    if (!discipline) {
+      throw new NotFoundException('Discipline not found');
+    }
+    const childCount = await this.disciplineRepository.count({
+      where: { parentId: id },
+    });
+    if (childCount > 0) {
+      throw new BadRequestException(
+        'Remove or reassign sub-disciplines before deleting this discipline',
+      );
+    }
+    const tagCount = await this.userDisciplineRepository.count({
+      where: { disciplineId: id },
+    });
+    if (tagCount > 0) {
+      throw new BadRequestException(
+        'This discipline is assigned to panel members; unassign them first',
+      );
+    }
+    await this.disciplineRepository.remove(discipline);
+    return { success: true, message: 'Discipline deleted successfully' };
+  }
+
+  // ---- Discipline resolution helpers (shared by queue scoping + routing) ----
+
+  /** Discipline ids for a top-level name plus all its descendant sub-disciplines. */
+  private async getDisciplineFamilyIds(rootName: string): Promise<string[]> {
+    const root = await this.disciplineRepository.findOne({
+      where: { name: rootName },
+    });
+    if (!root) {
+      return [];
+    }
+    const ids = [root.id];
+    let frontier = [root.id];
+    while (frontier.length) {
+      const children = await this.disciplineRepository.find({
+        where: { parentId: In(frontier) },
+      });
+      const childIds = children
+        .map((c) => c.id)
+        .filter((cid) => !ids.includes(cid));
+      if (!childIds.length) {
+        break;
+      }
+      ids.push(...childIds);
+      frontier = childIds;
+    }
+    return ids;
+  }
+
+  /**
+   * The set of top-level (application-facing) discipline names an evaluator is
+   * eligible for. Each of the evaluator's discipline tags is walked up to its
+   * top-level root; the application's `engineeringDiscipline` is matched against
+   * these root names.
+   */
+  async getEvaluatorApplicationDisciplineNames(
+    userId: string,
+  ): Promise<string[]> {
+    const tags = await this.userDisciplineRepository.find({ where: { userId } });
+    if (!tags.length) {
+      return [];
+    }
+    const disciplines = await this.disciplineRepository.find({
+      where: { id: In(tags.map((t) => t.disciplineId)) },
+    });
+    const rootNames = new Set<string>();
+    for (const discipline of disciplines) {
+      let current: DisciplineEntity | null = discipline;
+      const guard = new Set<string>();
+      while (current?.parentId && !guard.has(current.id)) {
+        guard.add(current.id);
+        current = await this.disciplineRepository.findOne({
+          where: { id: current.parentId },
+        });
+      }
+      if (current) {
+        rootNames.add(current.name);
+      }
+    }
+    return [...rootNames];
+  }
+
+  /** Active evaluator user ids tagged with the application's discipline family. */
+  async getMatchingEvaluatorUserIds(disciplineName: string): Promise<string[]> {
+    const familyIds = await this.getDisciplineFamilyIds(disciplineName);
+    if (!familyIds.length) {
+      return [];
+    }
+    const tags = await this.userDisciplineRepository.find({
+      where: { disciplineId: In(familyIds) },
+    });
+    const userIds = [...new Set(tags.map((t) => t.userId))];
+    if (!userIds.length) {
+      return [];
+    }
+    const users = await this.userRepository.find({
+      where: {
+        id: In(userIds),
+        role: In([UserRole.EVALUATOR, UserRole.REVIEWER]),
+        isActive: true,
+      },
+    });
+    return users.map((u) => u.id);
   }
 }

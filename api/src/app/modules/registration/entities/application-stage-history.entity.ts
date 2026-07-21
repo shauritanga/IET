@@ -7,6 +7,7 @@ import type { RegistrationEntity } from './registration.entity';
 export type ApplicationStageAction =
   | 'SUBMITTED'
   | 'ASSIGNED'
+  | 'CLAIMED'
   | 'ADVANCED'
   | 'EVALUATOR_RECOMMENDED'
   | 'MPDC_RECOMMENDED'

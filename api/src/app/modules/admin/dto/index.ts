@@ -99,7 +99,9 @@ export class UpdateApplicationStageDto {
     example: 'ASSIGN_EVALUATOR',
     description: 'Workflow action',
     enum: [
+      'ADVANCE_TO_EVALUATOR',
       'ASSIGN_EVALUATOR',
+      'CLAIM',
       'EVALUATOR_RECOMMEND',
       'SECRETARIAT_ADVANCE_TO_MPDC',
       'MPDC_RECOMMEND',
@@ -113,7 +115,9 @@ export class UpdateApplicationStageDto {
   @IsNotEmpty()
   @IsString()
   action:
+    | 'ADVANCE_TO_EVALUATOR'
     | 'ASSIGN_EVALUATOR'
+    | 'CLAIM'
     | 'EVALUATOR_RECOMMEND'
     | 'SECRETARIAT_ADVANCE_TO_MPDC'
     | 'MPDC_RECOMMEND'
@@ -362,8 +366,12 @@ export class CreateAdminUserDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiProperty({ example: 'AdminPass123!' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({
+    description:
+      'Password. Omit to auto-generate a temporary password and email login credentials to the user.',
+    example: 'AdminPass123!',
+  })
+  @IsOptional()
   @MinLength(8)
   @MaxLength(50)
   @Matches(
@@ -373,7 +381,17 @@ export class CreateAdminUserDto {
         'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
     },
   )
-  password: string;
+  password?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Discipline ids to tag this panel member with (evaluator/MPDC/council roles)',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  disciplineIds?: string[];
 }
 
 export class UpdateAdminUserDto {
@@ -406,6 +424,16 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Discipline ids to tag this panel member with (evaluator/MPDC/council roles). Replaces existing tags.',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  disciplineIds?: string[];
 }
 
 export class FiscalYearSettingsDto {
@@ -670,4 +698,71 @@ export class AnalyticsQueryDto {
   @IsOptional()
   @IsString()
   groupBy?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+}
+
+// ============================================
+// DISCIPLINES (admin-managed tree)
+// ============================================
+
+export class DisciplineQueryDto {
+  @ApiPropertyOptional({
+    description: 'Return only active disciplines',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  activeOnly?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Return a nested tree instead of a flat list',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  tree?: boolean;
+}
+
+export class CreateDisciplineDto {
+  @ApiProperty({ example: 'Structural' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  name: string;
+
+  @ApiPropertyOptional({
+    description: 'Parent discipline id (omit for a top-level discipline)',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  parentId?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateDisciplineDto {
+  @ApiPropertyOptional({ example: 'Structural' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Parent discipline id (null / omit for top-level)',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('4')
+  parentId?: string | null;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

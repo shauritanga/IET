@@ -271,6 +271,21 @@ export class RegistrationEntity extends AuditableEntity {
   assignedAt?: Date;
 
   @ApiProperty({
+    description:
+      'User ID of the panel member who has claimed the application at the current review stage (evaluator/MPDC/council). Cleared on every stage transition.',
+    required: false,
+  })
+  @Column({ type: 'uuid', nullable: true })
+  stageClaimedById?: string | null;
+
+  @ApiProperty({
+    description: 'Date when the current review stage was claimed',
+    required: false,
+  })
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  stageClaimedAt?: Date | null;
+
+  @ApiProperty({
     description: 'Date when the current review stage was last updated',
     required: false,
   })

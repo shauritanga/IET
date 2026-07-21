@@ -201,6 +201,64 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Send a workflow notification to an explicit set of user ids (deduped).
+   * Used for discipline-filtered evaluator broadcasts where the recipient set is
+   * resolved by the caller rather than by a single role.
+   */
+  async sendWorkflowNotificationToUsers(
+    userIds: string[],
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+      portal?: AuthPortal;
+    },
+  ): Promise<number> {
+    const uniqueIds = [...new Set(userIds)];
+    if (!uniqueIds.length) {
+      return 0;
+    }
+    await Promise.all(
+      uniqueIds.map((userId) =>
+        this.sendWorkflowNotification(userId, type, title, message, options),
+      ),
+    );
+    return uniqueIds.length;
+  }
+
+  /**
+   * Send a workflow notification to an explicit set of users using the admin
+   * portal destination.
+   */
+  async sendAdminWorkflowNotificationToUsers(
+    userIds: string[],
+    type: NotificationType,
+    title: string,
+    message: string,
+    options?: {
+      actionUrl?: string;
+      data?: Record<string, any>;
+      sendEmail?: boolean;
+      sendSms?: boolean;
+    },
+  ): Promise<number> {
+    return this.sendWorkflowNotificationToUsers(
+      userIds,
+      type,
+      title,
+      message,
+      {
+        ...options,
+        portal: AuthPortal.ADMIN_PORTAL,
+      },
+    );
+  }
+
+  /**
    * Get user notifications
    */
   async getUserNotifications(

@@ -13,6 +13,8 @@ import { PaymentEntity } from '../payments/entities/payment.entity';
 import { SystemSettingEntity } from './entities/system-setting.entity';
 import { MembershipCategoryEntity } from './entities/membership-category.entity';
 import { EngineeringInstitutionEntity } from './entities/engineering-institution.entity';
+import { DisciplineEntity } from './entities/discipline.entity';
+import { UserDisciplineEntity } from '../user/entities/user-discipline.entity';
 import { UserModule } from '../user/user.module';
 import { GuestModule } from '../guest/guest.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -31,6 +33,8 @@ import { EventsModule } from '../events/events.module';
       SystemSettingEntity,
       MembershipCategoryEntity,
       EngineeringInstitutionEntity,
+      DisciplineEntity,
+      UserDisciplineEntity,
     ]),
     UserModule,
     EventsModule,
