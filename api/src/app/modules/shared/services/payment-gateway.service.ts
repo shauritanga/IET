@@ -188,15 +188,18 @@ export class PaymentGatewayService {
     // errors were caused by the missing Accept/User-Agent headers and non-ASCII
     // characters in text fields — NOT by these URLs (per the working ICAFoW
     // integration), so they are included here.
+    // These must point at real member-portal routes: /payment/complete and
+    // /payment/cancel (see engineer-portal routes). Selcom appends its own
+    // order_id / payment_status query params to the redirect page on return.
     const redirectUrl =
       this.selcomRedirectUrl ||
       (this.selcomEngineerPortalUrl
-        ? `${this.selcomEngineerPortalUrl}/payments/callback?ref=${encodeURIComponent(request.reference)}`
+        ? `${this.selcomEngineerPortalUrl}/payment/complete`
         : '');
     const cancelUrl =
       this.selcomCancelUrl ||
-      (redirectUrl
-        ? `${redirectUrl}${redirectUrl.includes('?') ? '&' : '?'}cancel=1`
+      (this.selcomEngineerPortalUrl
+        ? `${this.selcomEngineerPortalUrl}/payment/cancel`
         : '');
     const webhookUrl = request.callbackUrl || '';
 
