@@ -161,15 +161,24 @@ export class PaymentGatewayService {
       );
     }
 
+    // buyer_phone is Mandatory on Selcom's create-order-minimal endpoint, so
+    // require it up front (like email) rather than letting Selcom reject the
+    // order after the round-trip.
+    const buyerPhone = request.phoneNumber
+      ? this.normalizeSelcomMsisdn(request.phoneNumber)
+      : '';
+    if (!buyerPhone) {
+      throw new BadRequestException(
+        'Phone number is required for Selcom card payments',
+      );
+    }
+
     const orderId = `IET-${request.reference}`;
     const apiUrl = `${this.selcomBaseUrl}/v1/checkout/create-order-minimal`;
 
     const buyerName = this.toSelcomAscii(
       `${request.firstName || 'IET'} ${request.lastName || 'Member'}`.trim(),
     );
-    const buyerPhone = request.phoneNumber
-      ? this.normalizeSelcomMsisdn(request.phoneNumber)
-      : '';
 
     // create-order-minimal accepts base64-encoded redirect_url / cancel_url /
     // webhook. Wiring these makes Selcom bounce the buyer back to our portal
@@ -196,7 +205,7 @@ export class PaymentGatewayService {
       order_id: orderId,
       buyer_email: request.email,
       buyer_name: buyerName,
-      ...(buyerPhone && { buyer_phone: buyerPhone }),
+      buyer_phone: buyerPhone,
       amount: Math.round(request.amount),
       currency: request.currency,
       ...(redirectUrl && { redirect_url: this.encodeSelcomUrl(redirectUrl) }),
