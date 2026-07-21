@@ -1,14 +1,15 @@
 import { NavLink } from "react-router";
-import { Building2, CalendarRange, CreditCard, LayoutDashboard, Network, PanelLeft, Tags, TrendingUp, Users } from "lucide-react";
+import { Building2, CalendarRange, CreditCard, LayoutDashboard, Network, PanelLeft, Tags, TrendingUp, UserCog, Users } from "lucide-react";
 import { getStoredUser } from "~/utils/auth";
 
-type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories" | "institutions" | "upgrades" | "disciplines";
+type SidebarIconName = "dashboard" | "payments" | "members" | "training" | "categories" | "institutions" | "upgrades" | "disciplines" | "users";
 
-const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: boolean }> = [
+const navItems: Array<{ label: string; icon: SidebarIconName; to: string; end?: boolean; roles?: string[] }> = [
   { label: "Dashboard", icon: "dashboard", to: "/dashboard", end: true },
   { label: "Payments", icon: "payments", to: "/dashboard/applications" },
   { label: "Members", icon: "members", to: "/dashboard/members" },
   { label: "Upgrades", icon: "upgrades", to: "/dashboard/upgrade-applications" },
+  { label: "Users", icon: "users", to: "/dashboard/admin-users", roles: ["ADMIN", "SUPER_ADMIN"] },
   { label: "Categories", icon: "categories", to: "/dashboard/membership-categories" },
   { label: "Disciplines", icon: "disciplines", to: "/dashboard/disciplines" },
   { label: "Institutions", icon: "institutions", to: "/dashboard/engineering-institutions" },
@@ -62,6 +63,10 @@ function sidebarIcon(name: SidebarIconName) {
     return <TrendingUp aria-hidden="true" />;
   }
 
+  if (name === "users") {
+    return <UserCog aria-hidden="true" />;
+  }
+
   return null;
 }
 
@@ -97,7 +102,9 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       </div>
 
       <nav className="sidebar-nav" aria-label="Dashboard navigation">
-        {navItems.map((item) => (
+        {navItems
+          .filter((item) => !item.roles || item.roles.includes(user?.role ?? ""))
+          .map((item) => (
           <NavLink
             key={item.label}
             to={item.to}
