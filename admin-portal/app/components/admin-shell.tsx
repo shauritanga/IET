@@ -602,7 +602,7 @@ export default function AdminShell() {
           <div className="flex min-w-0 flex-1 items-center gap-[11px]">
             <button
               type="button"
-              className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border-[1.5px] border-transparent bg-transparent text-[var(--muted)] transition-all duration-150 hover:border-[var(--border)] hover:bg-[var(--red-pale)] hover:text-[var(--red)]"
+              className="hidden h-[26px] w-[26px] items-center justify-center rounded-[5px] border-[1.5px] border-transparent bg-transparent text-[var(--muted)] transition-all duration-150 hover:border-[var(--border)] hover:bg-[var(--red-pale)] hover:text-[var(--red)] lg:flex"
               onClick={() => setCollapsed((value) => !value)}
               title="Toggle sidebar"
             >

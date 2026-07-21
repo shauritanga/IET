@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router"
-import { MoonStar, SunMedium, ChevronDown, LogOut, UserRound } from "lucide-react"
+import { MoonStar, SunMedium, ChevronDown, LogOut, UserRound, LayoutGrid, FileText, CalendarDays, User, Menu } from "lucide-react"
 import { isAxiosError } from "axios"
 import { BellIcon } from "~/components/portal/icons"
 import MembershipRequiredModal from "~/components/custom/membership-modal"
@@ -372,8 +372,41 @@ export default function AuthLayout() {
                         onClose={handleMembershipPromptClose}
                         onApply={openApplicationModal}
                     />
+                    {/* Spacer so content clears the fixed mobile bottom nav */}
+                    <div className="h-[64px] lg:hidden" aria-hidden="true" />
                 </div>
             </div>
+
+            {/* Mobile bottom navigation */}
+            <nav
+                className="fixed inset-x-0 bottom-0 z-[100] flex items-stretch border-t border-[var(--iet-border)] bg-[var(--iet-white)] lg:hidden"
+                style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+                aria-label="Primary"
+            >
+                {[
+                    { label: "Home", to: "/dashboard/home", icon: <LayoutGrid size={19} /> },
+                    { label: "Application", to: "/dashboard/status", icon: <FileText size={19} /> },
+                    { label: "Events", to: "/dashboard/events", icon: <CalendarDays size={19} /> },
+                    { label: "Profile", to: "/dashboard/profile", icon: <User size={19} /> },
+                    { label: "More", icon: <Menu size={19} />, onClick: () => setSidebarOpen(true) },
+                ].map((item) => {
+                    const active = item.to
+                        ? location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+                        : false
+                    return (
+                        <button
+                            key={item.label}
+                            type="button"
+                            onClick={item.onClick ?? (() => item.to && navigate(item.to))}
+                            aria-current={active ? "page" : undefined}
+                            className={`flex flex-1 flex-col items-center justify-center gap-[3px] py-2 text-[9.5px] font-semibold transition-colors ${active ? "text-[var(--iet-red)]" : "text-[var(--iet-muted)]"}`}
+                        >
+                            <span className="shrink-0">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </button>
+                    )
+                })}
+            </nav>
         </div>
     )
 }

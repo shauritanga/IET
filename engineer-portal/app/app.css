@@ -2844,6 +2844,11 @@
         .main.expanded {
             margin-left: 0;
         }
+
+        /* Redundant on mobile — the bottom nav's "More" opens the drawer. */
+        .sidebar-toggle {
+            display: none;
+        }
     }
 
     @media (max-width: 768px) {
