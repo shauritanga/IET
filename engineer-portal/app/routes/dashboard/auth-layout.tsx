@@ -188,6 +188,23 @@ export default function AuthLayout() {
 
     useEffect(() => { setHeaderMenuOpen(false) }, [location.pathname])
 
+    // On mobile/tablet (<1024px) the sidebar is an overlay drawer: closed by
+    // default and auto-closed after navigating; open (persistent) on desktop.
+    useEffect(() => {
+        if (typeof window === "undefined") return
+        const mq = window.matchMedia("(max-width: 1023px)")
+        const apply = () => setSidebarOpen(!mq.matches)
+        apply()
+        mq.addEventListener("change", apply)
+        return () => mq.removeEventListener("change", apply)
+    }, [])
+
+    useEffect(() => {
+        if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+            setSidebarOpen(false)
+        }
+    }, [location.pathname])
+
     const handleMembershipPromptClose = () => {
         setMembershipPromptOpen(false)
         if (typeof window === "undefined" || !authSession) return

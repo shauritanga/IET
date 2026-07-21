@@ -2828,6 +2828,22 @@
         .cpd-wrap {
             grid-template-columns: 1fr;
         }
+
+        /* Sidebar becomes an overlay drawer; content spans full width. */
+        .sidebar {
+            transform: translateX(-100%);
+            box-shadow: none;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+            box-shadow: 1px 0 12px rgba(0, 0, 0, .06);
+        }
+
+        .main,
+        .main.expanded {
+            margin-left: 0;
+        }
     }
 
     @media (max-width: 768px) {
@@ -2843,14 +2859,6 @@
         .auth-grid-2 {
             grid-template-columns: 1fr;
             gap: 0;
-        }
-
-        .sidebar {
-            transform: translateX(-100%);
-        }
-
-        .sidebar.open {
-            transform: translateX(0);
         }
 
         .apply-modal-panels {

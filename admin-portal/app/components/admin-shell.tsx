@@ -205,6 +205,28 @@ export default function AdminShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // On mobile/tablet (<1024px) the sidebar is an overlay drawer: closed by
+  // default, opened via the header toggle, and auto-closed after navigating.
+  // On desktop it is a persistent panel.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setCollapsed(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      setCollapsed(true);
+    }
+  }, [location.pathname]);
+
   const headerAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const sidebarAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
@@ -452,8 +474,16 @@ export default function AdminShell() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
+      {/* Mobile drawer backdrop */}
+      {!collapsed && (
+        <div
+          className="fixed inset-0 z-[190] bg-black/40 lg:hidden"
+          onClick={() => setCollapsed(true)}
+          aria-hidden="true"
+        />
+      )}
       <aside
-        className={`fixed inset-y-0 left-0 z-[200] flex w-[260px] flex-col border-r border-[var(--border)] bg-white shadow-[1px_0_12px_rgba(0,0,0,0.06)] transition-transform duration-[240ms] [transition-timing-function:cubic-bezier(.4,0,.2,1)] ${collapsed ? "-translate-x-full" : "translate-x-0"}`}
+        className={`fixed inset-y-0 left-0 z-[200] flex w-[260px] max-w-[85vw] flex-col border-r border-[var(--border)] bg-white shadow-[1px_0_12px_rgba(0,0,0,0.06)] transition-transform duration-[240ms] [transition-timing-function:cubic-bezier(.4,0,.2,1)] ${collapsed ? "-translate-x-full" : "translate-x-0"}`}
       >
         <div className="flex items-center gap-[11px] border-b border-[var(--border)] px-[18px] pb-[14px] pt-[18px]">
           <div className="h-10 w-10 rounded-[8px] bg-[var(--red-pale)] p-[3px]">
@@ -567,8 +597,8 @@ export default function AdminShell() {
         </div>
       </aside>
 
-      <div className={`min-h-screen transition-[margin-left] duration-[240ms] [transition-timing-function:cubic-bezier(.4,0,.2,1)] ${collapsed ? "ml-0" : "ml-[260px]"}`}>
-        <div className="sticky top-0 z-[100] flex min-h-[54px] items-center justify-between gap-4 border-b border-[var(--border)] bg-white px-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+      <div className={`min-h-screen transition-[margin-left] duration-[240ms] [transition-timing-function:cubic-bezier(.4,0,.2,1)] ${collapsed ? "ml-0" : "lg:ml-[260px]"}`}>
+        <div className="sticky top-0 z-[100] flex min-h-[54px] items-center justify-between gap-3 border-b border-[var(--border)] bg-white px-3 shadow-[0_1px_6px_rgba(0,0,0,0.04)] sm:gap-4 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-[11px]">
             <button
               type="button"
@@ -619,7 +649,7 @@ export default function AdminShell() {
                 <div
                   role="menu"
                   aria-label="Notifications"
-                  className="absolute right-0 top-[38px] z-[80] w-[380px] overflow-hidden rounded-[14px] border border-[var(--border)] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]"
+                  className="absolute right-0 top-[38px] z-[80] w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-[14px] border border-[var(--border)] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.12)]"
                 >
                   <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
                     <div>
@@ -698,7 +728,7 @@ export default function AdminShell() {
           </div>
         </div>
 
-        <main className="p-[18px]">
+        <main className="p-3 sm:p-[18px]">
           <div key={location.pathname} className="animate-page-rise">
             <Outlet />
           </div>
