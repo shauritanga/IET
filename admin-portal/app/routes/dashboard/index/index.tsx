@@ -123,11 +123,11 @@ function DashboardMetricCard({
         : "text-[var(--success)]";
 
   return (
-    <article className="cursor-default rounded-[11px] border border-[var(--border)] bg-white px-4 pb-[13px] pt-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-[2px] hover:shadow-[0_4px_18px_rgba(226,12,10,0.08)]">
+    <article className="cursor-default overflow-hidden rounded-[11px] border border-[var(--border)] bg-white px-4 pb-[13px] pt-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-[2px] hover:shadow-[0_4px_18px_rgba(226,12,10,0.08)]">
       <div className="mb-[10px] flex h-[34px] w-[34px] items-center justify-center rounded-[8px] bg-[var(--red-pale)] text-[var(--red)]">
         {icon}
       </div>
-      <div className={`font-serif-display font-bold leading-none tracking-[-1px] text-[var(--red-dark)] ${compactValue ? "text-[18px]" : "text-[24px]"}`}>
+      <div className={`font-serif-display font-bold leading-none tracking-[-1px] text-[var(--red-dark)] ${compactValue ? "text-[16px] sm:text-[18px]" : "text-[20px] sm:text-[24px]"}`}>
         {value}
       </div>
       <div className="mt-1 text-[11px] font-medium text-[var(--muted)]">{label}</div>
@@ -285,12 +285,12 @@ export default function DashboardOverviewPage() {
 
   return (
     <section>
-      <div className="mb-[18px] flex items-center justify-between gap-4">
+      <div className="mb-[18px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Dashboard Overview</h1>
           <p className="mt-[2px] text-[11px] text-[var(--muted)]">Live snapshot of IET Tanzania operations</p>
         </div>
-        <Button tone="outline">Export Report</Button>
+        <Button tone="outline" className="self-start sm:self-auto">Export Report</Button>
       </div>
 
       {pageError ? (
@@ -299,7 +299,7 @@ export default function DashboardOverviewPage() {
         </div>
       ) : null}
 
-      <div className="mb-5 grid gap-[14px] md:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-[14px] xl:grid-cols-4">
         <DashboardMetricCard
           icon={<MembersKpiIcon />}
           value={loading ? "—" : formatNumber(totalMembers)}
@@ -331,7 +331,7 @@ export default function DashboardOverviewPage() {
 
       <div className="mb-[18px] grid gap-[18px] xl:grid-cols-[1.4fr_1fr]">
         <DashboardCard title="Recent Applications" action={<Link to="/dashboard/applications">View all</Link>} bodyClassName="p-0">
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="table-proto min-w-full border-separate border-spacing-0">
               <thead>
                 <tr>
@@ -396,6 +396,39 @@ export default function DashboardOverviewPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile list */}
+          <div className="flex flex-col md:hidden">
+            {loading ? (
+              <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading applications...</div>
+            ) : recentApplications.length ? (
+              recentApplications.map((application, index) => (
+                <div
+                  key={application.id}
+                  className={`flex items-center justify-between gap-3 px-4 py-[11px] ${index < recentApplications.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <DashboardAvatar initials={initialsFromName(application.applicantName)} tone={toneFromId(application.id)} />
+                    <div className="min-w-0">
+                      <div className="truncate text-[12.5px] font-semibold">{application.applicantName}</div>
+                      <div className="text-[10.5px] text-[var(--muted)]">
+                        {application.appliedMembershipClass
+                          ? (MEMBERSHIP_CLASS_LABELS[application.appliedMembershipClass] ?? application.appliedMembershipClass)
+                          : "—"}
+                        {" · "}
+                        {formatShortDate(application.submittedAt ?? application.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                  <StatusBadge tone={statusTone(application.status)}>
+                    {application.status.replace(/_/g, " ")}
+                  </StatusBadge>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">No applications found.</div>
+            )}
+          </div>
         </DashboardCard>
 
         <DashboardCard title="Recent Payments" action={<Link to="/dashboard/payments">View all</Link>} bodyClassName="p-0">
@@ -436,7 +469,7 @@ export default function DashboardOverviewPage() {
       </div>
 
       <DashboardCard title="Recent Members" action={<Link to="/dashboard/members">View all</Link>} bodyClassName="p-0">
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="table-proto min-w-full border-separate border-spacing-0">
             <thead>
               <tr>
@@ -493,6 +526,36 @@ export default function DashboardOverviewPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile list */}
+        <div className="flex flex-col md:hidden">
+          {loading ? (
+            <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading members...</div>
+          ) : recentMembers.length ? (
+            recentMembers.map((member, index) => (
+              <div
+                key={member.id}
+                className={`flex items-center justify-between gap-3 px-4 py-[11px] ${index < recentMembers.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <DashboardAvatar initials={initialsFromName(displayMemberName(member))} tone={toneFromId(member.id)} small />
+                  <div className="min-w-0">
+                    <div className="truncate text-[12.5px] font-semibold">{displayMemberName(member)}</div>
+                    <div className="truncate text-[10.5px] text-[var(--muted)]">
+                      {member.membershipId ?? "—"}
+                      {member.membershipClass ? ` · ${MEMBERSHIP_CLASS_LABELS[member.membershipClass] ?? member.membershipClass}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <StatusBadge tone={statusTone(member.membershipStatus ?? "PENDING")}>
+                  {(member.membershipStatus ?? "PENDING").replace(/_/g, " ")}
+                </StatusBadge>
+              </div>
+            ))
+          ) : (
+            <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">No members found.</div>
+          )}
         </div>
       </DashboardCard>
     </section>
