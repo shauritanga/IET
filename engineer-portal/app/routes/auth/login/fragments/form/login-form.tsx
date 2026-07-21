@@ -8,7 +8,7 @@ import {
     writeAuthSession,
 } from "~/utils/otp-session"
 import { loginUser } from "~/routes/auth/login/requests/login-user"
-import { setToCookie, setToStorage } from "~/utils/storage"
+import { rememberDays, setRemember, setToCookie, setToStorage } from "~/utils/storage"
 import { TOKEN_KEY, USER_KEY } from "~/utils/http"
 import type { TErrorMessage } from "~/types"
 
@@ -28,6 +28,7 @@ const LoginForm = () => {
     const [emailError, setEmailError] = useState("")
     const [passwordError, setPasswordError] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [rememberMe, setRememberMe] = useState(false)
     const navigate = useNavigate()
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -55,6 +56,10 @@ const LoginForm = () => {
                 password,
             })
 
+            // Record the choice before any 2FA redirect so the tokens written
+            // after OTP verification inherit the persistence too.
+            setRemember(rememberMe)
+
             if ("validate2FA" in result) {
                 createOtpSession({
                     flow: "login-2fa",
@@ -68,10 +73,11 @@ const LoginForm = () => {
                 return
             }
 
-            setToCookie(TOKEN_KEY, result.accessToken)
-            setToCookie("global-rt", result.refreshToken)
-            setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, result.user.membershipStatus ?? "")
-            setToCookie(REGISTRATION_STATUS_COOKIE_KEY, result.user.registrationStatus ?? "")
+            const rememberTtl = rememberDays()
+            setToCookie(TOKEN_KEY, result.accessToken, rememberTtl)
+            setToCookie("global-rt", result.refreshToken, rememberTtl)
+            setToCookie(MEMBERSHIP_STATUS_COOKIE_KEY, result.user.membershipStatus ?? "", rememberTtl)
+            setToCookie(REGISTRATION_STATUS_COOKIE_KEY, result.user.registrationStatus ?? "", rememberTtl)
             setToStorage(USER_KEY, result.user)
             writeAuthSession(createAuthSession({
                 email: result.user.email,
@@ -137,8 +143,13 @@ const LoginForm = () => {
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "var(--iet-muted)", cursor: "pointer" }}>
-                        <input type="checkbox" style={{ accentColor: "var(--iet-red-dark)", width: 14, height: 14 }} />
-                        Remember me for 30 days
+                        <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            style={{ accentColor: "var(--iet-red-dark)", width: 14, height: 14 }}
+                        />
+                        Remember me for 7 days
                     </label>
                     <Link to="/auth/forgot-password" style={{ fontSize: 12.5, color: "var(--iet-red)", fontWeight: 600, textDecoration: "none" }}>
                         Forgot Password?

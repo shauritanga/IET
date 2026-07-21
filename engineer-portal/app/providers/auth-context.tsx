@@ -5,7 +5,8 @@ import {
     deleteFromStorage,
     setToCookie,
     deleteFromCookie,
-    getFromCookie
+    getFromCookie,
+    REMEMBER_KEY,
 } from "~/utils/storage";
 import {
     createAuthSession,
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         deleteFromCookie("global-rt");
         deleteFromCookie(MEMBERSHIP_STATUS_COOKIE_KEY);
         deleteFromCookie(REGISTRATION_STATUS_COOKIE_KEY);
+        deleteFromCookie(REMEMBER_KEY);
         deleteFromStorage(USER_KEY);
         clearAuthSession();
         setUser(null);

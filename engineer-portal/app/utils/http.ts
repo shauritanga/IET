@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
-import { deleteFromCookie, deleteFromStorage, getFromCookie, setToCookie } from "~/utils/storage";
+import { deleteFromCookie, deleteFromStorage, getFromCookie, rememberDays, setToCookie } from "~/utils/storage";
 import {
     clearAuthSession,
     MEMBERSHIP_STATUS_COOKIE_KEY,
@@ -99,8 +99,9 @@ const createAxiosInstance = (config: AxiosRequestConfig = {}): AxiosInstance => 
                     throw new Error("Malformed refresh token response");
                 }
 
-                setToCookie(TOKEN_KEY, nextAccessToken);
-                setToCookie(REFRESH_TOKEN_KEY, nextRefreshToken);
+                const rememberTtl = rememberDays();
+                setToCookie(TOKEN_KEY, nextAccessToken, rememberTtl);
+                setToCookie(REFRESH_TOKEN_KEY, nextRefreshToken, rememberTtl);
                 instance.defaults.headers.common["Authorization"] = `Bearer ${nextAccessToken}`;
                 processQueue(null, nextAccessToken);
                 originalRequest.headers["Authorization"] = `Bearer ${nextAccessToken}`;

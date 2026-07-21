@@ -36,9 +36,11 @@ function getSharedCookieDomain() {
   return "";
 }
 
-export function setCookie(key: string, value: string) {
+export function setCookie(key: string, value: string, maxAgeDays?: number) {
   if (typeof document === "undefined") return;
-  document.cookie = `${key}=${encodeURIComponent(value)}; path=/; ${getSharedCookieDomain()}SameSite=Strict`;
+  const ttl =
+    maxAgeDays && maxAgeDays > 0 ? `Max-Age=${Math.round(maxAgeDays * 86400)}; ` : "";
+  document.cookie = `${key}=${encodeURIComponent(value)}; path=/; ${getSharedCookieDomain()}${ttl}SameSite=Strict`;
 }
 
 export function deleteCookie(key: string) {

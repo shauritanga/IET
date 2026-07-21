@@ -11,6 +11,7 @@ import {
   ROLE_KEY,
   persistSession,
   setPendingTwoFactor,
+  setRemember,
   TOKEN_KEY,
 } from "~/utils/auth";
 import http from "~/utils/http";
@@ -64,6 +65,8 @@ export default function AdminLoginPage() {
       const result = response.data.data;
 
       if ("validate2FA" in result) {
+        // Record the choice now so the tokens written after OTP inherit it.
+        setRemember(rememberMe);
         setPendingTwoFactor({
           userId: result.validate2FA,
           email: email.trim(),
@@ -77,7 +80,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      persistSession(result.user, result.accessToken, result.refreshToken);
+      persistSession(result.user, result.accessToken, result.refreshToken, rememberMe);
       navigate("/dashboard", { replace: true });
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;

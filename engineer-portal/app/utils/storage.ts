@@ -45,10 +45,32 @@ const getSharedCookieDomain = () => {
     return "";
 };
 
-export const setToCookie = (key: string, value: string): void => {
+/**
+ * "Remember me" cookie + window. When set, auth cookies are written with a
+ * Max-Age so the session survives the browser being closed; otherwise they are
+ * session cookies that expire on browser close. 7 days matches the refresh
+ * token lifetime (JWT_REFRESH_EXPIRATION), the longest a session can live.
+ */
+export const REMEMBER_KEY = "global-remember";
+export const REMEMBER_DAYS = 7;
+
+export const setToCookie = (key: string, value: string, maxAgeDays?: number): void => {
     if (typeof document === "undefined") return;
-    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; ${getSharedCookieDomain()}SameSite=Strict`;
+    const ttl = maxAgeDays && maxAgeDays > 0
+        ? `Max-Age=${Math.round(maxAgeDays * 86400)}; `
+        : "";
+    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; ${getSharedCookieDomain()}${ttl}SameSite=Strict`;
 };
+
+/** Record the user's "remember me" choice (persisted for the remember window). */
+export const setRemember = (remember: boolean): void => {
+    if (remember) setToCookie(REMEMBER_KEY, "1", REMEMBER_DAYS);
+    else deleteFromCookie(REMEMBER_KEY);
+};
+
+/** Max-Age (days) to apply to auth cookies, or undefined for a session cookie. */
+export const rememberDays = (): number | undefined =>
+    getFromCookie(REMEMBER_KEY) === "1" ? REMEMBER_DAYS : undefined;
 
 export const getFromCookie = (key: string): string | null => {
     if (typeof document === "undefined") return null;
