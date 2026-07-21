@@ -705,7 +705,7 @@ export default function MembersPage() {
     <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Members Directory</h1>
           <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
@@ -733,7 +733,7 @@ export default function MembersPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid gap-[14px] md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-[14px] xl:grid-cols-4">
         <MembersKpiCard
           icon={<TotalMembersIcon />}
           value={loading ? "—" : total}
@@ -765,8 +765,8 @@ export default function MembersPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px", flex: 1, minWidth: 180, maxWidth: 280 }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-[260px]" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px" }}>
           <span style={{ color: "var(--muted)", flexShrink: 0 }}><SearchIcon /></span>
           <input
             type="text"
@@ -809,8 +809,8 @@ export default function MembersPage() {
           </button>
         )}
 
-        {/* View toggle */}
-        <div style={{ marginLeft: "auto", display: "flex", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 7, padding: 3, gap: 2 }}>
+        {/* View toggle (desktop only — mobile always uses cards) */}
+        <div className="ml-auto hidden sm:flex" style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 7, padding: 3, gap: 2 }}>
           {(["list", "grid"] as const).map((v) => (
             <button
               key={v}
@@ -849,37 +849,41 @@ export default function MembersPage() {
         );
 
         const renderMemberGrid = () => (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14, padding: 16 }}>
+          <div className="grid grid-cols-1 gap-2.5 p-0 sm:gap-[14px] sm:p-4 md:grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
             {pageMembers.map((member) => (
               <div key={member.id}
-                style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10, transition: "box-shadow .15s,transform .15s", background: "var(--white)" }}
-                onMouseOver={(e) => { e.currentTarget.style.boxShadow = "0 4px 18px rgba(226,12,10,.07)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                onMouseOut={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
+                className="rounded-[12px] border border-[var(--border)] bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-[box-shadow,transform] duration-150 sm:hover:-translate-y-[2px] sm:hover:shadow-[0_4px_18px_rgba(226,12,10,0.07)]"
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <MemberAvatar member={member} size={40} fontSize={13} />
+                {/* Identity + status */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <MemberAvatar member={member} size={36} fontSize={12} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName(member)}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.email}</div>
+                    </div>
+                  </div>
+                  <StatusPill status={member.membershipStatus ?? "PENDING"} />
+                </div>
+
+                {/* Details */}
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName(member)}</div>
-                    <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.email}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Grade</div>
+                    <div style={{ marginTop: 3 }}>
+                      {displayMembershipGrade(member) !== "—"
+                        ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{displayMembershipGrade(member)}</span>
+                        : <span style={{ fontSize: 11.5, color: "var(--muted)" }}>—</span>}
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Membership No.</div>
+                    <div style={{ marginTop: 3, fontSize: 11.5, fontFamily: "monospace", color: member.membershipId ? "var(--text)" : "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.membershipId ?? "—"}</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Grade</span>
-                    {displayMembershipGrade(member) !== "—"
-                      ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{displayMembershipGrade(member)}</span>
-                      : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>No.</span>
-                    <span style={{ fontSize: 10.5, fontFamily: "monospace", color: member.membershipId ? "var(--text)" : "var(--muted)" }}>{member.membershipId ?? "—"}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Status</span>
-                    <StatusPill status={member.membershipStatus ?? "PENDING"} />
-                  </div>
-                </div>
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+
+                {/* Actions */}
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
                   <ActionButtons member={member} />
                 </div>
               </div>
@@ -889,7 +893,7 @@ export default function MembersPage() {
 
         return (
           <>
-            <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+            <div className="overflow-hidden md:rounded-[14px] md:border md:border-[var(--border)] md:bg-white">
               {loading ? (
                 <div style={{ padding: "48px 20px", textAlign: "center" }}>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "var(--red-dark)", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
