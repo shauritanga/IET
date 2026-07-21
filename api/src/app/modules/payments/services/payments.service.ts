@@ -37,6 +37,13 @@ import { v4 as uuid4 } from 'uuid';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
+  // Minimum gap between authoritative gateway (Selcom order-status) re-checks
+  // for a still-pending payment. Status endpoints are polled from the portals
+  // (~every 5s per pending item); this bounds outbound gateway calls to at most
+  // one per payment per window, regardless of how aggressively clients poll.
+  // Webhook-driven completion is unaffected — it updates the DB independently,
+  // and a completed payment short-circuits the recheck below.
+  private readonly gatewayRecheckIntervalMs = 15_000;
   private readonly completedGatewayStatuses = new Set([
     'SUCCESS',
     'SUCCESSFUL',
@@ -924,6 +931,20 @@ export class PaymentsService {
       return payment;
     }
 
+    // Throttle: skip the outbound gateway call when we re-checked this pending
+    // payment moments ago. The DB already reflects that last result (and the
+    // linked registration was reconciled then), so return it as-is. A webhook
+    // that completes the payment in the meantime is handled by the guard above
+    // on the next call.
+    const lastCheckedAt = payment.providerResponse?.statusCheck?.checkedAt;
+    if (
+      lastCheckedAt &&
+      Date.now() - new Date(lastCheckedAt).getTime() <
+        this.gatewayRecheckIntervalMs
+    ) {
+      return payment;
+    }
+
     const providerReference =
       payment.mobileMoneyRef ||
       payment.transactionRef ||
@@ -954,7 +975,7 @@ export class PaymentsService {
 
     payment.providerResponse = {
       ...payment.providerResponse,
-      statusCheck: gatewayStatus,
+      statusCheck: { ...gatewayStatus, checkedAt: new Date().toISOString() },
     };
 
     const savedPayment = await this.paymentRepository.save(payment);
