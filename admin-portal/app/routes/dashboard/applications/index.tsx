@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router";
 import { Button, StatusBadge } from "~/components/prototype-ui";
+import { MobileCardList, MobileCard, MobileCardHeader, CardFieldGrid, MobileCardFooter } from "~/components/mobile-card";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -213,7 +214,7 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+      <section className="hidden overflow-hidden rounded-[12px] border border-[var(--border)] bg-white md:block">
         <div className="overflow-x-auto">
           {loading ? (
             <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading applications...</div>
@@ -296,6 +297,67 @@ export default function ApplicationsPage() {
           )}
         </div>
       </section>
+
+      {/* Mobile: card list */}
+      {loading ? (
+        <div className="space-y-2.5 md:hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5">
+              <div className="skeleton-bar mb-2 h-[14px] w-1/2" />
+              <div className="skeleton-bar h-[12px] w-2/3" />
+            </div>
+          ))}
+        </div>
+      ) : !visible.length ? (
+        <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-12 text-center text-[12px] text-[var(--muted)] md:hidden">
+          No applications found.
+        </div>
+      ) : (
+        <MobileCardList>
+          {visible.map((row) => (
+            <MobileCard key={row.id} onClick={() => navigate(`/dashboard/applications/${row.id}`)}>
+              <MobileCardHeader
+                title={
+                  <span className="flex items-center gap-2">
+                    <span className={`${avatarColor(row.id)} flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white`}>
+                      {initials(row.applicantName ?? "?")}
+                    </span>
+                    {row.applicantName}
+                  </span>
+                }
+                subtitle={row.email}
+                right={<StatusBadge tone={STATUS_TONES[row.status]}>{STATUS_LABELS[row.status]}</StatusBadge>}
+              />
+              <CardFieldGrid
+                fields={[
+                  { label: "Reference", value: row.referenceNumber ?? "-", mono: true },
+                  { label: "Grade", value: row.appliedMembershipClass ?? "-" },
+                  {
+                    label: "Stage",
+                    value: row.reviewStage ? (
+                      <StatusBadge tone={STAGE_TONES[row.reviewStage]}>{STAGE_LABELS[row.reviewStage]}</StatusBadge>
+                    ) : "-",
+                  },
+                  { label: "Submitted", value: formatDate(row.submittedAt) },
+                ]}
+              />
+              <MobileCardFooter>
+                <span className="text-[11px] text-[var(--muted)]">
+                  {row.queueOwnerRole ?? "-"}
+                  {row.reviewStage && CLAIMABLE_STAGES.includes(row.reviewStage) && (
+                    <span className={`ml-2 rounded-[5px] px-[6px] py-[1px] text-[10px] font-bold ${row.stageClaimedById ? "bg-[#f1f1f1] text-[var(--muted)]" : "bg-[#dcfce7] text-[#166534]"}`}>
+                      {row.stageClaimedById ? "Claimed" : "Available"}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[11.5px] font-semibold text-[var(--red)]">
+                  {row.status === "IN_REVIEW" ? "Review ›" : "View ›"}
+                </span>
+              </MobileCardFooter>
+            </MobileCard>
+          ))}
+        </MobileCardList>
+      )}
     </section>
   );
 }

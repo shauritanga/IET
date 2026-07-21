@@ -848,6 +848,45 @@ export default function MembersPage() {
           />
         );
 
+        const renderMemberGrid = () => (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14, padding: 16 }}>
+            {pageMembers.map((member) => (
+              <div key={member.id}
+                style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10, transition: "box-shadow .15s,transform .15s", background: "var(--white)" }}
+                onMouseOver={(e) => { e.currentTarget.style.boxShadow = "0 4px 18px rgba(226,12,10,.07)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseOut={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <MemberAvatar member={member} size={40} fontSize={13} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName(member)}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.email}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Grade</span>
+                    {displayMembershipGrade(member) !== "—"
+                      ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{displayMembershipGrade(member)}</span>
+                      : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>No.</span>
+                    <span style={{ fontSize: 10.5, fontFamily: "monospace", color: member.membershipId ? "var(--text)" : "var(--muted)" }}>{member.membershipId ?? "—"}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Status</span>
+                    <StatusPill status={member.membershipStatus ?? "PENDING"} />
+                  </div>
+                </div>
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                  <ActionButtons member={member} />
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
         return (
           <>
             <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
@@ -865,7 +904,8 @@ export default function MembersPage() {
                   <p style={{ fontSize: 11.5, color: "var(--muted)" }}>{search || statusFilter || classFilter ? "Try adjusting your filters." : "Add your first member to get started."}</p>
                 </div>
               ) : view === "list" ? (
-                <div style={{ overflowX: "auto" }}>
+                <>
+                <div className="hidden md:block" style={{ overflowX: "auto" }}>
                   <table className="table-proto min-w-full border-separate border-spacing-0">
                     <thead>
                       <tr>
@@ -904,43 +944,10 @@ export default function MembersPage() {
                     </tbody>
                   </table>
                 </div>
+                <div className="md:hidden">{renderMemberGrid()}</div>
+                </>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14, padding: 16 }}>
-                  {pageMembers.map((member) => (
-                    <div key={member.id}
-                      style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10, transition: "box-shadow .15s,transform .15s", background: "var(--white)" }}
-                      onMouseOver={(e) => { e.currentTarget.style.boxShadow = "0 4px 18px rgba(226,12,10,.07)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                      onMouseOut={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <MemberAvatar member={member} size={40} fontSize={13} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName(member)}</div>
-                          <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.email}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Grade</span>
-                          {displayMembershipGrade(member) !== "—"
-                            ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 5, padding: "1px 7px" }}>{displayMembershipGrade(member)}</span>
-                            : <span style={{ fontSize: 11, color: "var(--muted)" }}>—</span>}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>No.</span>
-                          <span style={{ fontSize: 10.5, fontFamily: "monospace", color: member.membershipId ? "var(--text)" : "var(--muted)" }}>{member.membershipId ?? "—"}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Status</span>
-                          <StatusPill status={member.membershipStatus ?? "PENDING"} />
-                        </div>
-                      </div>
-                      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                        <ActionButtons member={member} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                renderMemberGrid()
               )}
             </div>
 

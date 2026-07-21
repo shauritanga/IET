@@ -733,7 +733,7 @@ export default function EngineeringInstitutionsPage() {
         </div>
       )}
 
-      <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+      <div className="hidden md:block" style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "15px 18px", borderBottom: "1px solid var(--border)" }}>
           <div>
             <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--red-dark)" }}>Institution Directory</div>
@@ -863,6 +863,36 @@ export default function EngineeringInstitutionsPage() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Cards (mobile) */}
+      <div className="space-y-2.5 md:hidden">
+        {loading ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white" style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Loading institutions…</div>
+        ) : filteredItems.length === 0 ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white" style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>No institutions found.</div>
+        ) : (
+          filteredItems.map((item) => (
+            <div key={item.id} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5">
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{item.name}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{item.country}</div>
+                </div>
+                <RowMenu onEdit={() => openEdit(item)} onDisable={() => setDeleteTarget(item)} />
+              </div>
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 6, padding: "2px 8px" }}>
+                  {INSTITUTION_TYPE_LABELS[item.institutionType] ?? item.institutionType}
+                </span>
+                <StatusPill active={item.isActive} />
+              </div>
+              {item.notes && (
+                <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>{item.notes}</div>
+              )}
+            </div>
+          ))
         )}
       </div>
 

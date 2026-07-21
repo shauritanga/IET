@@ -423,8 +423,8 @@ export default function DisciplinesPage() {
         </div>
       )}
 
-      {/* Table */}
-      <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+      {/* Table (desktop) */}
+      <div className="hidden md:block" style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
         {loading ? (
           <div style={{ padding: "52px 20px", textAlign: "center" }}>
             <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "var(--red-dark)", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
@@ -473,6 +473,37 @@ export default function DisciplinesPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {/* Cards (mobile) */}
+      <div className="space-y-2.5 md:hidden">
+        {loading ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white" style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Loading disciplines…</div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white" style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>No disciplines yet.</div>
+        ) : (
+          rows.map(({ discipline: d, depth }) => (
+            <div key={d.id} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5" style={{ marginLeft: depth > 0 ? 16 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  {depth > 0 && <span style={{ color: "var(--muted)", fontSize: 13 }}>↳</span>}
+                  <span style={{ fontSize: 13, fontWeight: depth === 0 ? 700 : 600, color: "var(--text)" }}>{d.name}</span>
+                </div>
+                <RowMenu onEdit={() => openEdit(d)} onDelete={() => setDeleteTarget(d)} />
+              </div>
+              <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>{depth === 0 ? "Top-level" : "Sub-discipline"}</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+                  background: d.isActive ? "#dcfce7" : "#f1f1f1",
+                  color: d.isActive ? "#166534" : "var(--muted)",
+                }}>
+                  {d.isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
 

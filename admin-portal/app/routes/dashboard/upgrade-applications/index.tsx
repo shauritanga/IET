@@ -553,9 +553,9 @@ export default function UpgradeApplicationsPage() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Table (desktop) */}
       {!loading && applications.length > 0 && (
-        <div className="table-card">
+        <div className="table-card hidden md:block">
           <table className="data-table">
             <thead>
               <tr>
@@ -629,6 +629,52 @@ export default function UpgradeApplicationsPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Cards (mobile) */}
+      {!loading && applications.length > 0 && (
+        <div className="space-y-2.5 md:hidden">
+          {applications.map((app) => {
+            const name = app.applicant?.fullName ?? "Unknown";
+            const color = avatarColor(name);
+            return (
+              <div key={app.id} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div className={`member-avatar ${color}`} aria-hidden="true" style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                      {initials(name)}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{name}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.applicant?.email}</p>
+                    </div>
+                  </div>
+                  <StatusBadge tone={STATUS_TONE[app.status]}>{STATUS_LABEL[app.status]}</StatusBadge>
+                </div>
+                <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                  <span style={{ color: "var(--muted)" }}>{app.fromCategory?.name ?? "—"}</span>
+                  <span style={{ color: "var(--muted)" }}>→</span>
+                  <span style={{ fontWeight: 700, color: "var(--red-dark)" }}>{app.toCategory?.name ?? "—"}</span>
+                </div>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>Submitted {formatDate(app.submittedAt)}</span>
+                  {app.status === "PENDING" && (
+                    <Button
+                      onClick={() => setReviewModal({
+                        applicationId: app.id,
+                        applicantName: app.applicant?.fullName ?? "Unknown",
+                        fromCategoryName: app.fromCategory?.name ?? "—",
+                        toCategoryName: app.toCategory?.name ?? "—",
+                      })}
+                    >
+                      Review
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -383,6 +383,75 @@ export default function AdminUsersPage() {
     }
   }
 
+  const renderUserActions = (user: AdminUser) => (
+    <div className="inline-flex" ref={actionMenuUserId === user.id ? actionMenuTriggerRef : undefined}>
+      <button
+        type="button"
+        onClick={(event) => openMenu(user, event.currentTarget)}
+        className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[7px] border border-[var(--border)] bg-white text-[var(--muted)] transition-colors duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+        aria-label={`Open actions for ${displayName(user)}`}
+        aria-haspopup="menu"
+        aria-expanded={actionMenuUserId === user.id}
+      >
+        <MoreVertical size={15} />
+      </button>
+
+      {actionMenuUserId === user.id && (
+        <div
+          ref={actionMenuRef}
+          role="menu"
+          aria-label="User actions"
+          style={{ top: actionMenuPosition?.top ?? 0, left: actionMenuPosition?.left ?? 0 }}
+          className="fixed z-30 w-[170px] overflow-hidden rounded-[10px] border border-[var(--border)] bg-white shadow-[0_18px_42px_rgba(0,0,0,0.16)]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openView(user)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--red-pale)]"
+          >
+            <Eye size={14} className="text-[var(--muted)]" />
+            View
+          </button>
+          {canEditRow(user) && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setActionMenuUserId(null);
+                setActionMenuPosition(null);
+                openEdit(user);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--red-pale)]"
+            >
+              <PencilLine size={14} className="text-[var(--muted)]" />
+              Edit
+            </button>
+          )}
+          {canDeleteRow(user) && (
+            <>
+              <div className="h-px bg-[var(--border)]" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setActionMenuUserId(null);
+                  setActionMenuPosition(null);
+                  setDeletingUser(user);
+                  setFormError(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--red)] hover:bg-[var(--red-pale)]"
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <section>
       <PageHeader
@@ -422,7 +491,7 @@ export default function AdminUsersPage() {
             </div>
           )}
 
-          <section className="overflow-hidden rounded-[12px] border border-[var(--border)] bg-white">
+          <section className="hidden overflow-hidden rounded-[12px] border border-[var(--border)] bg-white md:block">
             <div className="overflow-x-auto">
               <table className="table-proto min-w-full border-separate border-spacing-0">
                 <thead>
@@ -461,74 +530,7 @@ export default function AdminUsersPage() {
                         <td className="text-[11.5px]">
                           {user.updatedAt ? new Date(user.updatedAt).toLocaleDateString("en-TZ") : "-"}
                         </td>
-                        <td>
-                          <div className="inline-flex" ref={actionMenuUserId === user.id ? actionMenuTriggerRef : undefined}>
-                            <button
-                              type="button"
-                              onClick={(event) => openMenu(user, event.currentTarget)}
-                              className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[7px] border border-[var(--border)] bg-white text-[var(--muted)] transition-colors duration-150 hover:border-[var(--red-light)] hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
-                              aria-label={`Open actions for ${displayName(user)}`}
-                              aria-haspopup="menu"
-                              aria-expanded={actionMenuUserId === user.id}
-                            >
-                              <MoreVertical size={15} />
-                            </button>
-
-                            {actionMenuUserId === user.id && (
-                              <div
-                                ref={actionMenuRef}
-                                role="menu"
-                                aria-label="User actions"
-                                style={{ top: actionMenuPosition?.top ?? 0, left: actionMenuPosition?.left ?? 0 }}
-                                className="fixed z-30 w-[170px] overflow-hidden rounded-[10px] border border-[var(--border)] bg-white shadow-[0_18px_42px_rgba(0,0,0,0.16)]"
-                              >
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => openView(user)}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--red-pale)]"
-                                >
-                                  <Eye size={14} className="text-[var(--muted)]" />
-                                  View
-                                </button>
-                                {canEditRow(user) && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setActionMenuUserId(null);
-                                      setActionMenuPosition(null);
-                                      openEdit(user);
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--red-pale)]"
-                                  >
-                                    <PencilLine size={14} className="text-[var(--muted)]" />
-                                    Edit
-                                  </button>
-                                )}
-                                {canDeleteRow(user) && (
-                                  <>
-                                    <div className="h-px bg-[var(--border)]" />
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => {
-                                        setActionMenuUserId(null);
-                                        setActionMenuPosition(null);
-                                        setDeletingUser(user);
-                                        setFormError(null);
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--red)] hover:bg-[var(--red-pale)]"
-                                    >
-                                      <Trash2 size={14} />
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
+                        <td>{renderUserActions(user)}</td>
                       </tr>
                     );
                   }) : (
@@ -538,6 +540,52 @@ export default function AdminUsersPage() {
               </table>
             </div>
           </section>
+
+          {/* Mobile: card list */}
+          <div className="space-y-2.5 md:hidden">
+            {loading ? (
+              <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                Loading admin users...
+              </div>
+            ) : visibleUsers.length ? (
+              visibleUsers.map((user) => (
+                <div key={user.id} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <UserAvatar user={user} />
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-bold text-[var(--text)]">{displayName(user)}</div>
+                        <div className="truncate text-[10.5px] text-[var(--muted)]">{user.email}</div>
+                      </div>
+                    </div>
+                    {renderUserActions(user)}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <RoleBadge role={user.role} />
+                    <StatusBadge tone={user.isActive ? "active" : "rejected"}>
+                      {user.isActive ? "Active" : "Inactive"}
+                    </StatusBadge>
+                    {user.phoneNumber && (
+                      <span className="text-[11px] text-[var(--muted)]">{user.phoneNumber}</span>
+                    )}
+                  </div>
+                  {user.disciplines && user.disciplines.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {user.disciplines.map((d) => (
+                        <span key={d.id} className="rounded-full bg-[var(--red-pale)] px-2 py-[2px] text-[10px] font-semibold text-[var(--red-dark)]">
+                          {d.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-12 text-center text-[12px] text-[var(--muted)]">
+                No admin users found.
+              </div>
+            )}
+          </div>
         </>
       )}
 

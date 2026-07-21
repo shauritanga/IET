@@ -542,8 +542,8 @@ export default function MembershipCategoriesPage() {
         </div>
       )}
 
-      {/* Table */}
-      <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
+      {/* Table (desktop) */}
+      <div className="hidden md:block" style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
         {loading ? (
           <div style={{ padding: "52px 20px", textAlign: "center" }}>
             <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "var(--red-dark)", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
@@ -641,6 +641,46 @@ export default function MembershipCategoriesPage() {
               );
             })()}
           </div>
+        )}
+      </div>
+
+      {/* Cards (mobile) */}
+      <div className="space-y-2.5 md:hidden">
+        {loading ? (
+          <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>Loading categories…</div>
+        ) : categories.length === 0 ? (
+          <div className="rounded-[12px] border border-[var(--border)] bg-white" style={{ padding: "40px 20px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>No categories yet.</div>
+        ) : (
+          categories.map((cat) => (
+            <div key={cat.id} className="rounded-[12px] border border-[var(--border)] bg-white p-3.5">
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--red-pale)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--red)", flexShrink: 0 }}>
+                    <BadgeIcon />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{cat.name}</div>
+                    {cat.description && (
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.5 }}>{cat.description}</div>
+                    )}
+                  </div>
+                </div>
+                <RowMenu onEdit={() => openEdit(cat)} onDelete={() => setDeleteTarget(cat)} />
+              </div>
+              <div style={{ marginTop: 12, display: "flex", gap: 24, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Annual Fee</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: feeColor(cat.yearlyFee), marginTop: 2 }}>{formatFee(cat.yearlyFee)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Min. Experience</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginTop: 2 }}>
+                    {cat.minYearsExperience === 0 ? "No minimum" : `${cat.minYearsExperience} yr${cat.minYearsExperience !== 1 ? "s" : ""}`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
 
