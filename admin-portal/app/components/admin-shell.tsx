@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText, ArrowUpRight } from "lucide-react";
+import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText, ArrowUpRight, LayoutDashboard, Users, CreditCard, Menu } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
@@ -732,8 +732,45 @@ export default function AdminShell() {
           <div key={location.pathname} className="animate-page-rise">
             <Outlet />
           </div>
+          {/* Spacer so content clears the fixed mobile bottom nav */}
+          <div className="h-[64px] lg:hidden" aria-hidden="true" />
         </main>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-[100] flex items-stretch border-t border-[var(--border)] bg-white lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        aria-label="Primary"
+      >
+        {[
+          { label: "Dashboard", to: "/dashboard", exact: true, icon: <LayoutDashboard size={19} /> },
+          { label: "Applications", to: "/dashboard/applications", icon: <FileText size={19} /> },
+          { label: "Members", to: "/dashboard/members", icon: <Users size={19} /> },
+          { label: "Payments", to: "/dashboard/payments", icon: <CreditCard size={19} /> },
+          { label: "More", icon: <Menu size={19} />, onClick: () => setCollapsed(false) },
+        ].map((item) => {
+          const active = item.to
+            ? item.exact
+              ? location.pathname === item.to
+              : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+            : false;
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick ?? (() => item.to && navigate(item.to))}
+              aria-current={active ? "page" : undefined}
+              className={`flex flex-1 flex-col items-center justify-center gap-[3px] py-2 text-[9.5px] font-semibold transition-colors ${
+                active ? "text-[var(--red)]" : "text-[var(--muted)]"
+              }`}
+            >
+              <span className="shrink-0">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
