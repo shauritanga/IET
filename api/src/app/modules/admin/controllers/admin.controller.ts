@@ -567,6 +567,17 @@ export class AdminController {
     };
   }
 
+  @Delete('payments/:id')
+  @ApiOperation({
+    summary: 'Delete a failed or cancelled payment (super admin only)',
+  })
+  async deletePayment(
+    @GetUser() admin: UserEntity,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.adminService.deletePayment(admin, id);
+  }
+
   // ============================================
   // ANALYTICS
   // ============================================

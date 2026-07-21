@@ -1,7 +1,8 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState } from "react";
-import { Button, StatusBadge } from "~/components/prototype-ui";
+import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
+import { getStoredUser } from "~/utils/auth";
 import type { ApiEnvelope } from "~/types";
 
 type PaymentRecord = {
@@ -195,6 +196,39 @@ export default function PaymentsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
+  const isSuperAdmin = getStoredUser()?.role === "SUPER_ADMIN";
+  const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Only actual (failed/cancelled) payment records may be deleted — never
+  // membership-fee rows or completed/in-flight payments.
+  function canDelete(p: PaymentRecord) {
+    return (
+      isSuperAdmin &&
+      p.source === "PAYMENT" &&
+      (p.status === "FAILED" || p.status === "CANCELLED")
+    );
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await http.delete(`/admin/payments/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      setToast("Payment deleted.");
+      setTimeout(() => setToast(null), 3000);
+      await loadPayments();
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setToast(apiError.response?.data?.message ?? "Failed to delete payment.");
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function loadPayments() {
     setLoading(true);
     setPageError(null);
@@ -346,6 +380,7 @@ export default function PaymentsPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Receipt</th>
+                  {isSuperAdmin && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -390,11 +425,26 @@ export default function PaymentsPage() {
                         <span className="text-[11px] text-[var(--muted)]">—</span>
                       )}
                     </td>
+                    {isSuperAdmin && (
+                      <td>
+                        {canDelete(p) ? (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(p)}
+                            className="text-[11.5px] font-semibold text-[#dc2626] hover:underline"
+                          >
+                            Delete
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-[var(--muted)]">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {!loading && payments.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
+                    <td colSpan={isSuperAdmin ? 10 : 9} className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
                       No payments found.
                     </td>
                   </tr>
@@ -452,6 +502,45 @@ export default function PaymentsPage() {
         </div>
       )}
       </section>
+
+      {toast && (
+        <div className="fixed right-5 top-5 z-[6000] rounded-[10px] bg-[#111] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+          {toast}
+        </div>
+      )}
+
+      <Modal
+        title="Delete Payment"
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button tone="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button tone="red" onClick={() => void handleDelete()} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete Payment"}
+            </Button>
+          </div>
+        }
+      >
+        {deleteTarget ? (
+          <div className="space-y-3">
+            <p className="text-[12px] text-[var(--text)]">
+              Permanently delete this <strong>{deleteTarget.status}</strong> payment
+              {deleteTarget.memberName ? <> for <strong>{deleteTarget.memberName}</strong></> : null}?
+            </p>
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px] text-[var(--muted)]">
+              <div>Ref: <span className="font-mono">{deleteTarget.transactionRef}</span></div>
+              <div>Amount: {formatMoney(deleteTarget.amount, deleteTarget.currency)}</div>
+            </div>
+            <p className="text-[11px] text-[var(--muted)]">
+              This removes the payment record only. It does not affect the member&rsquo;s
+              application or event registration, which can still be paid again.
+            </p>
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
 }

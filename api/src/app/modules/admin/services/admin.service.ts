@@ -310,6 +310,12 @@ export class AdminService {
     }
   }
 
+  private assertSuperAdmin(actor: Pick<UserEntity, 'role'>): void {
+    if (actor.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only super admins can perform this action');
+    }
+  }
+
   /** Admins and super admins may manage portal users. */
   private assertCanManagePortalUsers(actor: Pick<UserEntity, 'role'>): void {
     if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
@@ -2141,6 +2147,33 @@ export class AdminService {
       years,
       summary,
     };
+  }
+
+  /**
+   * Delete an unsuccessful (failed or cancelled) payment record. Restricted to
+   * super admins. Completed/refunded and in-flight (pending/processing)
+   * payments are protected — those are financial records or may still settle.
+   */
+  async deletePayment(actor: UserEntity, paymentId: string) {
+    this.assertSuperAdmin(actor);
+
+    const payment = await this.paymentRepository.findOneBy({ id: paymentId });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    const deletable = [PaymentStatus.FAILED, PaymentStatus.CANCELLED];
+    if (!deletable.includes(payment.status)) {
+      throw new BadRequestException(
+        'Only failed or cancelled payments can be deleted',
+      );
+    }
+
+    await this.paymentRepository.remove(payment);
+    this.logger.log(
+      `Payment ${paymentId} (${payment.status}) deleted by super admin ${actor.id}`,
+    );
+    return { success: true, message: 'Payment deleted successfully' };
   }
 
   async importMembers(file: Express.Multer.File): Promise<LegacyMemberImportResult> {
