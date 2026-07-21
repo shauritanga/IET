@@ -43,13 +43,6 @@ type ApplicationDetail = {
   stageHistory: Array<{ fromStage?: ReviewStage; toStage: ReviewStage; action: string; comments?: string; createdAt: string }>;
 };
 
-type EvaluatorUser = {
-  id: string;
-  fullName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  email: string;
-};
 
 const STAGE_LABELS: Record<ReviewStage, string> = {
   SECRETARIAT_REVIEW: "Secretariat Review",
@@ -104,9 +97,6 @@ function actionLabel(action: string) {
     .join(" ");
 }
 
-function evaluatorName(evaluator: EvaluatorUser) {
-  return evaluator.fullName || `${evaluator.firstName ?? ""} ${evaluator.lastName ?? ""}`.trim() || evaluator.email;
-}
 
 function DetailRows({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   return (
@@ -176,13 +166,11 @@ export default function ApplicationReviewPage() {
   const navigate = useNavigate();
   const currentUser = getStoredUser();
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
-  const [evaluators, setEvaluators] = useState<EvaluatorUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [comments, setComments] = useState("");
-  const [selectedEvaluatorId, setSelectedEvaluatorId] = useState("");
   const [membershipClass, setMembershipClass] = useState("MIET");
 
   async function loadDetail() {
@@ -193,7 +181,6 @@ export default function ApplicationReviewPage() {
       const { data } = await http.get<ApiEnvelope<ApplicationDetail>>(`/admin/applications/${applicationId}`);
       setDetail(data.data);
       setMembershipClass(data.data.appliedMembershipClass ?? "MIET");
-      setSelectedEvaluatorId(data.data.assignedEvaluatorId ?? "");
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
       setError(apiErr.response?.data?.message ?? "Failed to load application.");
@@ -204,15 +191,6 @@ export default function ApplicationReviewPage() {
 
   useEffect(() => {
     void loadDetail();
-    async function loadEvaluators() {
-      try {
-        const { data } = await http.get<ApiEnvelope<EvaluatorUser[]>>("/admin/users/evaluators");
-        setEvaluators(data.data ?? []);
-      } catch {
-        setEvaluators([]);
-      }
-    }
-    void loadEvaluators();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationId]);
 
@@ -238,10 +216,6 @@ export default function ApplicationReviewPage() {
 
   async function performAction(action: string) {
     if (!detail) return;
-    if (action === "ASSIGN_EVALUATOR" && !selectedEvaluatorId) {
-      setActionError("Select an evaluator before assigning this application.");
-      return;
-    }
     if (["EVALUATOR_RECOMMEND", "MPDC_RECOMMEND", "COUNCIL_RECOMMEND", "REJECT", "RETURN_FOR_CHANGES"].includes(action) && !comments.trim()) {
       setActionError("Comments or reason are required for this action.");
       return;
@@ -253,7 +227,6 @@ export default function ApplicationReviewPage() {
         action,
         comments: comments.trim() || undefined,
       };
-      if (action === "ASSIGN_EVALUATOR") payload.evaluatorId = selectedEvaluatorId;
       if (action === "APPROVE") payload.membershipClass = membershipClass;
       if (action === "CLAIM") payload.comments = undefined;
       await http.patch(`/admin/applications/${detail.id}/stage`, payload);
