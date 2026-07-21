@@ -111,6 +111,20 @@ const PANEL_ROLES = [
 const isPanelRole = (role: UserRole): boolean =>
   PANEL_ROLES.includes(role as (typeof PANEL_ROLES)[number]);
 
+// Portal roles a plain ADMIN (not SUPER_ADMIN) is allowed to create and manage.
+// The ADMIN and SUPER_ADMIN roles are intentionally excluded so an admin cannot
+// escalate privileges — only a super admin can manage admin accounts.
+const ADMIN_MANAGEABLE_ROLES = [
+  UserRole.SECRETARIAT,
+  UserRole.EVALUATOR,
+  UserRole.MPDC,
+  UserRole.COUNCIL,
+  UserRole.REVIEWER,
+] as const;
+
+const isAdminManageableRole = (role: UserRole): boolean =>
+  ADMIN_MANAGEABLE_ROLES.includes(role as (typeof ADMIN_MANAGEABLE_ROLES)[number]);
+
 const FISCAL_YEAR_SETTING_KEY = 'membership_fiscal_year';
 const DEFAULT_FISCAL_YEAR_SETTINGS: FiscalYearSettingsDto = {
   startMonth: 7,
@@ -290,15 +304,43 @@ export class AdminService {
     return documents;
   }
 
-  private assertSuperAdmin(user: Pick<UserEntity, 'role'>): void {
-    if (user.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Only super admins can manage portal users');
-    }
-  }
-
   private assertPortalRole(role: UserRole): void {
     if (!PORTAL_ROLES.includes(role as (typeof PORTAL_ROLES)[number])) {
       throw new BadRequestException('Role is not allowed for admin portal users');
+    }
+  }
+
+  /** Admins and super admins may manage portal users. */
+  private assertCanManagePortalUsers(actor: Pick<UserEntity, 'role'>): void {
+    if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('You are not allowed to manage portal users');
+    }
+  }
+
+  /** A role the actor is permitted to assign to a portal user. */
+  private assertCanAssignRole(actor: Pick<UserEntity, 'role'>, role: UserRole): void {
+    this.assertPortalRole(role);
+    if (actor.role === UserRole.SUPER_ADMIN) return;
+    if (!isAdminManageableRole(role)) {
+      throw new ForbiddenException(
+        'Only a super admin can assign the Admin or Super Admin role',
+      );
+    }
+  }
+
+  /** Whether the actor may modify or delete an existing portal user. */
+  private assertCanManageTarget(
+    actor: Pick<UserEntity, 'role'>,
+    target: Pick<UserEntity, 'role'>,
+  ): void {
+    if (actor.role === UserRole.SUPER_ADMIN) return;
+    if (
+      target.role === UserRole.ADMIN ||
+      target.role === UserRole.SUPER_ADMIN
+    ) {
+      throw new ForbiddenException(
+        'Only a super admin can manage Admin or Super Admin accounts',
+      );
     }
   }
 
@@ -436,7 +478,7 @@ export class AdminService {
     pageSize: number;
     totalPages: number;
   }> {
-    this.assertSuperAdmin(actor);
+    this.assertCanManagePortalUsers(actor);
 
     const { page = 1, limit = 20, role, isActive, search } = query;
     const pageSize = Math.min(limit, 100);
@@ -481,8 +523,8 @@ export class AdminService {
   }
 
   async createAdminUser(actor: UserEntity, dto: CreateAdminUserDto) {
-    this.assertSuperAdmin(actor);
-    this.assertPortalRole(dto.role);
+    this.assertCanManagePortalUsers(actor);
+    this.assertCanAssignRole(actor, dto.role);
 
     const existing = await this.userRepository.findOneBy({ email: dto.email });
     if (existing) {
@@ -565,12 +607,15 @@ export class AdminService {
     userId: string,
     dto: UpdateAdminUserDto,
   ) {
-    this.assertSuperAdmin(actor);
+    this.assertCanManagePortalUsers(actor);
 
     const user = await this.userRepository.findOneBy({ id: userId });
     if (!user || !PORTAL_ROLES.includes(user.role as any)) {
       throw new NotFoundException('Admin portal user not found');
     }
+
+    // A plain admin may not modify Admin/Super Admin accounts.
+    this.assertCanManageTarget(actor, user);
 
     if (actor.id === userId) {
       if (dto.isActive === false) {
@@ -582,7 +627,7 @@ export class AdminService {
     }
 
     if (dto.role) {
-      this.assertPortalRole(dto.role);
+      this.assertCanAssignRole(actor, dto.role);
       user.role = dto.role;
     }
     if (typeof dto.isActive === 'boolean') user.isActive = dto.isActive;
@@ -607,7 +652,7 @@ export class AdminService {
   }
 
   async getAdminUser(actor: UserEntity, userId: string) {
-    this.assertSuperAdmin(actor);
+    this.assertCanManagePortalUsers(actor);
 
     const user = await this.userRepository.findOneBy({ id: userId });
     if (!user || !PORTAL_ROLES.includes(user.role as any)) {
@@ -619,12 +664,15 @@ export class AdminService {
   }
 
   async deleteAdminUser(actor: UserEntity, userId: string): Promise<void> {
-    this.assertSuperAdmin(actor);
+    this.assertCanManagePortalUsers(actor);
 
     const user = await this.userRepository.findOneBy({ id: userId });
     if (!user || !PORTAL_ROLES.includes(user.role as any)) {
       throw new NotFoundException('Admin portal user not found');
     }
+
+    // A plain admin may not delete Admin/Super Admin accounts.
+    this.assertCanManageTarget(actor, user);
 
     if (user.id === actor.id) {
       throw new BadRequestException('You cannot delete your own account');

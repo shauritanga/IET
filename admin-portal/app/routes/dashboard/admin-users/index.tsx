@@ -51,8 +51,16 @@ const ROLE_OPTIONS: AdminRole[] = [
 
 const PANEL_ROLES: AdminRole[] = ["EVALUATOR", "MPDC", "COUNCIL"];
 
+// Roles a plain ADMIN may assign/manage. Only a SUPER_ADMIN can manage the
+// ADMIN and SUPER_ADMIN roles (mirrors the backend guard).
+const ELEVATED_ROLES: AdminRole[] = ["ADMIN", "SUPER_ADMIN"];
+
 function isPanelRole(role: AdminRole): boolean {
   return PANEL_ROLES.includes(role);
+}
+
+function isElevatedRole(role: AdminRole): boolean {
+  return ELEVATED_ROLES.includes(role);
 }
 
 const EMPTY_FORM: AdminUserForm = {
@@ -160,7 +168,12 @@ function TextField({
 
 export default function AdminUsersPage() {
   const currentUser = getStoredUser();
-  const canManage = currentUser?.role === "SUPER_ADMIN";
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const canManage = isSuperAdmin || currentUser?.role === "ADMIN";
+  // Roles the current actor may assign in the create/edit form.
+  const assignableRoles = isSuperAdmin
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((role) => !isElevatedRole(role));
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuTriggerRef = useRef<HTMLDivElement | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -272,12 +285,19 @@ export default function AdminUsersPage() {
     setModalOpen(true);
   }
 
+  // A plain admin may not manage Admin/Super Admin accounts; a super admin may
+  // manage everyone except other super admins.
+  function canManageTarget(user: AdminUser) {
+    if (!canManage || user.id === currentUser?.id) return false;
+    return isSuperAdmin ? user.role !== "SUPER_ADMIN" : !isElevatedRole(user.role);
+  }
+
   function canEditRow(user: AdminUser) {
-    return canManage && user.id !== currentUser?.id && user.role !== "SUPER_ADMIN";
+    return canManageTarget(user);
   }
 
   function canDeleteRow(user: AdminUser) {
-    return canManage && user.id !== currentUser?.id && user.role !== "SUPER_ADMIN";
+    return canManageTarget(user);
   }
 
   function openView(user: AdminUser) {
@@ -373,7 +393,7 @@ export default function AdminUsersPage() {
 
       {!canManage ? (
         <div className="rounded-[12px] border border-[var(--border)] bg-white px-5 py-8 text-center text-[12px] text-[var(--muted)]">
-          Only super admins can manage portal users.
+          You do not have permission to manage portal users.
         </div>
       ) : (
         <>
@@ -562,7 +582,7 @@ export default function AdminUsersPage() {
                 onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value as AdminRole }))}
                 className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
                 >
-                  {ROLE_OPTIONS.map((role) => (
+                  {assignableRoles.map((role) => (
                     <option key={role} value={role}>{roleLabel(role)}</option>
                   ))}
               </select>
