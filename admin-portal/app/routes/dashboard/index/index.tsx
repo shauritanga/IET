@@ -285,12 +285,12 @@ export default function DashboardOverviewPage() {
 
   return (
     <section>
-      <div className="mb-[18px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div>
+      <div className="mb-[18px] flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Dashboard Overview</h1>
-          <p className="mt-[2px] text-[11px] text-[var(--muted)]">Live snapshot of IET Tanzania operations</p>
+          <p className="mt-[2px] truncate text-[11px] text-[var(--muted)]">Live snapshot of IET Tanzania operations</p>
         </div>
-        <Button tone="outline" className="self-start sm:self-auto">Export Report</Button>
+        <Button tone="outline" className="shrink-0">Export Report</Button>
       </div>
 
       {pageError ? (

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router";
 import { Button, StatusBadge } from "~/components/prototype-ui";
-import { MobileCardList, MobileCard, MobileCardHeader, CardFieldGrid, MobileCardFooter } from "~/components/mobile-card";
+import { MobileCardList, MobileCard, CardFieldGrid } from "~/components/mobile-card";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -111,16 +111,18 @@ function FilterSelect({
   value,
   options,
   onChange,
+  className = "",
 }: {
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  className?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+      className={`h-[34px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white ${className}`}
     >
       {options.map((opt) => <option key={opt}>{opt}</option>)}
     </select>
@@ -188,22 +190,22 @@ export default function ApplicationsPage() {
 
   return (
     <section>
-      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-[18px] flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Membership Applications</h1>
           <p className="mt-[2px] text-[11px] text-[var(--muted)]">
             Secretariat controls progression; review bodies return recommendations for the next level
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search applicant or reference..."
-            className="h-[34px] w-[230px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)]"
+            className="col-span-2 h-[34px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)] sm:w-[230px]"
           />
-          <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
-          <FilterSelect value={stageFilter} onChange={setStageFilter} options={stageOptions} />
+          <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="w-full sm:w-auto" />
+          <FilterSelect value={stageFilter} onChange={setStageFilter} options={stageOptions} className="w-full sm:w-auto" />
         </div>
       </div>
 
@@ -316,44 +318,46 @@ export default function ApplicationsPage() {
         <MobileCardList>
           {visible.map((row) => (
             <MobileCard key={row.id} onClick={() => navigate(`/dashboard/applications/${row.id}`)}>
-              <MobileCardHeader
-                title={
-                  <span className="flex items-center gap-2">
-                    <span className={`${avatarColor(row.id)} flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white`}>
-                      {initials(row.applicantName ?? "?")}
-                    </span>
-                    {row.applicantName}
+              {/* Identity + status */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className={`${avatarColor(row.id)} flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white`}>
+                    {initials(row.applicantName ?? "?")}
                   </span>
-                }
-                subtitle={row.email}
-                right={<StatusBadge tone={STATUS_TONES[row.status]}>{STATUS_LABELS[row.status]}</StatusBadge>}
-              />
-              <CardFieldGrid
-                fields={[
-                  { label: "Reference", value: row.referenceNumber ?? "-", mono: true },
-                  { label: "Grade", value: row.appliedMembershipClass ?? "-" },
-                  {
-                    label: "Stage",
-                    value: row.reviewStage ? (
-                      <StatusBadge tone={STAGE_TONES[row.reviewStage]}>{STAGE_LABELS[row.reviewStage]}</StatusBadge>
-                    ) : "-",
-                  },
-                  { label: "Submitted", value: formatDate(row.submittedAt) },
-                ]}
-              />
-              <MobileCardFooter>
-                <span className="text-[11px] text-[var(--muted)]">
-                  {row.queueOwnerRole ?? "-"}
-                  {row.reviewStage && CLAIMABLE_STAGES.includes(row.reviewStage) && (
-                    <span className={`ml-2 rounded-[5px] px-[6px] py-[1px] text-[10px] font-bold ${row.stageClaimedById ? "bg-[#f1f1f1] text-[var(--muted)]" : "bg-[#dcfce7] text-[#166534]"}`}>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-bold text-[var(--text)]">{row.applicantName}</div>
+                    <div className="truncate text-[10.5px] text-[var(--muted)]">{row.email}</div>
+                  </div>
+                </div>
+                <StatusBadge tone={STATUS_TONES[row.status]}>{STATUS_LABELS[row.status]}</StatusBadge>
+              </div>
+
+              {/* Stage + claim */}
+              {row.reviewStage && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={STAGE_TONES[row.reviewStage]}>{STAGE_LABELS[row.reviewStage]}</StatusBadge>
+                  {CLAIMABLE_STAGES.includes(row.reviewStage) && (
+                    <span className={`rounded-full px-[7px] py-[2px] text-[10px] font-bold ${row.stageClaimedById ? "bg-[#f1f1f1] text-[var(--muted)]" : "bg-[#dcfce7] text-[#166534]"}`}>
                       {row.stageClaimedById ? "Claimed" : "Available"}
                     </span>
                   )}
-                </span>
-                <span className="text-[11.5px] font-semibold text-[var(--red)]">
+                </div>
+              )}
+
+              <CardFieldGrid
+                fields={[
+                  { label: "Reference", value: row.referenceNumber ?? "-", mono: true },
+                  { label: "Grade Applied", value: row.appliedMembershipClass ?? "-" },
+                  { label: "Owner", value: row.queueOwnerRole ?? "-" },
+                  { label: "Submitted", value: formatDate(row.submittedAt) },
+                ]}
+              />
+
+              <div className="mt-3 flex justify-end border-t border-[var(--border)] pt-2.5">
+                <span className="text-[11.5px] font-bold text-[var(--red)]">
                   {row.status === "IN_REVIEW" ? "Review ›" : "View ›"}
                 </span>
-              </MobileCardFooter>
+              </div>
             </MobileCard>
           ))}
         </MobileCardList>
