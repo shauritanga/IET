@@ -1,6 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import http from "~/utils/http";
 import type { AdminStats, ApiEnvelope, MemberSummary } from "~/types";
 import { Avatar, Button, StatusBadge } from "~/components/prototype-ui";
@@ -211,6 +211,7 @@ function applicationActionLabel(status: string) {
 }
 
 export default function DashboardOverviewPage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [recentApplications, setRecentApplications] = useState<DashboardApplicationRow[]>([]);
   const [recentPayments, setRecentPayments] = useState<DashboardPaymentRow[]>([]);
@@ -381,7 +382,7 @@ export default function DashboardOverviewPage() {
                           </StatusBadge>
                         </td>
                         <td>
-                          <Button tone={actionTone}>{applicationActionLabel(application.status)}</Button>
+                          <Button tone={actionTone} onClick={() => navigate(`/dashboard/applications/${application.id}`)}>{applicationActionLabel(application.status)}</Button>
                         </td>
                       </tr>
                     );
@@ -403,9 +404,11 @@ export default function DashboardOverviewPage() {
               <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading applications...</div>
             ) : recentApplications.length ? (
               recentApplications.map((application, index) => (
-                <div
+                <button
                   key={application.id}
-                  className={`flex items-center justify-between gap-3 px-4 py-[11px] ${index < recentApplications.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+                  type="button"
+                  onClick={() => navigate(`/dashboard/applications/${application.id}`)}
+                  className={`flex w-full items-center justify-between gap-3 px-4 py-[11px] text-left transition-colors active:bg-[var(--red-pale)] ${index < recentApplications.length - 1 ? "border-b border-[var(--border)]" : ""}`}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <DashboardAvatar initials={initialsFromName(application.applicantName)} tone={toneFromId(application.id)} />
@@ -423,7 +426,7 @@ export default function DashboardOverviewPage() {
                   <StatusBadge tone={statusTone(application.status)}>
                     {application.status.replace(/_/g, " ")}
                   </StatusBadge>
-                </div>
+                </button>
               ))
             ) : (
               <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">No applications found.</div>
@@ -513,7 +516,7 @@ export default function DashboardOverviewPage() {
                       </StatusBadge>
                     </td>
                     <td>
-                      <Button tone="outline">View</Button>
+                      <Button tone="outline" onClick={() => navigate(`/dashboard/members/${member.id}`)}>View</Button>
                     </td>
                   </tr>
                 ))
@@ -534,9 +537,11 @@ export default function DashboardOverviewPage() {
             <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">Loading members...</div>
           ) : recentMembers.length ? (
             recentMembers.map((member, index) => (
-              <div
+              <button
                 key={member.id}
-                className={`flex items-center justify-between gap-3 px-4 py-[11px] ${index < recentMembers.length - 1 ? "border-b border-[var(--border)]" : ""}`}
+                type="button"
+                onClick={() => navigate(`/dashboard/members/${member.id}`)}
+                className={`flex w-full items-center justify-between gap-3 px-4 py-[11px] text-left transition-colors active:bg-[var(--red-pale)] ${index < recentMembers.length - 1 ? "border-b border-[var(--border)]" : ""}`}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <DashboardAvatar initials={initialsFromName(displayMemberName(member))} tone={toneFromId(member.id)} small />
@@ -551,7 +556,7 @@ export default function DashboardOverviewPage() {
                 <StatusBadge tone={statusTone(member.membershipStatus ?? "PENDING")}>
                   {(member.membershipStatus ?? "PENDING").replace(/_/g, " ")}
                 </StatusBadge>
-              </div>
+              </button>
             ))
           ) : (
             <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">No members found.</div>
