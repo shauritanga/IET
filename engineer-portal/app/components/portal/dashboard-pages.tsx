@@ -768,19 +768,19 @@ export const DashboardEventsPage = () => {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                 <div>
                     <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--iet-red-dark)" }}>Events &amp; Training</h3>
-                    <p style={{ fontSize: 11.5, color: "var(--iet-muted)", marginTop: 2 }}>Upcoming IET conferences, workshops and CPD programmes</p>
+                    <p className="hidden sm:block" style={{ fontSize: 11.5, color: "var(--iet-muted)", marginTop: 2 }}>Upcoming IET conferences, workshops and CPD programmes</p>
                 </div>
-                <Link to="/dashboard/events/my-registrations" className="btn btn-red btn-sm">My Registrations</Link>
+                <Link to="/dashboard/events/my-registrations" className="btn btn-red btn-sm shrink-0">My Registrations</Link>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <div className="ev-search-box" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 11px", width: 200, flexShrink: 0 }}>
+            <div className="flex flex-wrap items-center gap-2 mb-[14px]">
+                <div className="ev-search-box w-full sm:w-[200px]" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 11px", flexShrink: 0 }}>
                     <SearchIcon width="12" height="12" stroke="var(--iet-muted)" />
-                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" style={{ border: "none", background: "transparent", outline: "none", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", width: "100%" }} />
+                    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" style={{ border: "none", background: "transparent", outline: "none", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", width: "100%", minWidth: 0 }} />
                 </div>
 
-                <div style={{ position: "relative" }}>
-                    <select value={type} onChange={(e) => setType(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                <div className="min-w-0 flex-1 sm:flex-none" style={{ position: "relative" }}>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className="w-full sm:w-auto" style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         {EVENT_TYPE_FILTERS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
@@ -788,8 +788,8 @@ export const DashboardEventsPage = () => {
                     <ChevronDownIcon width="10" height="10" stroke="var(--iet-muted)" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
                 </div>
 
-                <div style={{ position: "relative" }}>
-                    <select value={location} onChange={(e) => setLocation(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                <div className="min-w-0 flex-1 sm:flex-none" style={{ position: "relative" }}>
+                    <select value={location} onChange={(e) => setLocation(e.target.value)} className="w-full sm:w-auto" style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         <option value="">All Locations</option>
                         <option value="Dar es Salaam">Dar es Salaam</option>
                         <option value="Arusha">Arusha</option>
@@ -799,8 +799,8 @@ export const DashboardEventsPage = () => {
                     <ChevronDownIcon width="10" height="10" stroke="var(--iet-muted)" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
                 </div>
 
-                <div style={{ position: "relative" }}>
-                    <select value={cost} onChange={(e) => setCost(e.target.value)} style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
+                <div className="hidden min-w-0 flex-1 sm:block sm:flex-none" style={{ position: "relative" }}>
+                    <select value={cost} onChange={(e) => setCost(e.target.value)} className="w-full sm:w-auto" style={{ appearance: "none", background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "6px 26px 6px 11px", fontFamily: "Montserrat,sans-serif", fontSize: 12, color: "var(--iet-text)", cursor: "pointer", outline: "none" }}>
                         <option value="">All Costs</option>
                         <option value="free">Free</option>
                         <option value="paid">Paid</option>
@@ -808,9 +808,9 @@ export const DashboardEventsPage = () => {
                     <ChevronDownIcon width="10" height="10" stroke="var(--iet-muted)" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
                 </div>
 
-                <button className="btn btn-outline btn-sm" onClick={() => { setQuery(""); setType(""); setLocation(""); setCost("") }}>Clear</button>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: "flex", gap: 2, background: "var(--iet-bg)", border: "1px solid var(--iet-border)", borderRadius: 7, padding: 3, flexShrink: 0 }}>
+                <button className="btn btn-outline btn-sm hidden sm:inline-flex" onClick={() => { setQuery(""); setType(""); setLocation(""); setCost("") }}>Clear</button>
+                <div className="hidden sm:block" style={{ flex: 1 }} />
+                <div className="hidden sm:flex" style={{ gap: 2, background: "var(--iet-bg)", border: "1px solid var(--iet-border)", borderRadius: 7, padding: 3, flexShrink: 0 }}>
                     <button onClick={() => setView("list")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "list" ? "var(--iet-white)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "list" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "list" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><ListIcon width="13" height="13" /></button>
                     <button onClick={() => setView("grid")} style={{ width: 28, height: 26, border: "none", borderRadius: 5, background: view === "grid" ? "var(--iet-white)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: view === "grid" ? "var(--iet-red-dark)" : "var(--iet-muted)", boxShadow: view === "grid" ? "0 1px 3px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}><GridIcon width="13" height="13" /></button>
                 </div>
@@ -842,36 +842,41 @@ export const DashboardEventsPage = () => {
                         return (
                             <div
                                 key={event.id}
-                                style={{ background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 10, display: "flex", alignItems: "center", padding: "14px 18px", gap: 18, transition: "border-color .15s,box-shadow .15s" }}
+                                className="gap-3 px-[14px] sm:gap-[18px] sm:px-[18px]"
+                                style={{ background: "var(--iet-white)", border: "1px solid var(--iet-border)", borderRadius: 10, display: "flex", alignItems: "center", paddingTop: 14, paddingBottom: 14, transition: "border-color .15s,box-shadow .15s" }}
                                 onMouseOver={(ev) => { ev.currentTarget.style.borderColor = "var(--iet-red)"; ev.currentTarget.style.boxShadow = "0 2px 10px rgba(226,12,10,.07)" }}
                                 onMouseOut={(ev) => { ev.currentTarget.style.borderColor = "var(--iet-border)"; ev.currentTarget.style.boxShadow = "" }}
                             >
-                                <div style={{ textAlign: "center", minWidth: 38, flexShrink: 0 }}>
+                                <div style={{ textAlign: "center", minWidth: 34, flexShrink: 0 }}>
                                     <div style={{ fontFamily: "'Source Serif 4',serif", fontSize: 20, fontWeight: 700, color: "var(--iet-red-dark)", lineHeight: 1 }}>{day}</div>
                                     <div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--iet-muted)", marginTop: 2 }}>{month}</div>
                                 </div>
                                 <div style={{ width: 1, height: 34, background: "var(--iet-border)", flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--iet-text)", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{event.title}</div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                                         <span style={{ fontSize: 11, color: "var(--iet-muted)" }}>{event.type}</span>
                                         <span style={{ fontSize: 11, color: "var(--iet-muted)" }}>· {event.mode === "Online" ? "Online" : event.location}</span>
+                                        <span className="sm:hidden" style={{ fontSize: 11, fontWeight: 700, color: event.free ? "#1a6b3c" : "var(--iet-muted)" }}>
+                                            · {event.free ? "Free" : `TZS ${event.price.toLocaleString()}`}
+                                        </span>
                                     </div>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
-                                    {event.free ? (
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#1a6b3c" }}>Free</span>
-                                    ) : (
-                                        <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--iet-muted)" }}>TZS {event.price.toLocaleString()}</span>
-                                    )}
-                                    <button onClick={() => openDrawer(event)} className="btn btn-outline btn-sm">View Details</button>
+                                <div className="shrink-0 flex items-center gap-[14px]">
+                                    <span className="hidden sm:inline" style={{ fontSize: 11.5, fontWeight: event.free ? 700 : 600, color: event.free ? "#1a6b3c" : "var(--iet-muted)" }}>
+                                        {event.free ? "Free" : `TZS ${event.price.toLocaleString()}`}
+                                    </span>
+                                    <button onClick={() => openDrawer(event)} className="btn btn-outline btn-sm shrink-0">
+                                        <span className="hidden sm:inline">View Details</span>
+                                        <span className="sm:hidden">View</span>
+                                    </button>
                                 </div>
                             </div>
                         )
                     })}
                 </div>
             ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredEvents.map((event) => {
                         const parts = event.date.split(" ")
                         const month = parts[0]

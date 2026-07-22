@@ -2921,6 +2921,7 @@
 
         .content {
             padding: 20px 16px;
+            overflow-x: hidden;
         }
 
         .mem-dlg-actions {
