@@ -319,7 +319,7 @@ function MemberActionMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -328,14 +328,31 @@ function MemberActionMenu({
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    // Close on scroll/resize so the fixed menu can't float away from its row.
+    function close() {
+      setOpen(false);
+    }
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
 
   function toggle() {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      setOpenUp(window.innerHeight - rect.bottom < 150);
+      const menuWidth = 150;
+      const menuHeight = 132;
+      const gap = 6;
+      const openUp = window.innerHeight - rect.bottom < menuHeight + gap;
+      setPos({
+        top: openUp ? rect.top - menuHeight - gap : rect.bottom + gap,
+        left: Math.max(8, rect.right - menuWidth),
+      });
     }
     setOpen((value) => !value);
   }
@@ -378,18 +395,18 @@ function MemberActionMenu({
         <MoreVerticalIcon />
       </button>
 
-      {open && (
+      {open && pos && (
         <div
           style={{
-            position: "absolute",
-            right: 0,
-            zIndex: 200,
-            ...(openUp ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
+            position: "fixed",
+            top: pos.top,
+            left: pos.left,
+            zIndex: 1000,
             background: "var(--white)",
             border: "1px solid var(--border)",
             borderRadius: 10,
             boxShadow: "0 10px 28px rgba(0,0,0,.16)",
-            minWidth: 150,
+            width: 150,
             overflow: "hidden",
           }}
         >
