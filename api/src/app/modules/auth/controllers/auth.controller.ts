@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from '../services/auth.service';
 import { UserLoginDto } from '../dto/login.dto';
 import {
@@ -33,6 +34,9 @@ import {
 
 @ApiTags('Authentication')
 @Controller('auth')
+// Baseline brute-force protection for all auth endpoints: 10 requests per
+// minute per IP per endpoint (login/password endpoints are tightened below).
+@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class AuthController {
   constructor(private authService: AuthService) {}
 
@@ -142,6 +146,7 @@ export class AuthController {
   // LOGIN ENDPOINTS
   // ============================================
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -239,6 +244,7 @@ export class AuthController {
   // PASSWORD MANAGEMENT ENDPOINTS
   // ============================================
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -264,6 +270,7 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('reset-password')
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -362,6 +369,7 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('2fa/validate')
   @Public()
   @HttpCode(HttpStatus.OK)

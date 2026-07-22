@@ -38,7 +38,7 @@ export class UploadController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE_BYTES } }))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload an image or document' })
   @ApiBody({

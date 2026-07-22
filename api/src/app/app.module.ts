@@ -96,8 +96,10 @@ import * as Joi from 'joi';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         {
-          ttl: config.get('THROTTLE_TTL'),
-          limit: config.get('THROTTLE_LIMIT'),
+          // @nestjs/throttler v5 expects ttl in milliseconds. THROTTLE_TTL is
+          // configured in seconds, so convert it.
+          ttl: Number(config.get('THROTTLE_TTL') ?? 60) * 1000,
+          limit: Number(config.get('THROTTLE_LIMIT') ?? 100),
         },
       ],
     }),

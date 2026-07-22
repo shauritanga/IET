@@ -438,7 +438,9 @@ export class AdminController {
     },
   })
   @ApiResponse({ status: HttpStatus.OK, description: 'Import result' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }),
+  )
   async importMembers(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Import file is required');
     const lowerName = file.originalname.toLowerCase();
