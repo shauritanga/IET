@@ -708,7 +708,7 @@ export default function MembersPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Members Directory</h1>
-          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+          <p className="hidden sm:block" style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
             Manage all IET Tanzania registered members
           </p>
         </div>
@@ -765,19 +765,19 @@ export default function MembersPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="w-full sm:w-[260px]" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px" }}>
+      <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
+        <div className="min-w-0 flex-1 sm:w-[260px] sm:flex-none" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px" }}>
           <span style={{ color: "var(--muted)", flexShrink: 0 }}><SearchIcon /></span>
           <input
             type="text"
-            placeholder="Search by name or email…"
+            placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ border: "none", background: "transparent", fontSize: 12, color: "var(--text)", outline: "none", width: "100%", fontFamily: "inherit" }}
+            style={{ border: "none", background: "transparent", fontSize: 12, color: "var(--text)", outline: "none", width: "100%", minWidth: 0, fontFamily: "inherit" }}
           />
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div className="shrink-0" style={{ position: "relative" }}>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>
@@ -788,7 +788,7 @@ export default function MembersPage() {
           <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div className="shrink-0" style={{ position: "relative" }}>
           <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
             <option value="">All Grades</option>
             {membershipCategories.map((category) => (
@@ -802,6 +802,7 @@ export default function MembersPage() {
 
         {(search || statusFilter || classFilter) && (
           <button
+            className="hidden sm:block"
             onClick={() => { setSearch(""); setStatusFilter(""); setClassFilter(""); }}
             style={{ fontSize: 11.5, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px", fontWeight: 600 }}
           >
