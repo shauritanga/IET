@@ -403,7 +403,7 @@ export default function DisciplinesPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Engineering Disciplines</h1>
-          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+          <p className="hidden sm:block" style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
             Manage disciplines and sub-disciplines used to route applications to evaluators
           </p>
         </div>

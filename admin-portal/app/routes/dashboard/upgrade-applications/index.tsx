@@ -474,10 +474,10 @@ export default function UpgradeApplicationsPage() {
         <div>
           <h1 className="page-title">Upgrade Applications</h1>
           <p className="page-subtitle">
-            Review membership upgrade requests from engineers
+            <span className="hidden sm:inline">Review membership upgrade requests from engineers</span>
             {pendingCount > 0 && (
-              <span style={{
-                marginLeft: 10, background: "var(--red)", color: "#fff",
+              <span className="sm:ml-[10px]" style={{
+                background: "var(--red)", color: "#fff",
                 borderRadius: 20, fontSize: 11, fontWeight: 700, padding: "2px 9px"
               }}>
                 {pendingCount} pending

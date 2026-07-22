@@ -384,18 +384,18 @@ export default function PaymentsPage() {
       <div className="mb-[18px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Payments</h1>
-          <p className="mt-[2px] text-[11px] text-[var(--muted)]">
+          <p className="mt-[2px] hidden text-[11px] text-[var(--muted)] sm:block">
             Track all member payments, imported fee records, and subscriptions
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <div className="flex flex-nowrap gap-2 sm:flex-wrap">
           <select
             value={yearFilter}
             onChange={(e) => {
               setPage(1);
               setYearFilter(e.target.value);
             }}
-            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] min-w-0 flex-1 sm:w-auto sm:flex-none rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             <option value={YEAR_OPTION_ALL}>All Years</option>
             {years.map((year) => (
@@ -410,7 +410,7 @@ export default function PaymentsPage() {
               setPage(1);
               setTypeFilter(e.target.value);
             }}
-            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] min-w-0 flex-1 sm:w-auto sm:flex-none rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -422,7 +422,7 @@ export default function PaymentsPage() {
               setPage(1);
               setStatusFilter(e.target.value);
             }}
-            className="h-[34px] w-full sm:w-auto rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+            className="h-[34px] min-w-0 flex-1 sm:w-auto sm:flex-none rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] pr-8 text-[11.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o}>{o}</option>

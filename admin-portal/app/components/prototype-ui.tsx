@@ -40,7 +40,7 @@ export function PageHeader({
     <div className="mb-[18px] flex items-center justify-between gap-4">
       <div>
         <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">{title}</h1>
-        <p className="mt-[2px] text-[11px] text-[var(--muted)]">{description}</p>
+        <p className="mt-[2px] hidden text-[11px] text-[var(--muted)] sm:block">{description}</p>
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>

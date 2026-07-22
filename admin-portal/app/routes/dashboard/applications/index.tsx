@@ -193,19 +193,19 @@ export default function ApplicationsPage() {
       <div className="mb-[18px] flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Membership Applications</h1>
-          <p className="mt-[2px] text-[11px] text-[var(--muted)]">
+          <p className="mt-[2px] hidden text-[11px] text-[var(--muted)] sm:block">
             Secretariat controls progression; review bodies return recommendations for the next level
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search applicant or reference..."
-            className="col-span-2 h-[34px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)] sm:w-[230px]"
+            placeholder="Search…"
+            className="h-[34px] min-w-0 flex-1 rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-[10px] text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--red-dark)] sm:w-[230px] sm:flex-none"
           />
-          <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="w-full sm:w-auto" />
-          <FilterSelect value={stageFilter} onChange={setStageFilter} options={stageOptions} className="w-full sm:w-auto" />
+          <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="max-w-[30vw] shrink-0 sm:max-w-none" />
+          <FilterSelect value={stageFilter} onChange={setStageFilter} options={stageOptions} className="max-w-[30vw] shrink-0 sm:max-w-none" />
         </div>
       </div>
 

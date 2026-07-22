@@ -491,7 +491,7 @@ export default function MembershipCategoriesPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Membership Categories</h1>
-          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+          <p className="hidden sm:block" style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
             Define IET membership grades — fees and eligibility requirements
           </p>
         </div>

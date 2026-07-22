@@ -623,7 +623,7 @@ export default function EngineeringInstitutionsPage() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Engineering Institutions</h1>
-          <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+          <p className="hidden sm:block" style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
             Manage the approved institution directory used in member applications.
           </p>
         </div>
