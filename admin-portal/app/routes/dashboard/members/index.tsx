@@ -766,7 +766,7 @@ export default function MembersPage() {
 
       {/* Filters */}
       <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
-        <div className="min-w-0 flex-1 sm:w-[260px] sm:flex-none" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px" }}>
+        <div className="min-w-0 flex-[1.6] sm:w-[260px] sm:flex-none" style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "7px 12px" }}>
           <span style={{ color: "var(--muted)", flexShrink: 0 }}><SearchIcon /></span>
           <input
             type="text"
@@ -777,8 +777,8 @@ export default function MembersPage() {
           />
         </div>
 
-        <div className="shrink-0" style={{ position: "relative" }}>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
+        <div className="min-w-0 flex-1 sm:flex-none" style={{ position: "relative" }}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full sm:w-auto" style={{ ...selectStyle, paddingRight: 28 }}>
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>
             <option value="PENDING">Pending</option>
@@ -788,8 +788,8 @@ export default function MembersPage() {
           <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
         </div>
 
-        <div className="shrink-0" style={{ position: "relative" }}>
-          <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
+        <div className="min-w-0 flex-1 sm:flex-none" style={{ position: "relative" }}>
+          <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="w-full sm:w-auto" style={{ ...selectStyle, paddingRight: 28 }}>
             <option value="">All Grades</option>
             {membershipCategories.map((category) => (
               <option key={category.id} value={category.id}>
