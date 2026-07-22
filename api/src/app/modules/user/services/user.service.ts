@@ -45,7 +45,7 @@ export class UserService {
   private readonly logger = new Logger(UserService.name);
   private readonly databaseEnabled: boolean;
   private readonly mockUsers: Partial<UserEntity>[] = [MOCK_USER];
-  private readonly SALT_ROUNDS = 10;
+  private readonly SALT_ROUNDS = 12;
 
   constructor(
     @Optional()
