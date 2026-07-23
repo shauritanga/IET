@@ -10,6 +10,7 @@ import {
   HttpCode,
   ParseUUIDPipe,
   Headers,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -31,6 +32,7 @@ import {
   MpesaCallbackDto,
   SelcomCallbackDto,
   SelcomC2bCallbackDto,
+  SelcomWebhookDto,
 } from '../dto';
 
 @ApiTags('Payments')
@@ -196,9 +198,9 @@ export class PaymentsController {
   })
   async handleSelcomCallback(
     @Body() data: SelcomCallbackDto,
-    @Headers('authorization') auth: string,
+    @Headers() headers: Record<string, string>,
   ) {
-    return this.paymentsService.handleSelcomCallback(data, auth);
+    return this.paymentsService.handleSelcomCallback(data, headers);
   }
 
   @Post('webhooks/selcom/lookup')
@@ -219,9 +221,9 @@ export class PaymentsController {
   })
   async handleSelcomLookup(
     @Body() data: SelcomC2bCallbackDto,
-    @Headers('authorization') auth: string,
+    @Headers() headers: Record<string, string>,
   ) {
-    return this.paymentsService.handleSelcomLookup(data, auth);
+    return this.paymentsService.handleSelcomLookup(data, headers);
   }
 
   @Post('webhooks/selcom/validation')
@@ -242,9 +244,9 @@ export class PaymentsController {
   })
   async handleSelcomValidation(
     @Body() data: SelcomC2bCallbackDto,
-    @Headers('authorization') auth: string,
+    @Headers() headers: Record<string, string>,
   ) {
-    return this.paymentsService.handleSelcomValidation(data, auth);
+    return this.paymentsService.handleSelcomValidation(data, headers);
   }
 
   @Post('webhooks/selcom/notification')
@@ -264,10 +266,20 @@ export class PaymentsController {
     },
   })
   async handleSelcomNotification(
-    @Body() data: SelcomC2bCallbackDto,
-    @Headers('authorization') auth: string,
+    // Relaxed pipe: accept Selcom's exact payload (and any extra fields) without
+    // stripping/transforming, so the HMAC signature stays verifiable and an
+    // undocumented extra field can't cause a 400.
+    @Body(
+      new ValidationPipe({
+        whitelist: false,
+        forbidNonWhitelisted: false,
+        transform: false,
+      }),
+    )
+    data: SelcomWebhookDto,
+    @Headers() headers: Record<string, string>,
   ) {
-    return this.paymentsService.handleSelcomNotification(data, auth);
+    return this.paymentsService.handleSelcomNotification(data, headers);
   }
 
   @Post('webhooks/dpo')

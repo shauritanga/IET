@@ -17,6 +17,7 @@ import {
   MpesaCallbackDto,
   SelcomCallbackDto,
   SelcomC2bCallbackDto,
+  SelcomWebhookDto,
   PaymentQueryDto,
 } from '../dto';
 import {
@@ -34,7 +35,6 @@ import { EmailService } from '../../shared/services/email.service';
 import { EventRegistrationEntity } from '../../events/entities';
 import { GuestRegistrationEntity } from '../../guest/entities/guest-registration.entity';
 import { v4 as uuid4 } from 'uuid';
-import { timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class PaymentsService {
@@ -707,9 +707,9 @@ export class PaymentsService {
    */
   async handleSelcomCallback(
     data: SelcomCallbackDto,
-    auth: string,
+    headers: Record<string, string>,
   ): Promise<{ status: string }> {
-    if (!this.verifySelcomWebhookToken(auth)) {
+    if (!this.paymentGateway.verifySelcomWebhookSignature(headers, data as unknown as Record<string, unknown>)) {
       this.logger.warn('Selcom legacy callback rejected: invalid token');
       return { status: 'OK' };
     }
@@ -775,7 +775,7 @@ export class PaymentsService {
 
   async handleSelcomLookup(
     data: SelcomC2bCallbackDto,
-    auth: string,
+    headers: Record<string, string>,
   ): Promise<Record<string, string>> {
     const fail = (code: string, msg: string) => ({
       reference: data.reference,
@@ -784,7 +784,7 @@ export class PaymentsService {
       message: msg,
     });
 
-    if (!this.verifySelcomWebhookToken(auth)) {
+    if (!this.paymentGateway.verifySelcomWebhookSignature(headers, data as unknown as Record<string, unknown>)) {
       return fail('010', 'Unauthorized');
     }
 
@@ -819,7 +819,7 @@ export class PaymentsService {
 
   async handleSelcomValidation(
     data: SelcomC2bCallbackDto,
-    auth: string,
+    headers: Record<string, string>,
   ): Promise<Record<string, string>> {
     const fail = (code: string, msg: string) => ({
       reference: data.reference,
@@ -828,7 +828,7 @@ export class PaymentsService {
       message: msg,
     });
 
-    if (!this.verifySelcomWebhookToken(auth)) {
+    if (!this.paymentGateway.verifySelcomWebhookSignature(headers, data as unknown as Record<string, unknown>)) {
       return fail('010', 'Unauthorized');
     }
 
@@ -863,8 +863,8 @@ export class PaymentsService {
   }
 
   async handleSelcomNotification(
-    data: SelcomC2bCallbackDto,
-    auth: string,
+    data: SelcomWebhookDto,
+    headers: Record<string, string>,
   ): Promise<Record<string, string>> {
     const fail = (code: string, msg: string) => ({
       reference: data.reference,
@@ -873,18 +873,23 @@ export class PaymentsService {
       message: msg,
     });
 
-    if (!this.verifySelcomWebhookToken(auth)) {
+    if (
+      !this.paymentGateway.verifySelcomWebhookSignature(
+        headers,
+        data as unknown as Record<string, unknown>,
+      )
+    ) {
       return fail('010', 'Unauthorized');
     }
 
     try {
       const payment = await this.paymentRepository.findOne({
-        where: { id: this.resolvePaymentId(data.utilityref) },
+        where: { id: this.resolvePaymentId(data.order_id) },
       });
 
       if (!payment) {
         this.logger.warn(
-          `Selcom notification for unknown payment ref: ${data.utilityref}`,
+          `Selcom notification for unknown order_id: ${data.order_id}`,
         );
         return fail('010', 'Invalid payment reference');
       }
@@ -935,23 +940,6 @@ export class PaymentsService {
       );
       return fail('4XX', 'Internal error');
     }
-  }
-
-  private verifySelcomWebhookToken(auth: string): boolean {
-    const webhookToken = this.configService.get<string>('SELCOM_WEBHOOK_TOKEN');
-    if (!webhookToken) {
-      this.logger.warn('SELCOM_WEBHOOK_TOKEN not configured — rejecting webhook');
-      return false;
-    }
-    const expected = `Bearer ${webhookToken}`;
-    // Constant-time comparison to avoid leaking the token via timing.
-    const a = Buffer.from(auth ?? '');
-    const b = Buffer.from(expected);
-    const valid = a.length === b.length && timingSafeEqual(a, b);
-    if (!valid) {
-      this.logger.warn('Selcom webhook token verification failed');
-    }
-    return valid;
   }
 
   /**

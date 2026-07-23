@@ -201,3 +201,49 @@ export class SelcomC2bCallbackDto {
   @IsString()
   msisdn?: string;
 }
+
+/**
+ * Selcom hosted-checkout webhook payload (fires on successful transactions).
+ * Matches Selcom's documented "Webhook Callback" body. Values are validated as
+ * plain strings with no transforms so the HMAC signature stays verifiable.
+ */
+export class SelcomWebhookDto {
+  @ApiProperty()
+  @IsString()
+  transid: string;
+
+  @ApiProperty({ description: 'Order id echoed back (IET-<paymentId>)' })
+  @IsString()
+  order_id: string;
+
+  @ApiProperty()
+  @IsString()
+  reference: string;
+
+  @ApiProperty({ description: 'SUCCESS | FAIL' })
+  @IsString()
+  result: string;
+
+  @ApiProperty({ description: 'Selcom result code, 000 on success' })
+  @IsString()
+  resultcode: string;
+
+  @ApiProperty({ description: 'COMPLETED | CANCELLED | PENDING' })
+  @IsString()
+  payment_status: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  channel?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  amount?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}

@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentMethod } from '../../../common/enums';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 export interface PaymentRequest {
   amount: number;
@@ -348,6 +348,66 @@ export class PaymentGatewayService {
       Timestamp: timestamp,
       'Signed-Fields': signedFields.join(','),
     };
+  }
+
+  private safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a);
+    const bb = Buffer.from(b);
+    return ab.length === bb.length && timingSafeEqual(ab, bb);
+  }
+
+  /**
+   * Verify an inbound Selcom webhook using the same HMAC scheme Selcom uses for
+   * outbound requests: Authorization = "SELCOM base64(api_key)", and Digest =
+   * HMAC-SHA256(signingString, api_secret) where signingString is
+   * "timestamp=<Timestamp>&<field>=<body[field]>..." over the comma-separated
+   * Signed-Fields header. Authenticated entirely with the credentials we already
+   * hold — no separate webhook token required.
+   */
+  verifySelcomWebhookSignature(
+    headers: Record<string, string | undefined>,
+    body: Record<string, unknown>,
+  ): boolean {
+    if (!this.selcomApiKey || !this.selcomApiSecret) {
+      this.logger.warn('Selcom credentials not configured — rejecting webhook');
+      return false;
+    }
+
+    const get = (name: string) =>
+      headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
+    const auth = get('Authorization');
+    const digest = get('Digest');
+    const timestamp = get('Timestamp');
+    const signedFields = get('Signed-Fields');
+
+    if (!auth || !digest || !timestamp || !signedFields) {
+      this.logger.warn('Selcom webhook missing required signature headers');
+      return false;
+    }
+
+    const expectedAuth = `SELCOM ${Buffer.from(this.selcomApiKey).toString('base64')}`;
+    if (!this.safeEqual(auth, expectedAuth)) {
+      this.logger.warn('Selcom webhook Authorization mismatch');
+      return false;
+    }
+
+    const fields = signedFields
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    let signingString = `timestamp=${timestamp}`;
+    for (const field of fields) {
+      signingString += `&${field}=${body?.[field] ?? ''}`;
+    }
+    const expectedDigest = createHmac('sha256', this.selcomApiSecret)
+      .update(signingString)
+      .digest('base64');
+
+    const ok = this.safeEqual(digest, expectedDigest);
+    if (!ok) {
+      this.logger.warn('Selcom webhook Digest verification failed');
+    }
+    return ok;
   }
 
   private decodeSelcomUrl(value?: string): string | undefined {
