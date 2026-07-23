@@ -127,7 +127,7 @@ function RowMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -136,15 +136,30 @@ function RowMenu({
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function close() {
+      setOpen(false);
+    }
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
 
   function toggle() {
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      // dropdown is ~90px tall; open upward if less than 110px space below
-      setOpenUp(window.innerHeight - rect.bottom < 110);
+      const menuWidth = 140;
+      const menuHeight = 96;
+      const gap = 6;
+      const openUp = window.innerHeight - rect.bottom < menuHeight + gap;
+      setPos({
+        top: openUp ? rect.top - menuHeight - gap : rect.bottom + gap,
+        left: Math.max(8, rect.right - menuWidth),
+      });
     }
     setOpen((o) => !o);
   }
@@ -167,12 +182,11 @@ function RowMenu({
         <MoreVerticalIcon />
       </button>
 
-      {open && (
+      {open && pos && (
         <div style={{
-          position: "absolute", right: 0, zIndex: 200,
-          ...(openUp ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
           background: "var(--white)", border: "1px solid var(--border)", borderRadius: 10,
-          boxShadow: "0 8px 24px rgba(0,0,0,.12)", minWidth: 140, overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(0,0,0,.12)", width: 140, overflow: "hidden",
         }}>
           <button
             type="button"
