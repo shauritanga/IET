@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PaymentEntity } from '../entities/payment.entity';
 import { UserEntity } from '../../user/entities/user.entity';
 import { RegistrationEntity } from '../../registration/entities';
@@ -33,6 +34,7 @@ import { EmailService } from '../../shared/services/email.service';
 import { EventRegistrationEntity } from '../../events/entities';
 import { GuestRegistrationEntity } from '../../guest/entities/guest-registration.entity';
 import { v4 as uuid4 } from 'uuid';
+import { timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class PaymentsService {
@@ -730,27 +732,37 @@ export class PaymentsService {
       }
 
       if (data.resultcode === '000') {
-        payment.status = PaymentStatus.COMPLETED;
-        payment.completedAt = new Date();
-        payment.receiptNumber = await this.generateReceiptNumber();
-        await this.sendPaymentNotifications(payment);
+        // Trigger only — re-verify authoritatively before completing.
+        const gatewayStatus = await this.paymentGateway.checkPaymentStatus(
+          payment.paymentMethod,
+          payment.mobileMoneyRef || payment.transactionRef || payment.id,
+        );
+        if (gatewayStatus.status === 'COMPLETED') {
+          await this.completePaymentOnce(payment, {
+            transactionRef: gatewayStatus.transactionId || data.transid,
+            paidAt: gatewayStatus.paidAt,
+            gatewayAmount: gatewayStatus.amount,
+            providerKey: 'selcomCallback',
+            providerData: data,
+          });
+        } else {
+          this.logger.warn(
+            `Selcom callback for ${payment.id} not confirmed by order-status (${gatewayStatus.status}); ignoring.`,
+          );
+        }
       } else {
         payment.status = PaymentStatus.FAILED;
         payment.errorMessage = data.result;
+        payment.transactionRef = data.transid;
+        payment.providerResponse = {
+          ...payment.providerResponse,
+          selcomCallback: data,
+        };
+        await this.paymentRepository.save(payment);
+        await this.updateRegistrationPaymentStatus(payment);
       }
 
-      payment.transactionRef = data.transid;
-      payment.providerResponse = {
-        ...payment.providerResponse,
-        selcomCallback: data,
-      };
-
-      await this.paymentRepository.save(payment);
-      await this.updateRegistrationPaymentStatus(payment);
-      this.logger.log(
-        `Selcom payment ${payment.id} processed, status: ${payment.status}`,
-      );
-
+      this.logger.log(`Selcom callback processed for payment ${payment.id}`);
       return { status: 'OK' };
     } catch (error) {
       this.logger.error(
@@ -887,21 +899,29 @@ export class PaymentsService {
         };
       }
 
-      payment.status = PaymentStatus.COMPLETED;
-      payment.completedAt = new Date();
-      payment.transactionRef = data.transid;
-      payment.mobileMoneyRef = data.reference;
-      payment.receiptNumber = await this.generateReceiptNumber();
-      payment.providerResponse = {
-        ...payment.providerResponse,
-        selcomNotification: data,
-      };
+      // Treat the webhook as a trigger only — re-verify against Selcom's
+      // authoritative order-status before completing. A forged notification
+      // (even with a valid token) cannot fulfil a payment Selcom hasn't settled.
+      const gatewayStatus = await this.paymentGateway.checkPaymentStatus(
+        payment.paymentMethod,
+        payment.mobileMoneyRef || payment.transactionRef || payment.id,
+      );
+      if (gatewayStatus.status !== 'COMPLETED') {
+        this.logger.warn(
+          `Selcom notification for ${payment.id} not confirmed by order-status (${gatewayStatus.status}); ignoring.`,
+        );
+        return fail('012', 'Not confirmed by gateway');
+      }
 
-      const savedPayment = await this.paymentRepository.save(payment);
-      await this.updateRegistrationPaymentStatus(savedPayment);
-      await this.sendPaymentNotifications(savedPayment);
+      await this.completePaymentOnce(payment, {
+        transactionRef: gatewayStatus.transactionId || data.transid,
+        mobileMoneyRef: data.reference,
+        paidAt: gatewayStatus.paidAt,
+        gatewayAmount: gatewayStatus.amount,
+        providerKey: 'selcomNotification',
+        providerData: data,
+      });
 
-      this.logger.log(`Selcom payment ${payment.id} completed via notification`);
       return {
         reference: data.reference,
         resultcode: '000',
@@ -924,7 +944,10 @@ export class PaymentsService {
       return false;
     }
     const expected = `Bearer ${webhookToken}`;
-    const valid = auth === expected;
+    // Constant-time comparison to avoid leaking the token via timing.
+    const a = Buffer.from(auth ?? '');
+    const b = Buffer.from(expected);
+    const valid = a.length === b.length && timingSafeEqual(a, b);
     if (!valid) {
       this.logger.warn('Selcom webhook token verification failed');
     }
@@ -1078,14 +1101,21 @@ export class PaymentsService {
     );
 
     if (gatewayStatus.status === 'COMPLETED') {
-      payment.status = PaymentStatus.COMPLETED;
-      payment.transactionRef =
-        gatewayStatus.transactionId || payment.transactionRef;
-      payment.completedAt = gatewayStatus.paidAt || new Date();
-      payment.receiptNumber =
-        payment.receiptNumber || (await this.generateReceiptNumber());
-      payment.errorMessage = null;
-    } else if (gatewayStatus.status === 'FAILED') {
+      // Route completion through the single atomic, amount-verified path.
+      await this.completePaymentOnce(payment, {
+        transactionRef: gatewayStatus.transactionId,
+        paidAt: gatewayStatus.paidAt,
+        gatewayAmount: gatewayStatus.amount,
+        providerKey: 'statusCheck',
+        providerData: { ...gatewayStatus, checkedAt: new Date().toISOString() },
+      });
+      return (
+        (await this.paymentRepository.findOne({ where: { id: payment.id } })) ??
+        payment
+      );
+    }
+
+    if (gatewayStatus.status === 'FAILED') {
       payment.status = PaymentStatus.FAILED;
       payment.errorMessage = gatewayStatus.message;
     } else if (gatewayStatus.status === 'CANCELLED') {
@@ -1103,6 +1133,156 @@ export class PaymentsService {
     const savedPayment = await this.paymentRepository.save(payment);
     await this.updateRegistrationPaymentStatus(savedPayment);
     return savedPayment;
+  }
+
+  /**
+   * Atomically complete a payment and run fulfilment exactly once.
+   *
+   * - Verifies the gateway-reported amount matches the expected amount (when
+   *   provided) — refuses to complete on mismatch.
+   * - Uses a conditional UPDATE (PENDING/PROCESSING -> COMPLETED) so concurrent
+   *   webhook + poll cannot both fulfil the same payment (no duplicate receipts,
+   *   emails, or side effects).
+   * - Only the caller that actually performed the transition runs the linked
+   *   registration confirmation and notifications.
+   *
+   * Returns whether THIS call completed the payment, plus a reason otherwise.
+   */
+  private async completePaymentOnce(
+    payment: PaymentEntity,
+    info: {
+      transactionRef?: string;
+      mobileMoneyRef?: string;
+      paidAt?: Date;
+      gatewayAmount?: number;
+      providerKey?: string;
+      providerData?: unknown;
+    },
+  ): Promise<{ completed: boolean; reason?: string }> {
+    // Defense-in-depth amount verification.
+    if (info.gatewayAmount !== undefined && info.gatewayAmount !== null) {
+      const expected = Math.round(Number(payment.amount));
+      const paid = Math.round(Number(info.gatewayAmount));
+      if (Number.isFinite(paid) && paid !== expected) {
+        this.logger.error(
+          `Payment ${payment.id} amount mismatch — expected ${expected}, gateway reported ${paid}. Refusing to complete.`,
+        );
+        // Flag for manual review; leave the money-state untouched.
+        payment.errorMessage = `Amount mismatch: expected ${expected}, paid ${paid}`;
+        payment.providerResponse = {
+          ...(payment.providerResponse ?? {}),
+          amountMismatch: { expected, paid, at: new Date().toISOString() },
+        };
+        await this.paymentRepository.save(payment);
+        return { completed: false, reason: 'amount_mismatch' };
+      }
+    }
+
+    // Try up to a few times to dodge a receipt-number collision between two
+    // different payments completing at the same instant.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const receiptNumber =
+        payment.receiptNumber || (await this.generateReceiptNumber());
+      try {
+        const result = await this.paymentRepository
+          .createQueryBuilder()
+          .update(PaymentEntity)
+          .set({
+            status: PaymentStatus.COMPLETED,
+            completedAt: info.paidAt ?? new Date(),
+            transactionRef: info.transactionRef ?? payment.transactionRef,
+            mobileMoneyRef: info.mobileMoneyRef ?? payment.mobileMoneyRef,
+            receiptNumber,
+            errorMessage: null,
+          })
+          .where('id = :id AND status IN (:...open)', {
+            id: payment.id,
+            open: [PaymentStatus.PENDING, PaymentStatus.PROCESSING],
+          })
+          .execute();
+
+        if (!result.affected) {
+          // Already settled by another path (webhook/poll/reconcile).
+          return { completed: false, reason: 'already_settled' };
+        }
+        break;
+      } catch (error: any) {
+        const isUniqueViolation =
+          error?.code === '23505' ||
+          /duplicate key|unique/i.test(error?.message ?? '');
+        if (isUniqueViolation && attempt < 2) {
+          payment.receiptNumber = undefined;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    const fresh = await this.paymentRepository.findOne({
+      where: { id: payment.id },
+    });
+    if (!fresh) {
+      return { completed: false, reason: 'not_found' };
+    }
+    if (info.providerKey) {
+      fresh.providerResponse = {
+        ...(fresh.providerResponse ?? {}),
+        [info.providerKey]: info.providerData,
+      };
+      await this.paymentRepository.save(fresh);
+    }
+
+    await this.updateRegistrationPaymentStatus(fresh);
+    await this.sendPaymentNotifications(fresh);
+    this.logger.log(`Payment ${fresh.id} completed and fulfilled`);
+    return { completed: true };
+  }
+
+  /**
+   * Safety net for "paid but not fulfilled": periodically reconcile payments
+   * stuck in PENDING/PROCESSING against the gateway's authoritative order-status.
+   * Catches missed webhooks and abandoned browser sessions so a member who paid
+   * always gets fulfilled without manual intervention. Genuinely-unpaid pending
+   * sessions simply stay pending (order-status returns PENDING => no false
+   * completion). Amount is verified inside the completion path.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async reconcilePendingPayments(): Promise<void> {
+    const now = Date.now();
+    const minAgeMs = 3 * 60 * 1000; // give the interactive flow a head start
+    const maxAgeMs = 24 * 60 * 60 * 1000; // stop chasing after 24h
+
+    const candidates = await this.paymentRepository.find({
+      where: { status: In([PaymentStatus.PENDING, PaymentStatus.PROCESSING]) },
+      order: { createdAt: 'ASC' },
+      take: 50,
+    });
+
+    let reconciled = 0;
+    for (const payment of candidates) {
+      const age = now - new Date(payment.createdAt).getTime();
+      if (age < minAgeMs || age > maxAgeMs) continue;
+      // Only reconcile ones that actually reached the gateway.
+      if (
+        !payment.mobileMoneyRef &&
+        !payment.transactionRef &&
+        !payment.paymentUrl
+      ) {
+        continue;
+      }
+      try {
+        await this.syncPaymentState(payment);
+        reconciled++;
+      } catch (error: any) {
+        this.logger.warn(
+          `Reconcile failed for payment ${payment.id}: ${error?.message}`,
+        );
+      }
+    }
+
+    if (reconciled > 0) {
+      this.logger.log(`Reconciled ${reconciled} pending payment(s)`);
+    }
   }
 
   private canRetryApplicationPayment(payment: PaymentEntity): boolean {

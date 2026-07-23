@@ -1018,6 +1018,41 @@ export class EventsService {
       }
     }
 
+    // Guard against double-charging: reconcile any prior payment for this
+    // registration against the gateway first. If it already settled, don't
+    // create a second order; if it's still an open, resumable checkout session,
+    // reuse that URL instead of minting a new one.
+    const existingPayment = await this.paymentsService.syncEventRegistrationPayment(
+      userId,
+      registrationId,
+    );
+    if (existingPayment?.status === PaymentStatus.COMPLETED) {
+      throw new BadRequestException(
+        'This registration has already been paid for.',
+      );
+    }
+    if (
+      existingPayment &&
+      [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
+        existingPayment.status,
+      ) &&
+      existingPayment.paymentUrl &&
+      registration.paymentExpiresAt &&
+      new Date(registration.paymentExpiresAt).getTime() > Date.now()
+    ) {
+      return {
+        registrationId: registration.id,
+        eventId: event.id,
+        eventTitle: event.title,
+        status: registration.status,
+        paymentId: existingPayment.id,
+        paymentUrl: existingPayment.paymentUrl,
+        amount: event.registrationFee,
+        currency: 'TZS',
+        paymentExpiresAt: registration.paymentExpiresAt,
+      };
+    }
+
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     const paymentResult = await this.paymentsService.initiatePayment(userId, {

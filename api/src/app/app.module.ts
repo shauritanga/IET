@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { SharedModule } from './modules/shared/shared.module';
@@ -30,6 +31,9 @@ import * as Joi from 'joi';
 
 @Module({
   imports: [
+    // Scheduled tasks (payment reconciliation, etc.)
+    ScheduleModule.forRoot(),
+
     // Environment Configuration
     ConfigModule.forRoot({
       envFilePath: [
