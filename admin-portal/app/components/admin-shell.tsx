@@ -168,6 +168,11 @@ function isExternalUrl(url?: string | null) {
   return !!url && /^https?:\/\//i.test(url);
 }
 
+// Log the user out after this long with no mouse/keyboard/touch/scroll activity.
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const IDLE_CHECK_INTERVAL_MS = 15 * 1000;
+const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"] as const;
+
 function navIcon(label: string) {
   if (label === "Dashboard") return <DashboardIcon />;
   if (label === "Applications") return <ApplicationsIcon />;
@@ -346,6 +351,36 @@ export default function AdminShell() {
       Communication: location.pathname.startsWith("/dashboard/communication"),
     }));
   }, [location.pathname]);
+
+  // Idle timeout: sign the user out after 15 minutes of no activity,
+  // independent of token/session expiry. AdminShell only mounts once
+  // authenticated, so this runs for the lifetime of the session.
+  useEffect(() => {
+    let lastActivity = Date.now();
+    const markActive = () => {
+      lastActivity = Date.now();
+    };
+
+    ACTIVITY_EVENTS.forEach((event) =>
+      window.addEventListener(event, markActive, { passive: true }),
+    );
+
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivity >= IDLE_TIMEOUT_MS) {
+        clearSession();
+        queryClient.clear();
+        window.location.assign("/auth/login");
+      }
+    }, IDLE_CHECK_INTERVAL_MS);
+
+    return () => {
+      ACTIVITY_EVENTS.forEach((event) =>
+        window.removeEventListener(event, markActive),
+      );
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleGroup(label: string) {
     setOpenGroups((current) => ({

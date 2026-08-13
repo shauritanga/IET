@@ -8,6 +8,7 @@
 
 # Dependencies
 node_modules/
+server-credentials.json
 
 # Build output
 build/

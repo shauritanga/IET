@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { useNavigate } from "react-router";
 import {
     setToStorage,
     getFromStorage,
@@ -30,11 +31,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Log the user out after this long with no mouse/keyboard/touch/scroll activity.
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const IDLE_CHECK_INTERVAL_MS = 15 * 1000;
+const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"] as const;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     // Restore session on app load
     useEffect(() => {
@@ -79,6 +86,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setRefreshToken(null);
     };
+
+    // Idle timeout: sign the user out after 15 minutes of no activity,
+    // independent of token/session expiry.
+    useEffect(() => {
+        if (!token) return;
+
+        let lastActivity = Date.now();
+        const markActive = () => {
+            lastActivity = Date.now();
+        };
+
+        ACTIVITY_EVENTS.forEach((event) =>
+            window.addEventListener(event, markActive, { passive: true }),
+        );
+
+        const interval = setInterval(() => {
+            if (Date.now() - lastActivity >= IDLE_TIMEOUT_MS) {
+                logout();
+                navigate("/auth/login", { replace: true });
+            }
+        }, IDLE_CHECK_INTERVAL_MS);
+
+        return () => {
+            ACTIVITY_EVENTS.forEach((event) =>
+                window.removeEventListener(event, markActive),
+            );
+            clearInterval(interval);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token]);
 
     return (
         <AuthContext.Provider value={{

@@ -40,6 +40,28 @@ export class AuthService {
     private registrationRepository: Repository<RegistrationEntity>,
   ) {}
 
+  /**
+   * Parse simple duration strings ("15m", "7d", "24h", "30s") into milliseconds.
+   * Falls back to treating a plain number as milliseconds.
+   */
+  private parseDurationMs(value: string): number {
+    const match = /^(\d+)\s*(ms|s|m|h|d)?$/.exec(value.trim());
+    if (!match) {
+      // Sensible fallback: 7 days, matching the default refresh token lifetime
+      return 7 * 24 * 60 * 60 * 1000;
+    }
+    const amount = Number(match[1]);
+    const unit = match[2] ?? 'ms';
+    const unitMs: Record<string, number> = {
+      ms: 1,
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+    };
+    return amount * unitMs[unit];
+  }
+
   private async getRegistrationStatus(userId: string): Promise<string | null> {
     const registration = await this.registrationRepository.findOne({
       where: { userId },
@@ -394,8 +416,27 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      // Generate new tokens
-      const tokens = await this.generateTokens(user);
+      // Enforce an absolute session lifetime regardless of activity: a
+      // session cannot be extended past this ceiling just by refreshing
+      // before each expiry. sessionStart is carried forward from the
+      // original login and never reset on refresh.
+      const sessionStartSeconds = payload.sessionStart ?? payload.iat;
+      const maxSessionAgeMs = this.parseDurationMs(
+        this.configService.get<string>('JWT_REFRESH_EXPIRATION', '7d'),
+      );
+      if (
+        typeof sessionStartSeconds === 'number' &&
+        Date.now() - sessionStartSeconds * 1000 > maxSessionAgeMs
+      ) {
+        // Session has exceeded its absolute lifetime; force re-login.
+        await this.usersService.removeRefreshToken(user.id);
+        throw new UnauthorizedException(
+          'Session expired, please log in again',
+        );
+      }
+
+      // Generate new tokens, carrying the original session start forward
+      const tokens = await this.generateTokens(user, sessionStartSeconds);
 
       // Update the refresh token in the database
       await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
@@ -420,12 +461,16 @@ export class AuthService {
    */
   private async generateTokens(
     user: UserEntity | Partial<UserEntity>,
+    sessionStart?: number,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const payload = {
       email: user.email,
       sub: user.id,
       role: user.role,
       membershipId: user.membershipId,
+      // Original login time (seconds since epoch), preserved across
+      // refreshes so absolute session lifetime can be enforced.
+      sessionStart: sessionStart ?? Math.floor(Date.now() / 1000),
     };
 
     // Generate access token (15 minutes default)
