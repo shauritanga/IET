@@ -257,6 +257,7 @@ export function Modal({
   children,
   footer,
   bodyClassName,
+  maxWidthClassName = "max-w-[520px]",
 }: {
   title: string;
   open: boolean;
@@ -264,6 +265,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   bodyClassName?: string;
+  maxWidthClassName?: string;
 }) {
   if (!open) return null;
 
@@ -273,7 +275,10 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="animate-modal-rise flex max-h-[88vh] w-full max-w-[520px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(57,9,9,0.2)]"
+        className={cx(
+          "animate-modal-rise flex max-h-[88vh] w-full flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(57,9,9,0.2)]",
+          maxWidthClassName,
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[var(--border)] bg-white px-[22px] py-[18px]">

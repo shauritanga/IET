@@ -14,6 +14,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { GuestModule } from './modules/guest/guest.module';
 import { UpgradeModule } from './modules/upgrade/upgrade.module';
 import { ReferenceModule } from './modules/reference/reference.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 import { HealthController } from './controllers/health.controller';
 import { RootController } from './controllers/root.controller';
@@ -129,6 +130,7 @@ import * as Joi from 'joi';
     GuestModule,
     UpgradeModule,
     ReferenceModule,
+    ReportsModule,
   ],
   controllers: [HealthController, RootController],
   providers: [
