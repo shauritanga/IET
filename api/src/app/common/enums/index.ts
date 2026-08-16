@@ -165,6 +165,12 @@ export enum FeeStatus {
   EXPIRING = 'EXPIRING',
 }
 
+export enum MembershipCardStatus {
+  ISSUED = 'ISSUED',
+  READY_FOR_COLLECTION = 'READY_FOR_COLLECTION',
+  COLLECTED = 'COLLECTED',
+}
+
 // ============================================
 // EVENT ENUMS
 // ============================================

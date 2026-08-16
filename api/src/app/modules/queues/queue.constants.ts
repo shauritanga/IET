@@ -38,6 +38,7 @@ export type EmailJobName =
   | 'application-status'
   | 'application-submitted'
   | 'expiry-reminder'
+  | 'membership-fee-reminder'
   | 'event-registration';
 
 export type SmsJobName =
@@ -47,4 +48,5 @@ export type SmsJobName =
   | 'payment-confirmation'
   | 'application-status'
   | 'expiry-reminder'
+  | 'membership-fee-reminder'
   | 'event-reminder';

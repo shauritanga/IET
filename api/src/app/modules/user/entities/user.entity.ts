@@ -310,6 +310,14 @@ export class UserEntity extends BaseEntity {
   role: UserRole;
 
   @ApiProperty({
+    description:
+      'Optional per-user permission overrides. Null means inherit role defaults.',
+    required: false,
+  })
+  @Column({ type: 'jsonb', nullable: true })
+  customPermissions?: Record<string, string[]> | null;
+
+  @ApiProperty({
     description: 'Whether user account is active',
     default: true,
   })

@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../auth/guards/admin.guard';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { CommunicationService } from '../services/communication.service';
@@ -34,7 +35,7 @@ import {
 
 @ApiTags('Communication')
 @Controller('communication')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class CommunicationController {
   constructor(private communicationService: CommunicationService) {}

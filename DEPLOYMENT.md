@@ -54,8 +54,8 @@ sudo apt install -y postgresql postgresql-contrib
 2. Go to **Zone Editor** → select `iet.or.tz` → **Manage**
 3. Add three **A records**:
 
-| Type | Name              | Address        | TTL   |
-|------|-------------------|----------------|-------|
+| Type | Name                      | Address         | TTL   |
+| ---- | ------------------------- | --------------- | ----- |
 | A    | `member-portal.iet.or.tz` | `67.205.135.70` | 14400 |
 | A    | `admin-portal.iet.or.tz`  | `67.205.135.70` | 14400 |
 | A    | `api.iet.or.tz`           | `67.205.135.70` | 14400 |
@@ -63,6 +63,7 @@ sudo apt install -y postgresql postgresql-contrib
 4. Save all records and wait 10–30 minutes for propagation
 
 **Verify:**
+
 ```bash
 dig member-portal.iet.or.tz +short   # should return 67.205.135.70
 dig admin-portal.iet.or.tz +short
@@ -120,6 +121,7 @@ SWAGGER_ENABLED=false
 ```
 
 > **Generate strong secrets:**
+>
 > ```bash
 > node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 > ```
@@ -133,11 +135,13 @@ SWAGGER_ENABLED=false
 Both portals must point to the production API URL. On the server:
 
 **`engineer-portal/.env`**
+
 ```env
 VITE_API_BASE_URL=https://api.iet.or.tz/api/v1
 ```
 
 **`admin-portal/.env`**
+
 ```env
 VITE_API_BASE_URL=https://api.iet.or.tz/api/v1
 ```
@@ -184,6 +188,7 @@ pm2 startup
 ```
 
 **Useful PM2 commands:**
+
 ```bash
 pm2 list                    # view all processes
 pm2 logs iet-api            # stream API logs
@@ -302,11 +307,13 @@ sudo certbot --nginx \
 ```
 
 Certbot will:
+
 - Obtain free certificates from Let's Encrypt
 - Automatically update the Nginx config with SSL paths
 - Set up auto-renewal (runs twice daily via systemd timer)
 
 **Test auto-renewal:**
+
 ```bash
 sudo certbot renew --dry-run
 ```
@@ -335,6 +342,7 @@ EMAIL_FROM_NAME=IET Tanzania
 ```
 
 6. Restart the API:
+
 ```bash
 pm2 restart iet-api
 ```
@@ -373,6 +381,7 @@ sudo certbot renew --dry-run
 ```
 
 **Expected results:**
+
 - All `curl -I` commands return `HTTP/2 200`
 - `pm2 list` shows `iet-api`, `iet-member`, `iet-admin` all `online`
 - `nginx -t` says `syntax is ok`

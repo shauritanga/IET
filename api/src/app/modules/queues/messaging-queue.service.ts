@@ -290,6 +290,28 @@ export class MessagingQueueService {
     });
   }
 
+  async enqueueMembershipFeeReminderEmail(params: {
+    email: string;
+    firstName: string;
+    year: number;
+    amount: number;
+    currency: string;
+    dueDate: string;
+    reminderStep: 1 | 2 | 3;
+  }): Promise<EmailResult> {
+    return this.enqueueNamedEmail('membership-fee-reminder', params);
+  }
+
+  async enqueueMembershipFeeReminderSms(params: {
+    phoneNumber: string;
+    memberName: string;
+    year: number;
+    amountLabel: string;
+    reminderStep: 1 | 2 | 3;
+  }): Promise<SmsResult> {
+    return this.enqueueNamedSms('membership-fee-reminder', params);
+  }
+
   private async enqueueNamedEmail(
     name: string,
     data: Record<string, any>,
@@ -382,6 +404,18 @@ export class MessagingQueueService {
           new Date(data.expiryDate),
           data.daysUntilExpiry,
         );
+      case 'membership-fee-reminder':
+        return this.emailService.sendMembershipFeeReminder(
+          data.email,
+          data.firstName,
+          {
+            year: data.year,
+            amount: data.amount,
+            currency: data.currency,
+            dueDate: data.dueDate,
+            reminderStep: data.reminderStep,
+          },
+        );
       case 'event-registration':
         return this.emailService.sendEventRegistrationEmail(
           data.email,
@@ -431,6 +465,14 @@ export class MessagingQueueService {
           data.memberName,
           new Date(data.expiryDate),
           data.daysUntilExpiry,
+        );
+      case 'membership-fee-reminder':
+        return this.smsService.sendMembershipFeeReminder(
+          data.phoneNumber,
+          data.memberName,
+          data.year,
+          data.amountLabel,
+          data.reminderStep,
         );
       default:
         return this.smsService.send(data as SmsOptions);

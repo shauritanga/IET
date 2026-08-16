@@ -432,6 +432,18 @@ export class AuthController {
     };
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current authenticated user (with permissions)' })
+  async getMe(@GetUser() user: UserEntity) {
+    const data = await this.authService.getSessionUser(user.id || (user as any).userId);
+    return {
+      success: true,
+      data,
+    };
+  }
+
   @Post('2fa/disable')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

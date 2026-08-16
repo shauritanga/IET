@@ -124,4 +124,20 @@ export class MembershipFeeEntity extends BaseEntity {
   })
   @Column({ type: 'timestamp with time zone', nullable: true })
   lastReminderAt?: Date;
+
+  @ApiProperty({
+    example: '2026-01',
+    description:
+      'Calendar month key (YYYY-MM) for the active unpaid-fee reminder cycle',
+  })
+  @Column({ type: 'varchar', length: 7, nullable: true })
+  reminderCycleMonth?: string | null;
+
+  @ApiProperty({
+    example: 1,
+    description:
+      'Reminder step within the current month cycle: 0=none, 1=month-end, 2=+3 days, 3=+5 days',
+  })
+  @Column({ type: 'integer', default: 0 })
+  reminderCycleStep: number;
 }

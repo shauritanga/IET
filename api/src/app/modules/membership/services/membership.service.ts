@@ -4,8 +4,9 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MembershipFeeEntity } from '../entities/membership-fee.entity';
 import { UserEntity } from '../../user/entities/user.entity';
 import { MembershipCategoryEntity } from '../../admin/entities/membership-category.entity';
@@ -17,12 +18,20 @@ import {
   PaymentMethod,
 } from '../../../common/enums';
 import { InitiateFeePaymentDto } from '../dto';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 
 type FiscalYearSettings = {
   startMonth: number;
   startDay: number;
   endMonth: number;
   endDay: number;
+};
+
+type CalendarDay = {
+  year: number;
+  month: number;
+  day: number;
+  key: string;
 };
 
 const FISCAL_YEAR_SETTING_KEY = 'membership_fiscal_year';
@@ -32,6 +41,10 @@ const DEFAULT_FISCAL_YEAR_SETTINGS: FiscalYearSettings = {
   endMonth: 7,
   endDay: 10,
 };
+
+/** Calendar logic for reminders uses Tanzania local time. */
+const REMINDER_TIMEZONE = 'Africa/Dar_es_Salaam';
+const UNPAID_FEE_STATUSES = [FeeStatus.PENDING, FeeStatus.EXPIRING, FeeStatus.OVERDUE];
 
 @Injectable()
 export class MembershipService {
@@ -57,7 +70,31 @@ export class MembershipService {
     private membershipCategoryRepository: Repository<MembershipCategoryEntity>,
     @InjectRepository(SystemSettingEntity)
     private settingRepository: Repository<SystemSettingEntity>,
+    private readonly messagingQueue: MessagingQueueService,
   ) {}
+
+  /** Create annual fee rows for the new calendar year (due 1 January). */
+  @Cron('5 0 1 1 *', { timeZone: REMINDER_TIMEZONE })
+  async handleCreateAnnualFeesCron(): Promise<void> {
+    const today = this.getCalendarDayInTimezone();
+    const created = await this.createAnnualFees(today.year);
+    this.logger.log(
+      `Annual fee cron: created ${created} fee record(s) for ${today.year}`,
+    );
+  }
+
+  /**
+   * Daily: mark overdue fees, then send unpaid membership fee reminders
+   * (month-end → +3 days → +5 days, repeating each month from 31 January).
+   */
+  @Cron('0 9 * * *', { timeZone: REMINDER_TIMEZONE })
+  async handleDailyMembershipFeeJobs(): Promise<void> {
+    await this.updateFeeStatuses();
+    const sent = await this.sendOverdueMembershipFeeReminders();
+    this.logger.log(
+      `Membership fee reminder cron: sent ${sent} reminder(s)`,
+    );
+  }
 
   private hasThreeConsecutiveUnpaidFeeYears(
     fees: Array<{ year: number; status: FeeStatus }>,
@@ -296,7 +333,7 @@ export class MembershipService {
           : 0);
       fee.currency = 'TZS';
       fee.status = FeeStatus.PENDING;
-      fee.dueDate = await this.getFiscalYearEndDate(dto.year);
+      fee.dueDate = this.getAnnualFeeDueDate(dto.year);
       fee = await this.feeRepository.save(fee);
     }
 
@@ -443,7 +480,8 @@ export class MembershipService {
             : 0);
         fee.currency = 'TZS';
         fee.status = FeeStatus.PENDING;
-        fee.dueDate = new Date(year, 6, 10); // July 10th
+        fee.dueDate = this.getAnnualFeeDueDate(year);
+        fee.reminderCycleStep = 0;
         await this.feeRepository.save(fee);
         created++;
       }
@@ -451,6 +489,99 @@ export class MembershipService {
 
     this.logger.log(`Created ${created} annual fee records for year ${year}`);
     return created;
+  }
+
+  /**
+   * Send unpaid membership fee reminders.
+   * Cycle per month (from 31 Jan of the fee year):
+   *   1) last day of month
+   *   2) +3 days
+   *   3) +5 days after step 2
+   * Then waits for the next month-end and repeats until paid.
+   */
+  async sendOverdueMembershipFeeReminders(
+    referenceDate: Date = new Date(),
+  ): Promise<number> {
+    const today = this.getCalendarDayInTimezone(referenceDate);
+    const cycleMonthEnd = this.getActiveReminderCycleMonthEnd(today);
+
+    const unpaidFees = await this.feeRepository.find({
+      where: { status: In(UNPAID_FEE_STATUSES) },
+      relations: ['user'],
+    });
+
+    let sent = 0;
+    for (const fee of unpaidFees) {
+      if (!fee.user || fee.user.deletedAt) {
+        continue;
+      }
+
+      const feeFirstReminder = this.makeCalendarDay(fee.year, 1, 31);
+      if (this.compareCalendarDays(today, feeFirstReminder) < 0) {
+        continue;
+      }
+
+      // Latest month-end cycle that has started; must be on/after 31 Jan of the fee year.
+      if (this.compareCalendarDays(cycleMonthEnd, feeFirstReminder) < 0) {
+        continue;
+      }
+
+      const cycleKey = `${cycleMonthEnd.year}-${String(cycleMonthEnd.month).padStart(2, '0')}`;
+      const step1 = cycleMonthEnd;
+      const step2 = this.addCalendarDays(cycleMonthEnd, 3);
+      const step3 = this.addCalendarDays(step2, 5);
+
+      const step =
+        fee.reminderCycleMonth === cycleKey ? (fee.reminderCycleStep ?? 0) : 0;
+      let nextStep: 1 | 2 | 3 | null = null;
+
+      if (this.compareCalendarDays(today, step1) >= 0 && step < 1) {
+        nextStep = 1;
+      } else if (this.compareCalendarDays(today, step2) >= 0 && step < 2) {
+        nextStep = 2;
+      } else if (this.compareCalendarDays(today, step3) >= 0 && step < 3) {
+        nextStep = 3;
+      }
+
+      if (!nextStep) {
+        continue;
+      }
+
+      const amountLabel = `${fee.currency} ${fee.amount.toLocaleString('en-TZ')}`;
+      const dueLabel = this.formatCalendarDay(
+        this.makeCalendarDay(fee.year, 1, 1),
+      );
+      const memberName = fee.user.firstName || 'Member';
+
+      await this.messagingQueue.enqueueMembershipFeeReminderEmail({
+        email: fee.user.email,
+        firstName: memberName,
+        year: fee.year,
+        amount: fee.amount,
+        currency: fee.currency,
+        dueDate: dueLabel,
+        reminderStep: nextStep,
+      });
+
+      if (fee.user.phoneNumber) {
+        await this.messagingQueue.enqueueMembershipFeeReminderSms({
+          phoneNumber: fee.user.phoneNumber,
+          memberName,
+          year: fee.year,
+          amountLabel,
+          reminderStep: nextStep,
+        });
+      }
+
+      fee.reminderCycleMonth = cycleKey;
+      fee.reminderCycleStep = nextStep;
+      fee.remindersSent = (fee.remindersSent ?? 0) + 1;
+      fee.lastReminderAt = new Date();
+      await this.feeRepository.save(fee);
+      sent++;
+    }
+
+    return sent;
   }
 
   /**
@@ -565,6 +696,83 @@ export class MembershipService {
     const date = new Date(year, settings.endMonth - 1, settings.endDay);
     date.setHours(23, 59, 59, 999);
     return date;
+  }
+
+  /** Annual membership fees are due on 1 January of the fee year. */
+  private getAnnualFeeDueDate(year: number): Date {
+    return new Date(Date.UTC(year, 0, 1));
+  }
+
+  private getCalendarDayInTimezone(
+    date: Date = new Date(),
+    timeZone: string = REMINDER_TIMEZONE,
+  ): CalendarDay {
+    const formatted = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+    const [year, month, day] = formatted.split('-').map(Number);
+    return this.makeCalendarDay(year, month, day);
+  }
+
+  private makeCalendarDay(
+    year: number,
+    month: number,
+    day: number,
+  ): CalendarDay {
+    return {
+      year,
+      month,
+      day,
+      key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    };
+  }
+
+  private compareCalendarDays(a: CalendarDay, b: CalendarDay): number {
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    return a.day - b.day;
+  }
+
+  private lastDayOfMonth(year: number, month: number): number {
+    return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  }
+
+  private addCalendarDays(day: CalendarDay, days: number): CalendarDay {
+    const date = new Date(Date.UTC(day.year, day.month - 1, day.day + days));
+    return this.makeCalendarDay(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + 1,
+      date.getUTCDate(),
+    );
+  }
+
+  private formatCalendarDay(day: CalendarDay): string {
+    return new Date(Date.UTC(day.year, day.month - 1, day.day)).toLocaleDateString(
+      'en-GB',
+      { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' },
+    );
+  }
+
+  /**
+   * Active reminder cycle is anchored on the most recent month-end that has
+   * started (today is on/after that month-end).
+   */
+  private getActiveReminderCycleMonthEnd(today: CalendarDay): CalendarDay {
+    const thisMonthEndDay = this.lastDayOfMonth(today.year, today.month);
+    if (today.day >= thisMonthEndDay) {
+      return this.makeCalendarDay(today.year, today.month, thisMonthEndDay);
+    }
+
+    let year = today.year;
+    let month = today.month - 1;
+    if (month < 1) {
+      month = 12;
+      year -= 1;
+    }
+    return this.makeCalendarDay(year, month, this.lastDayOfMonth(year, month));
   }
 
   /**

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { Link, useNavigate, useParams } from "react-router";
 import { Button, StatusBadge } from "~/components/prototype-ui";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
 import type { ApiEnvelope } from "~/types";
@@ -164,6 +165,8 @@ function getPrimaryAction(
 export default function ApplicationReviewPage() {
   const { applicationId } = useParams();
   const navigate = useNavigate();
+  const { canUpdate } = usePermissions();
+  const canUpdateApplications = canUpdate("applications");
   const currentUser = getStoredUser();
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,8 +202,12 @@ export default function ApplicationReviewPage() {
     [detail, currentUser],
   );
   const isSecretariat = currentUser?.role === "SECRETARIAT" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN";
-  const canAct = detail?.status === "IN_REVIEW" && primaryAction;
-  const canTerminate = detail?.status === "IN_REVIEW" && isSecretariat && detail.reviewStage?.startsWith("SECRETARIAT");
+  const canAct = detail?.status === "IN_REVIEW" && primaryAction && canUpdateApplications;
+  const canTerminate =
+    detail?.status === "IN_REVIEW" &&
+    isSecretariat &&
+    detail.reviewStage?.startsWith("SECRETARIAT") &&
+    canUpdateApplications;
   // A review-stage application that this reviewer could act on, but which another
   // panel member has already claimed.
   const isReviewStage = detail?.reviewStage
@@ -387,7 +394,7 @@ export default function ApplicationReviewPage() {
                   </p>
                 )}
 
-                {detail.reviewStage === "SECRETARIAT_COUNCIL_RECOMMENDATION" && (
+                {detail.reviewStage === "SECRETARIAT_COUNCIL_RECOMMENDATION" && canUpdateApplications && (
                   <label className="block">
                     <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Approved Membership Grade</span>
                     <select
@@ -400,7 +407,7 @@ export default function ApplicationReviewPage() {
                   </label>
                 )}
 
-                {!claimAction && (
+                {!claimAction && canUpdateApplications && (
                   <label className="block">
                     <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Recommendation / Reason</span>
                     <textarea

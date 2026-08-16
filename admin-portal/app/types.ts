@@ -35,6 +35,8 @@ export type LoginUser = {
   role: string | null;
   profilePhotoUrl?: string | null;
   registrationStatus?: string | null;
+  permissions?: Partial<Record<string, Array<"read" | "create" | "update" | "delete">>>;
+  usingRoleDefaults?: boolean;
 };
 
 export type LoginResponse = {

@@ -2,8 +2,8 @@ import type { AxiosError } from "axios";
 import { useEffect, useState } from "react";
 import { RefreshCw, Send, Trash2, Wallet } from "lucide-react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
-import { getStoredUser } from "~/utils/auth";
 import type { ApiEnvelope } from "~/types";
 
 type PaymentRecord = {
@@ -186,6 +186,8 @@ function MetricCard({
 }
 
 export default function PaymentsPage() {
+  const { canUpdate, canDelete: canDeletePayments } = usePermissions();
+  const canUpdatePayments = canUpdate("payments");
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,15 +201,14 @@ export default function PaymentsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
 
-  const currentRole = getStoredUser()?.role;
-  const isSuperAdmin = currentRole === "SUPER_ADMIN";
-  const isAdmin = isSuperAdmin || currentRole === "ADMIN";
   const [deleteTarget, setDeleteTarget] = useState<PaymentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [sendLinkTarget, setSendLinkTarget] = useState<PaymentRecord | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  const showPaymentActions = canUpdatePayments || canDeletePayments("payments");
 
   function showToast(message: string, ms = 3500) {
     setToast(message);
@@ -216,25 +217,26 @@ export default function PaymentsPage() {
 
   // Only actual (failed/cancelled) payment records may be deleted — never
   // membership-fee rows or completed/in-flight payments.
-  function canDelete(p: PaymentRecord) {
+  function canDeletePaymentRecord(p: PaymentRecord) {
     return (
-      isSuperAdmin &&
+      canDeletePayments("payments") &&
       p.source === "PAYMENT" &&
       (p.status === "FAILED" || p.status === "CANCELLED")
     );
   }
 
   // A payment link can be (re)sent for any unpaid real payment.
-  function canSendLink(p: PaymentRecord) {
+  function canSendPaymentLink(p: PaymentRecord) {
     return (
-      isSuperAdmin &&
+      canUpdatePayments &&
       p.source === "PAYMENT" &&
       p.status !== "COMPLETED" &&
       p.status !== "REFUNDED"
     );
   }
 
-  const canCheckStatus = (p: PaymentRecord) => isAdmin && p.source === "PAYMENT";
+  const canCheckPaymentStatus = (p: PaymentRecord) =>
+    canUpdatePayments && p.source === "PAYMENT";
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -338,11 +340,12 @@ export default function PaymentsPage() {
 
   // Shared action buttons (used by both the desktop table and the mobile cards).
   function renderActions(p: PaymentRecord) {
-    if (!isAdmin) return null;
-    const hasAny = canCheckStatus(p) || canSendLink(p) || canDelete(p);
+    if (!showPaymentActions) return null;
+    const hasAny =
+      canCheckPaymentStatus(p) || canSendPaymentLink(p) || canDeletePaymentRecord(p);
     return (
       <div className="flex items-center gap-2">
-        {canCheckStatus(p) && (
+        {canCheckPaymentStatus(p) && (
           <button
             type="button"
             onClick={() => void handleCheckStatus(p)}
@@ -354,7 +357,7 @@ export default function PaymentsPage() {
             <RefreshCw size={13} className={checkingId === p.id ? "animate-spin" : ""} />
           </button>
         )}
-        {canSendLink(p) && (
+        {canSendPaymentLink(p) && (
           <button
             type="button"
             onClick={() => setSendLinkTarget(p)}
@@ -365,7 +368,7 @@ export default function PaymentsPage() {
             <Send size={13} />
           </button>
         )}
-        {canDelete(p) && (
+        {canDeletePaymentRecord(p) && (
           <button
             type="button"
             onClick={() => setDeleteTarget(p)}
@@ -484,13 +487,13 @@ export default function PaymentsPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Receipt</th>
-                  {isAdmin && <th>Actions</th>}
+                  {showPaymentActions && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: isAdmin ? 10 : 9 }).map((__, j) => (
+                    {Array.from({ length: showPaymentActions ? 10 : 9 }).map((__, j) => (
                       <td key={j}>
                         <div
                           className="skeleton-bar h-[12px]"
@@ -515,7 +518,7 @@ export default function PaymentsPage() {
                   <th>Date</th>
                   <th>Status</th>
                   <th>Receipt</th>
-                  {isAdmin && <th>Actions</th>}
+                  {showPaymentActions && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -560,12 +563,12 @@ export default function PaymentsPage() {
                         <span className="text-[11px] text-[var(--muted)]">—</span>
                       )}
                     </td>
-                    {isAdmin && <td>{renderActions(p)}</td>}
+                    {showPaymentActions && <td>{renderActions(p)}</td>}
                   </tr>
                 ))}
                 {!loading && payments.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-12 text-center">
+                    <td colSpan={showPaymentActions ? 10 : 9} className="px-4 py-12 text-center">
                       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--red-pale)] text-[var(--red)]">
                         <Wallet size={22} />
                       </div>
@@ -656,7 +659,7 @@ export default function PaymentsPage() {
                   ))}
                 </div>
 
-                {(p.receiptUrl || isAdmin) && (
+                {(p.receiptUrl || showPaymentActions) && (
                   <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
                     {p.receiptUrl ? (
                       <a

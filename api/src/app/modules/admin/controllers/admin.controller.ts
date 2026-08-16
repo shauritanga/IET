@@ -17,6 +17,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -31,11 +32,13 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../auth/guards/admin.guard';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { AdminService } from '../services/admin.service';
 import { EventsService } from '../../events/services/events.service';
 import { GuestService } from '../../guest/services/guest.service';
+import { MembershipCardService } from '../../membership/services/membership-card.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
@@ -62,17 +65,43 @@ import {
 } from '../dto';
 import { GuestCheckInDto } from '../../guest/dto';
 import { CreateEventDto, UpdateEventDto } from '../../events/dto';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
+class IssueMembershipCardDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
 
 @ApiTags('Admin')
 @Controller('admin')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class AdminController {
   constructor(
     private adminService: AdminService,
     private eventsService: EventsService,
     private guestService: GuestService,
+    private membershipCardService: MembershipCardService,
   ) {}
+
+  // ============================================
+  // PERMISSIONS CATALOG
+  // ============================================
+
+  @Get('permissions/catalog')
+  @ApiOperation({
+    summary: 'Permission resources, actions, and role defaults',
+  })
+  async getPermissionsCatalog() {
+    return {
+      success: true,
+      data: this.adminService.getPermissionsCatalog(),
+    };
+  }
 
   // ============================================
   // DASHBOARD
@@ -281,6 +310,86 @@ export class AdminController {
       success: true,
       data: result,
     };
+  }
+
+  @Get('members/:memberId/membership-card')
+  @ApiOperation({ summary: 'Get membership card status for a member' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async getMemberMembershipCard(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+  ) {
+    return {
+      success: true,
+      data: await this.membershipCardService.getCardForUser(memberId),
+    };
+  }
+
+  @Post('members/:memberId/membership-card/issue')
+  @ApiOperation({
+    summary: 'Issue membership card (notifies member by email/SMS)',
+  })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async issueMemberMembershipCard(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: IssueMembershipCardDto,
+  ) {
+    const card = await this.membershipCardService.issueCard(
+      memberId,
+      admin.id || (admin as any).userId,
+      dto?.notes,
+    );
+    return {
+      success: true,
+      data: card,
+      message: 'Membership card issued and member notified',
+    };
+  }
+
+  @Post('members/:memberId/membership-card/ready-for-collection')
+  @ApiOperation({ summary: 'Mark card ready for physical collection' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async markMembershipCardReady(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+  ) {
+    return {
+      success: true,
+      data: await this.membershipCardService.markReadyForCollection(memberId),
+      message: 'Card marked ready for collection',
+    };
+  }
+
+  @Post('members/:memberId/membership-card/collected')
+  @ApiOperation({ summary: 'Mark physical membership card as collected' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async markMembershipCardCollected(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    return {
+      success: true,
+      data: await this.membershipCardService.markCollected(
+        memberId,
+        admin.id || (admin as any).userId,
+      ),
+      message: 'Card marked as collected',
+    };
+  }
+
+  @Get('members/:memberId/membership-card/pdf')
+  @ApiOperation({ summary: 'Download / print membership card PDF' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async downloadMemberMembershipCardPdf(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename } =
+      await this.membershipCardService.generatePdfForMember(memberId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    return new StreamableFile(buffer);
   }
 
   @Patch('members/:memberId/status')

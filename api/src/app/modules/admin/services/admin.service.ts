@@ -73,6 +73,8 @@ import {
   DEFAULT_APPLICATION_ENTRY_FEES,
   type ApplicationEntryFeesConfig,
 } from '../constants/application-entry-fees';
+import { PermissionsService } from '../../../common/permissions/permissions.service';
+import { type ResourcePermissions } from '../../../common/permissions/permission.constants';
 
 type LegacyMemberImportResult = {
   created: number;
@@ -175,6 +177,7 @@ export class AdminService {
     private notificationsService: NotificationsService,
     private paymentsService: PaymentsService,
     private messagingQueue: MessagingQueueService,
+    private permissionsService: PermissionsService,
   ) {}
 
   private hasThreeConsecutiveUnpaidFeeYears(
@@ -326,11 +329,25 @@ export class AdminService {
     }
   }
 
-  /** Admins and super admins may manage portal users. */
-  private assertCanManagePortalUsers(actor: Pick<UserEntity, 'role'>): void {
-    if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You are not allowed to manage portal users');
-    }
+  /** Admins and permission-gated actors may manage portal users (guard enforces). */
+  private assertCanManagePortalUsers(_actor: Pick<UserEntity, 'role'>): void {
+    // Intentionally empty: PermissionsGuard requires admin_users:* on these routes.
+  }
+
+  getPermissionsCatalog() {
+    return this.permissionsService.getCatalog();
+  }
+
+  private buildPermissionSummary(user: UserEntity) {
+    const effective = this.permissionsService.resolveEffectivePermissions(
+      user.role,
+      user.customPermissions as ResourcePermissions | null,
+    );
+    return {
+      permissions: effective,
+      usingRoleDefaults: !user.customPermissions,
+      customPermissions: user.customPermissions ?? null,
+    };
   }
 
   /** A role the actor is permitted to assign to a portal user. */
@@ -364,6 +381,7 @@ export class AdminService {
     user: UserEntity,
     disciplines: { id: string; name: string }[] = [],
   ) {
+    const permissionSummary = this.buildPermissionSummary(user);
     return {
       id: user.id,
       email: user.email,
@@ -377,6 +395,7 @@ export class AdminService {
       disciplines,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      ...permissionSummary,
     };
   }
 
@@ -567,6 +586,11 @@ export class AdminService {
       smsPreferences: {},
       pushPreferences: {},
       password: await bcrypt.hash(plainPassword, 10),
+      customPermissions: this.permissionsService.normalizeForStorage(
+        dto.role,
+        dto.permissions as ResourcePermissions | undefined,
+        dto.useRoleDefaults,
+      ),
     });
 
     const saved = await this.userRepository.save(user);
@@ -696,6 +720,14 @@ export class AdminService {
     if (dto.firstName !== undefined) user.firstName = dto.firstName;
     if (dto.lastName !== undefined) user.lastName = dto.lastName;
     if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
+
+    if (dto.permissions !== undefined || dto.useRoleDefaults) {
+      user.customPermissions = this.permissionsService.normalizeForStorage(
+        user.role,
+        dto.permissions as ResourcePermissions | undefined,
+        dto.useRoleDefaults,
+      );
+    }
 
     const saved = await this.userRepository.save(user);
 

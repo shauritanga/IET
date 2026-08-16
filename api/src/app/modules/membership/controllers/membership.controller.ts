@@ -9,6 +9,8 @@ import {
   HttpStatus,
   HttpCode,
   ParseIntPipe,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -18,10 +20,12 @@ import {
   ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { MembershipService } from '../services/membership.service';
+import { MembershipCardService } from '../services/membership-card.service';
 import { InitiateFeePaymentDto } from '../dto';
 import { Public } from '../../../common/decorators/public.decorator';
 
@@ -30,7 +34,10 @@ import { Public } from '../../../common/decorators/public.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MembershipController {
-  constructor(private membershipService: MembershipService) {}
+  constructor(
+    private membershipService: MembershipService,
+    private membershipCardService: MembershipCardService,
+  ) {}
 
   @Get('categories')
   @Public()
@@ -217,5 +224,35 @@ export class MembershipController {
       success: true,
       data: result,
     };
+  }
+
+  // ============================================
+  // MEMBERSHIP CARD (member self-service)
+  // ============================================
+
+  @Get('me/card')
+  @ApiOperation({ summary: 'Get current member membership card status' })
+  async getMyMembershipCard(@GetUser() user: UserEntity) {
+    const result = await this.membershipCardService.getCardForUser(
+      user.id || (user as any).userId,
+    );
+    return { success: true, data: result };
+  }
+
+  @Get('me/card/pdf')
+  @ApiOperation({ summary: 'Download issued membership card PDF' })
+  async downloadMyMembershipCardPdf(
+    @GetUser() user: UserEntity,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { buffer, filename } =
+      await this.membershipCardService.generatePdfForSelf(
+        user.id || (user as any).userId,
+      );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    return new StreamableFile(buffer);
   }
 }

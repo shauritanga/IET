@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import http from "~/utils/http";
+import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope, MemberSummary } from "~/types";
 
 type MemberRow = MemberSummary & {
@@ -315,8 +316,8 @@ function MemberActionMenu({
   onDelete,
 }: {
   onView: () => void;
-  onRenew: () => void;
-  onDelete: () => void;
+  onRenew?: () => void;
+  onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -415,17 +416,23 @@ function MemberActionMenu({
             onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
             <ViewIcon /> View
           </button>
-          <button type="button" onClick={() => { setOpen(false); onRenew(); }} style={itemStyle}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
-            <RenewIcon /> Renew
-          </button>
-          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
-          <button type="button" onClick={() => { setOpen(false); onDelete(); }} style={{ ...itemStyle, color: "var(--red)" }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-pale)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
-            <TrashIcon /> Delete
-          </button>
+          {onRenew ? (
+            <button type="button" onClick={() => { setOpen(false); onRenew(); }} style={itemStyle}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+              <RenewIcon /> Renew
+            </button>
+          ) : null}
+          {onDelete ? (
+            <>
+              <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
+              <button type="button" onClick={() => { setOpen(false); onDelete(); }} style={{ ...itemStyle, color: "var(--red)" }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-pale)")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+                <TrashIcon /> Delete
+              </button>
+            </>
+          ) : null}
         </div>
       )}
     </div>
@@ -476,6 +483,10 @@ function GridViewIcon({ active }: { active: boolean }) {
 
 export default function MembersPage() {
   const navigate = useNavigate();
+  const { canCreate, canUpdate, canDelete } = usePermissions();
+  const canAddMembers = canCreate("members");
+  const canRenewMembers = canUpdate("members");
+  const canRemoveMembers = canDelete("members");
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -730,22 +741,26 @@ export default function MembersPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={openCreate}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "background .15s" }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
-          >
-            <PlusIcon /> Add Member
-          </button>
-          <button
-            onClick={openImport}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--white)", color: "var(--text)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "border-color .15s" }}
-            onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
-            onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-          >
-            <UploadIcon /> Import Members
-          </button>
+          {canAddMembers ? (
+            <button
+              onClick={openCreate}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "background .15s" }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
+            >
+              <PlusIcon /> Add Member
+            </button>
+          ) : null}
+          {canAddMembers ? (
+            <button
+              onClick={openImport}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--white)", color: "var(--text)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "border-color .15s" }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+            >
+              <UploadIcon /> Import Members
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -861,8 +876,8 @@ export default function MembersPage() {
         const ActionButtons = ({ member }: { member: MemberRow }) => (
           <MemberActionMenu
             onView={() => navigate(`/dashboard/members/${member.id}`)}
-            onRenew={() => openRenew(member)}
-            onDelete={() => openDelete(member)}
+            onRenew={canRenewMembers ? () => openRenew(member) : undefined}
+            onDelete={canRemoveMembers ? () => openDelete(member) : undefined}
           />
         );
 

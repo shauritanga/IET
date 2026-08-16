@@ -23,6 +23,8 @@ import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { RegistrationEntity } from '../../registration/entities';
 import { AuthPortal, UserRole } from '../../../common/enums';
 import { RegisterDto } from '../dto/register.dto';
+import { PermissionsService } from '../../../common/permissions/permissions.service';
+import { ResourcePermissions } from '../../../common/permissions/permission.constants';
 
 @Injectable()
 export class AuthService {
@@ -34,9 +36,37 @@ export class AuthService {
     private configService: ConfigService,
     private encryptionService: EncryptionService,
     private messagingQueue: MessagingQueueService,
+    private permissionsService: PermissionsService,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
   ) {}
+
+  private toAuthUserPayload(
+    user: UserEntity,
+    registrationStatus?: string | null,
+  ) {
+    const permissions = this.permissionsService.resolveEffectivePermissions(
+      user.role,
+      user.customPermissions as ResourcePermissions | null,
+    );
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+      isActive: user.isActive,
+      membershipId: user.membershipId,
+      membershipStatus: user.membershipStatus,
+      role: user.role,
+      profilePhotoUrl: user.profilePhotoUrl,
+      registrationStatus: registrationStatus ?? null,
+      permissions,
+      usingRoleDefaults: !user.customPermissions,
+    };
+  }
 
   /**
    * Parse simple duration strings ("15m", "7d", "24h", "30s") into milliseconds.
@@ -141,18 +171,17 @@ export class AuthService {
     return {
       verified: true,
       ...tokens,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        phoneNumber: user.phoneNumber,
-        membershipId: user.membershipId,
-        membershipStatus: user.membershipStatus,
-        role: user.role,
-        profilePhotoUrl: user.profilePhotoUrl,
-        registrationStatus,
-      },
+      user: this.toAuthUserPayload(user, registrationStatus),
     };
+  }
+
+  /**
+   * Current authenticated user with effective permissions.
+   */
+  async getSessionUser(userId: string) {
+    const user = await this.usersService.findById(userId);
+    const registrationStatus = await this.getRegistrationStatus(user.id);
+    return this.toAuthUserPayload(user, registrationStatus);
   }
 
   /**
@@ -293,17 +322,7 @@ export class AuthService {
 
       return {
         ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          phoneNumber: user.phoneNumber,
-          membershipId: user.membershipId,
-          membershipStatus: user.membershipStatus,
-          role: user.role,
-          profilePhotoUrl: user.profilePhotoUrl,
-          registrationStatus,
-        },
+        user: this.toAuthUserPayload(user, registrationStatus),
       };
     } catch (error) {
       if (
@@ -564,17 +583,7 @@ export class AuthService {
         return {
           verified: true,
           ...tokens,
-          user: {
-            id: user.id,
-            email: user.email,
-            fullName: user.fullName,
-            phoneNumber: user.phoneNumber,
-            membershipId: user.membershipId,
-            membershipStatus: user.membershipStatus,
-            role: user.role,
-            profilePhotoUrl: user.profilePhotoUrl,
-            registrationStatus,
-          },
+          user: this.toAuthUserPayload(user, registrationStatus),
         };
       }
 

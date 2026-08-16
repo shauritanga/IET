@@ -15,6 +15,7 @@ import {
   Max,
   IsUUID,
   ValidateNested,
+  IsObject,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -25,6 +26,10 @@ import {
   EngineeringDiscipline,
   UserRole,
 } from '../../../common/enums';
+import {
+  PermissionAction,
+  PermissionResource,
+} from '../../../common/permissions/permission.constants';
 
 export class MemberQueryDto {
   @ApiPropertyOptional({ example: 1 })
@@ -397,6 +402,25 @@ export class CreateAdminUserDto {
   @IsArray()
   @IsUUID('4', { each: true })
   disciplineIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Optional permission overrides by resource. Omit or set useRoleDefaults to inherit role defaults.',
+    example: {
+      applications: ['read', 'update'],
+      members: ['read'],
+    },
+  })
+  @IsOptional()
+  @IsObject()
+  permissions?: Partial<Record<PermissionResource, PermissionAction[]>>;
+
+  @ApiPropertyOptional({
+    description: 'When true, clear overrides and inherit role defaults',
+  })
+  @IsOptional()
+  @IsBoolean()
+  useRoleDefaults?: boolean;
 }
 
 export class UpdateAdminUserDto {
@@ -439,6 +463,21 @@ export class UpdateAdminUserDto {
   @IsArray()
   @IsUUID('4', { each: true })
   disciplineIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'Optional permission overrides by resource. Pass useRoleDefaults=true to clear overrides.',
+  })
+  @IsOptional()
+  @IsObject()
+  permissions?: Partial<Record<PermissionResource, PermissionAction[]>>;
+
+  @ApiPropertyOptional({
+    description: 'When true, clear overrides and inherit role defaults',
+  })
+  @IsOptional()
+  @IsBoolean()
+  useRoleDefaults?: boolean;
 }
 
 export class FiscalYearSettingsDto {

@@ -84,6 +84,19 @@ export class EmailQueueProcessor extends WorkerHost {
           job.data.daysUntilExpiry,
         );
         break;
+      case 'membership-fee-reminder':
+        result = await this.emailService.sendMembershipFeeReminder(
+          job.data.email,
+          job.data.firstName,
+          {
+            year: job.data.year,
+            amount: job.data.amount,
+            currency: job.data.currency,
+            dueDate: job.data.dueDate,
+            reminderStep: job.data.reminderStep,
+          },
+        );
+        break;
       case 'event-registration':
         result = await this.emailService.sendEventRegistrationEmail(
           job.data.email,

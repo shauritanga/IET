@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { isAxiosError } from "axios";
 import http from "~/utils/http";
+import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope } from "~/types";
 import { Button, StatusBadge } from "~/components/prototype-ui";
 
@@ -307,6 +308,9 @@ function ReviewModal({
 }
 
 function UpgradeRulesPanel() {
+  const { canCreate, canUpdate } = usePermissions();
+  const canCreateRules = canCreate("members");
+  const canUpdateRules = canUpdate("members");
   const [rules, setRules] = useState<UpgradeRule[]>([]);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -402,7 +406,7 @@ function UpgradeRulesPanel() {
           <input style={fieldStyle} placeholder="Required docs, comma-separated" value={form.requiredDocuments} onChange={(e) => setForm((f) => ({ ...f, requiredDocuments: e.target.value }))} />
           <input style={fieldStyle} placeholder="Description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </div>
-        <Button style={{ marginTop: 12 }} disabled={saving} onClick={createRule}>{saving ? "Saving…" : "Create Rule"}</Button>
+        <Button style={{ marginTop: 12 }} disabled={saving || !canCreateRules} onClick={createRule}>{saving ? "Saving…" : "Create Rule"}</Button>
       </div>
       {loading ? (
         <div style={{ padding: 20, fontSize: 12, color: "var(--text-muted, #666)" }}>Loading rules…</div>
@@ -416,7 +420,13 @@ function UpgradeRulesPanel() {
                   <td style={{ fontSize: 12.5, fontWeight: 600 }}>{rule.fromCategory?.name ?? "—"} → {rule.toCategory?.name ?? "—"}</td>
                   <td style={{ fontSize: 12 }}>Years: {rule.minYearsExperience}, CPD: {rule.minCpdPoints}, Docs: {rule.requiredDocuments?.join(", ") || "None"}</td>
                   <td><StatusBadge tone={rule.isActive ? "active" : "warning"}>{rule.isActive ? "Active" : "Inactive"}</StatusBadge></td>
-                  <td style={{ textAlign: "right" }}><Button onClick={() => toggleRule(rule)}>{rule.isActive ? "Deactivate" : "Activate"}</Button></td>
+                  <td style={{ textAlign: "right" }}>
+                    {canUpdateRules ? (
+                      <Button onClick={() => toggleRule(rule)}>{rule.isActive ? "Deactivate" : "Activate"}</Button>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--text-muted, #666)" }}>—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -430,6 +440,8 @@ function UpgradeRulesPanel() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function UpgradeApplicationsPage() {
+  const { canUpdate } = usePermissions();
+  const canReviewUpgrades = canUpdate("members");
   const [applications, setApplications] = useState<UpgradeApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -609,7 +621,7 @@ export default function UpgradeApplicationsPage() {
                       ) : "—"}
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      {app.status === "PENDING" ? (
+                      {app.status === "PENDING" && canReviewUpgrades ? (
                         <Button
                           onClick={() => setReviewModal({
                             applicationId: app.id,
@@ -659,7 +671,7 @@ export default function UpgradeApplicationsPage() {
                 </div>
                 <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                   <span style={{ fontSize: 11, color: "var(--muted)" }}>Submitted {formatDate(app.submittedAt)}</span>
-                  {app.status === "PENDING" && (
+                  {app.status === "PENDING" && canReviewUpgrades && (
                     <Button
                       onClick={() => setReviewModal({
                         applicationId: app.id,

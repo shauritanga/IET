@@ -1,6 +1,7 @@
 import type { AxiosError } from "axios";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { AdminStats, ApiEnvelope, MemberSummary } from "~/types";
 import { Avatar, Button, StatusBadge } from "~/components/prototype-ui";
@@ -212,6 +213,11 @@ function applicationActionLabel(status: string) {
 
 export default function DashboardOverviewPage() {
   const navigate = useNavigate();
+  const { canRead, canAccess } = usePermissions();
+  const canExportReports = canRead("reports");
+  const canViewApplications = canAccess("/dashboard/applications");
+  const canViewPayments = canAccess("/dashboard/payments");
+  const canViewMembers = canAccess("/dashboard/members");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [recentApplications, setRecentApplications] = useState<DashboardApplicationRow[]>([]);
   const [recentPayments, setRecentPayments] = useState<DashboardPaymentRow[]>([]);
@@ -278,7 +284,11 @@ export default function DashboardOverviewPage() {
           <h1 className="text-[15px] font-extrabold text-[var(--red-dark)]">Dashboard Overview</h1>
           <p className="mt-[2px] hidden truncate text-[11px] text-[var(--muted)] sm:block">Live snapshot of IET Tanzania operations</p>
         </div>
-        <Button tone="outline" className="shrink-0">Export Report</Button>
+        {canExportReports ? (
+          <Button tone="outline" className="shrink-0" onClick={() => navigate("/dashboard/reports")}>
+            Export Report
+          </Button>
+        ) : null}
       </div>
 
       {pageError ? (
@@ -318,7 +328,11 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="mb-[18px] grid gap-[18px] xl:grid-cols-[1.4fr_1fr]">
-        <DashboardCard title="Recent Applications" action={<Link to="/dashboard/applications">View all</Link>} bodyClassName="p-0">
+        <DashboardCard
+          title="Recent Applications"
+          action={canViewApplications ? <Link to="/dashboard/applications">View all</Link> : undefined}
+          bodyClassName="p-0"
+        >
           <div className="hidden overflow-x-auto md:block">
             <table className="table-proto min-w-full border-separate border-spacing-0">
               <thead>
@@ -421,7 +435,11 @@ export default function DashboardOverviewPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Recent Payments" action={<Link to="/dashboard/payments">View all</Link>} bodyClassName="p-0">
+        <DashboardCard
+          title="Recent Payments"
+          action={canViewPayments ? <Link to="/dashboard/payments">View all</Link> : undefined}
+          bodyClassName="p-0"
+        >
           <div className="flex flex-col">
             {loading ? (
               <div className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">
@@ -458,7 +476,11 @@ export default function DashboardOverviewPage() {
         </DashboardCard>
       </div>
 
-      <DashboardCard title="Recent Members" action={<Link to="/dashboard/members">View all</Link>} bodyClassName="p-0">
+      <DashboardCard
+        title="Recent Members"
+        action={canViewMembers ? <Link to="/dashboard/members">View all</Link> : undefined}
+        bodyClassName="p-0"
+      >
         <div className="hidden overflow-x-auto md:block">
           <table className="table-proto min-w-full border-separate border-spacing-0">
             <thead>

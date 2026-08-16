@@ -1,10 +1,11 @@
 import { ChevronDown, LogOut, MoonStar, Settings2, SunMedium, UserRound, ChevronUp, SendHorizonal, History, FileText, ArrowUpRight, LayoutDashboard, Users, CreditCard, Menu } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useRef, useState } from "react";
-import { clearSession, getStoredUser } from "~/utils/auth";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { clearSession } from "~/utils/auth";
 import { navGroups, pageLabels } from "~/data/admin-prototype";
 import { useThemeMode } from "~/providers/theme";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 
 function DashboardIcon() {
@@ -235,12 +236,34 @@ export default function AdminShell() {
   const headerAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const sidebarAccountMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
-  const user = getStoredUser();
+  const { user, canAccess, canRead } = usePermissions();
   const { theme, toggleTheme } = useThemeMode();
+
+  const visibleNavGroups = useMemo(() => {
+    return navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canAccess(item.to)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [canAccess]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!canAccess(location.pathname)) {
+      const fallback =
+        visibleNavGroups[0]?.items[0]?.to ??
+        (canRead("dashboard") ? "/dashboard" : "/dashboard/profile");
+      if (location.pathname !== fallback) {
+        navigate(fallback, { replace: true });
+      }
+    }
+  }, [location.pathname, canAccess, canRead, user, visibleNavGroups, navigate]);
 
   const pageLabel = pageLabels[location.pathname] ?? "Dashboard";
   const userName = user?.fullName ?? "Admin";
   const userRole = user?.role ?? "ADMIN";
+  const canOpenSettings = canRead("settings");
   const initials = userName
     .split(/\s+/)
     .slice(0, 2)
@@ -469,18 +492,20 @@ export default function AdminShell() {
             <span>Member Portal</span>
           </button>
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeAccountMenu();
-              navigate("/dashboard/settings");
-            }}
-            className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors duration-150 hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
-          >
-            <Settings2 size={14} className="shrink-0 text-[var(--muted)]" />
-            <span>Settings</span>
-          </button>
+          {canOpenSettings && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeAccountMenu();
+                navigate("/dashboard/settings");
+              }}
+              className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] transition-colors duration-150 hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+            >
+              <Settings2 size={14} className="shrink-0 text-[var(--muted)]" />
+              <span>Settings</span>
+            </button>
+          )}
 
           <div className="my-1 h-px bg-[var(--border)]" />
 
@@ -535,7 +560,7 @@ export default function AdminShell() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-0 py-3">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.label}>
               {"collapsible" in group && group.collapsible ? (
                 <div>
@@ -784,7 +809,9 @@ export default function AdminShell() {
           { label: "Members", to: "/dashboard/members", icon: <Users size={19} /> },
           { label: "Payments", to: "/dashboard/payments", icon: <CreditCard size={19} /> },
           { label: "More", icon: <Menu size={19} />, onClick: () => setCollapsed(false) },
-        ].map((item) => {
+        ]
+          .filter((item) => !item.to || canAccess(item.to))
+          .map((item) => {
           const active = item.to
             ? item.exact
               ? location.pathname === item.to

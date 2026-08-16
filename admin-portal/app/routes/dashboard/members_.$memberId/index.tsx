@@ -1,7 +1,8 @@
 import type { AxiosError } from "axios";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import http from "~/utils/http";
+import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope } from "~/types";
 
 type MemberDetails = {
@@ -72,6 +73,30 @@ type MemberDetails = {
     createdAt?: string | null;
     updatedAt?: string | null;
   };
+};
+
+type MembershipCardSummary = {
+  id: string;
+  status: "ISSUED" | "READY_FOR_COLLECTION" | "COLLECTED";
+  membershipNumber: string;
+  memberName: string;
+  membershipCategory: string;
+  specialization?: string | null;
+  validUntil: string;
+  issuedAt?: string | null;
+  readyForCollectionAt?: string | null;
+  collectedAt?: string | null;
+};
+
+type MembershipCardResponse = {
+  issued: boolean;
+  card: MembershipCardSummary | null;
+};
+
+const CARD_STATUS_LABELS: Record<string, string> = {
+  ISSUED: "Issued",
+  READY_FOR_COLLECTION: "Ready for collection",
+  COLLECTED: "Collected",
 };
 
 const CLASS_LABELS: Record<string, string> = {
@@ -188,9 +213,27 @@ function InlineMetric({ label, value }: { label: string; value: React.ReactNode 
 
 export default function MemberDetailsPage() {
   const { memberId } = useParams();
+  const { canUpdate } = usePermissions();
+  const canManageCard = canUpdate("members");
   const [member, setMember] = useState<MemberDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cardInfo, setCardInfo] = useState<MembershipCardResponse | null>(null);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardMessage, setCardMessage] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  const loadCard = useCallback(async () => {
+    if (!memberId) return;
+    try {
+      const { data } = await http.get<ApiEnvelope<MembershipCardResponse>>(
+        `/admin/members/${memberId}/membership-card`,
+      );
+      setCardInfo(data.data);
+    } catch {
+      setCardInfo({ issued: false, card: null });
+    }
+  }, [memberId]);
 
   useEffect(() => {
     async function loadMember() {
@@ -200,6 +243,7 @@ export default function MemberDetailsPage() {
       try {
         const { data } = await http.get<ApiEnvelope<MemberDetails>>(`/admin/members/${memberId}`);
         setMember(data.data);
+        await loadCard();
       } catch (err) {
         const e = err as AxiosError<{ message?: string }>;
         setError(e.response?.data?.message ?? "Failed to load member details.");
@@ -208,7 +252,45 @@ export default function MemberDetailsPage() {
       }
     }
     void loadMember();
-  }, [memberId]);
+  }, [memberId, loadCard]);
+
+  async function runCardAction(action: "issue" | "ready-for-collection" | "collected" | "pdf") {
+    if (!memberId) return;
+    setCardBusy(true);
+    setCardError(null);
+    setCardMessage(null);
+    try {
+      if (action === "pdf") {
+        const response = await http.get(`/admin/members/${memberId}/membership-card/pdf`, {
+          responseType: "blob",
+        });
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `IET-Membership-Card-${member?.membershipId ?? memberId}.pdf`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setCardMessage("Card PDF downloaded for printing.");
+        return;
+      }
+
+      const path =
+        action === "issue"
+          ? `/admin/members/${memberId}/membership-card/issue`
+          : action === "ready-for-collection"
+            ? `/admin/members/${memberId}/membership-card/ready-for-collection`
+            : `/admin/members/${memberId}/membership-card/collected`;
+      const { data } = await http.post<ApiEnvelope<MembershipCardSummary>>(path, {});
+      setCardMessage(data.message ?? "Updated.");
+      await loadCard();
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string }>;
+      setCardError(e.response?.data?.message ?? "Membership card action failed.");
+    } finally {
+      setCardBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -297,6 +379,91 @@ export default function MemberDetailsPage() {
               ]} />
             </Section>
           </div>
+
+          <Section title="Membership Card">
+            {!member.membershipId ? (
+              <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                Issue a membership number first (complete application approval) before creating a card.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>Status:</span>
+                  <strong style={{ fontSize: 12.5 }}>
+                    {cardInfo?.issued && cardInfo.card
+                      ? CARD_STATUS_LABELS[cardInfo.card.status] ?? cardInfo.card.status
+                      : "Not issued"}
+                  </strong>
+                  {cardInfo?.card?.issuedAt ? (
+                    <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                      Issued {formatDate(cardInfo.card.issuedAt)}
+                    </span>
+                  ) : null}
+                </div>
+                {cardError ? (
+                  <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, color: "var(--red)" }}>
+                    {cardError}
+                  </div>
+                ) : null}
+                {cardMessage ? (
+                  <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, color: "#15803d" }}>
+                    {cardMessage}
+                  </div>
+                ) : null}
+                {canManageCard ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={cardBusy}
+                      onClick={() => void runCardAction("issue")}
+                      style={{ background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: cardBusy ? 0.7 : 1 }}
+                    >
+                      {cardInfo?.issued ? "Re-issue & Notify" : "Issue Card"}
+                    </button>
+                    {cardInfo?.issued ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={cardBusy}
+                          onClick={() => void runCardAction("pdf")}
+                          style={{ background: "white", color: "var(--text)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Print / Download PDF
+                        </button>
+                        {cardInfo.card?.status !== "COLLECTED" ? (
+                          <button
+                            type="button"
+                            disabled={cardBusy}
+                            onClick={() => void runCardAction("ready-for-collection")}
+                            style={{ background: "white", color: "var(--text)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Ready for Collection
+                          </button>
+                        ) : null}
+                        {cardInfo.card?.status !== "COLLECTED" ? (
+                          <button
+                            type="button"
+                            disabled={cardBusy}
+                            onClick={() => void runCardAction("collected")}
+                            style={{ background: "#1a365d", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Mark Collected
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                    You can view card status, but issuing requires members update permission.
+                  </p>
+                )}
+                <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
+                  Issuing notifies the member by email and SMS. They can download the card in the member portal, or you can print it here for office collection.
+                </p>
+              </div>
+            )}
+          </Section>
 
           <Section title="Fee History">
             {member.feeHistory.length === 0 ? (

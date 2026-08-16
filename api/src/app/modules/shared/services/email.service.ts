@@ -277,6 +277,38 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
+   * Send unpaid annual membership fee reminder
+   */
+  async sendMembershipFeeReminder(
+    email: string,
+    firstName: string,
+    details: {
+      year: number;
+      amount: number;
+      currency: string;
+      dueDate: string;
+      reminderStep: 1 | 2 | 3;
+    },
+  ): Promise<EmailResult> {
+    const html = this.getTemplate('membership-fee-reminder', {
+      firstName,
+      ...details,
+      amountLabel: `${details.currency} ${details.amount.toLocaleString('en-TZ')}`,
+    });
+    const urgency =
+      details.reminderStep === 1
+        ? 'Payment Reminder'
+        : details.reminderStep === 2
+          ? 'Second Reminder'
+          : 'Final Reminder This Month';
+    return this.send({
+      to: email,
+      subject: `${urgency}: ${details.year} IET Membership Fee Outstanding`,
+      html,
+    });
+  }
+
+  /**
    * Send application status update
    */
   async sendApplicationStatusEmail(
@@ -380,6 +412,111 @@ export class EmailService implements OnModuleInit {
       successful,
       failed,
     };
+  }
+
+  /**
+   * Wrap free-form communication body in the standard IET email chrome
+   * (branded header + institutional footer signature).
+   */
+  buildCommunicationEmail(params: {
+    body: string;
+    subject?: string;
+    recipientName?: string | null;
+  }): { html: string; text: string } {
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const safeBody = escapeHtml(params.body.trim())
+      .split('\n')
+      .map((line) => (line.trim() ? line : '&nbsp;'))
+      .join('<br />');
+
+    const greeting = params.recipientName?.trim()
+      ? `Dear ${escapeHtml(params.recipientName.trim())},`
+      : 'Dear Member,';
+
+    const title = params.subject?.trim()
+      ? escapeHtml(params.subject.trim())
+      : 'Message from IET Tanzania';
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f0f0;font-family:Arial,Helvetica,sans-serif;color:#1f1313;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f0f0;width:100%;">
+    <tr>
+      <td align="center" style="padding:28px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #eadfdf;">
+          <tr>
+            <td style="background:#E20C0A;color:#ffffff;padding:22px 28px;">
+              <div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;opacity:.9;">Institution of Engineers Tanzania</div>
+              <div style="font-size:20px;font-weight:700;margin-top:6px;line-height:1.3;">${title}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 12px;">
+              <p style="margin:0 0 16px;font-size:15px;color:#1f1313;">${greeting}</p>
+              <div style="font-size:14px;line-height:1.7;color:#3f2f2f;">${safeBody}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 28px;">
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#3f2f2f;">
+                Kind regards,<br />
+                <strong>IET Secretariat</strong><br />
+                Institution of Engineers Tanzania
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8f4f4;padding:18px 24px;text-align:center;border-top:1px solid #eadfdf;">
+              <p style="margin:0 0 6px;color:#7f1d1d;font-size:12px;font-weight:700;letter-spacing:.4px;">
+                Institution of Engineers Tanzania (IET)
+              </p>
+              <p style="margin:0;color:#7a6565;font-size:11px;line-height:1.5;">
+                Dar es Salaam, Tanzania<br />
+                <a href="mailto:info@iet.or.tz" style="color:#9b1c1c;text-decoration:none;">info@iet.or.tz</a>
+                &nbsp;·&nbsp;
+                <a href="https://www.iet.or.tz" style="color:#9b1c1c;text-decoration:none;">www.iet.or.tz</a>
+              </p>
+              <p style="margin:10px 0 0;color:#9a8585;font-size:10px;line-height:1.4;">
+                This message was sent by IET. Please do not reply directly to this email unless a reply address was provided.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+    const textGreeting = params.recipientName?.trim()
+      ? `Dear ${params.recipientName.trim()},`
+      : 'Dear Member,';
+
+    const text = [
+      textGreeting,
+      '',
+      params.body.trim(),
+      '',
+      'Kind regards,',
+      'IET Secretariat',
+      'Institution of Engineers Tanzania (IET)',
+      'Dar es Salaam, Tanzania',
+      'info@iet.or.tz · www.iet.or.tz',
+    ].join('\n');
+
+    return { html, text };
   }
 
   // ============================================
@@ -736,6 +873,33 @@ export class EmailService implements OnModuleInit {
                         <p style="text-align: center; margin: 30px 0;">
                             <a href="${this.configService.get('APP_URL')}/memberships/renew" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">Renew Now</a>
                         </p>
+                    </div>
+                </body>
+                </html>
+            `,
+      'membership-fee-reminder': (ctx) => `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="utf-8"><title>Membership Fee Reminder</title></head>
+                <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; padding: 20px; background: #1a365d; color: white;">
+                        <h1>Membership Fee Reminder</h1>
+                    </div>
+                    <div style="padding: 30px; background: #f7fafc;">
+                        <h2>Dear ${ctx.firstName},</h2>
+                        <p>This is a reminder that your <strong>${ctx.year}</strong> IET annual membership fee is still outstanding.</p>
+                        <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr><td style="padding: 8px 0; color: #718096;">Fee year</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">${ctx.year}</td></tr>
+                                <tr><td style="padding: 8px 0; color: #718096;">Amount due</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">${ctx.amountLabel}</td></tr>
+                                <tr><td style="padding: 8px 0; color: #718096;">Due date</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">${ctx.dueDate}</td></tr>
+                            </table>
+                        </div>
+                        <p>Please pay as soon as possible to keep your membership in good standing.</p>
+                        <p style="text-align: center; margin: 30px 0;">
+                            <a href="${this.configService.get('ENGINEER_PORTAL_URL') || this.configService.get('APP_URL')}/dashboard/memberships" style="background: #2b6cb0; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;">Pay Membership Fee</a>
+                        </p>
+                        <p style="color: #718096; font-size: 13px;">Institution of Engineers Tanzania (IET)</p>
                     </div>
                 </body>
                 </html>

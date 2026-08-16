@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useRef, useState } from "react";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import {
@@ -144,8 +145,8 @@ function RowMenu({
   onEdit,
   onDelete,
 }: {
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -194,6 +195,8 @@ function RowMenu({
     setOpen((value) => !value);
   }
 
+  if (!onEdit && !onDelete) return null;
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -227,21 +230,25 @@ function RowMenu({
           maxHeight: "calc(100vh - 16px)",
           overflowY: "auto",
         }}>
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onEdit(); }}
-            style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left" }}
-          >
-            <EditIcon /> Edit
-          </button>
-          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onDelete(); }}
-            style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
-          >
-            <TrashIcon /> Delete
-          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onEdit(); }}
+              style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left" }}
+            >
+              <EditIcon /> Edit
+            </button>
+          ) : null}
+          {onEdit && onDelete ? <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} /> : null}
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onDelete(); }}
+              style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
+            >
+              <TrashIcon /> Delete
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -291,6 +298,10 @@ function FormField({
 }
 
 export default function CommunicationTemplatesPage() {
+  const { canCreate, canUpdate, canDelete } = usePermissions();
+  const canCreateTemplates = canCreate("communication");
+  const canUpdateTemplates = canUpdate("communication");
+  const canDeleteTemplates = canDelete("communication");
   const [templates, setTemplates] = useState<CommunicationTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -436,13 +447,15 @@ export default function CommunicationTemplatesPage() {
             Manage reusable SMS and Email templates for communication campaigns.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-        >
-          <PlusIcon /> New Template
-        </button>
+        {canCreateTemplates ? (
+          <button
+            type="button"
+            onClick={openCreate}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >
+            <PlusIcon /> New Template
+          </button>
+        ) : null}
       </div>
 
       <div className="grid gap-[14px] md:grid-cols-4">
@@ -532,7 +545,12 @@ export default function CommunicationTemplatesPage() {
                     <td style={{ fontSize: 11.5, color: "var(--text)" }}>{template.subject ?? "—"}</td>
                     <td><ActiveBadge active={template.isActive} /></td>
                     <td style={{ fontSize: 11.5, color: "var(--text)" }}>{formatDateTime(template.updatedAt)}</td>
-                    <td><RowMenu onEdit={() => openEdit(template)} onDelete={() => setDeleteTarget(template)} /></td>
+                    <td>
+                      <RowMenu
+                        onEdit={canUpdateTemplates ? () => openEdit(template) : undefined}
+                        onDelete={canDeleteTemplates ? () => setDeleteTarget(template) : undefined}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

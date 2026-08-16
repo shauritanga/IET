@@ -53,6 +53,15 @@ export class SmsQueueProcessor extends WorkerHost {
           job.data.daysUntilExpiry,
         );
         break;
+      case 'membership-fee-reminder':
+        result = await this.smsService.sendMembershipFeeReminder(
+          job.data.phoneNumber,
+          job.data.memberName,
+          job.data.year,
+          job.data.amountLabel,
+          job.data.reminderStep,
+        );
+        break;
       case 'event-reminder':
         result = await this.smsService.sendEventReminder(
           job.data.phoneNumber,

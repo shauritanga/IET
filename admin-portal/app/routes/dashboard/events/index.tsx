@@ -1,6 +1,7 @@
 import type { AxiosError } from "axios";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventAttendeesResponse, EventCategory } from "~/types";
 
@@ -396,7 +397,7 @@ const ROW_MENU_ESTIMATED_HEIGHT = 82;
 const ROW_MENU_GAP = 6;
 const ROW_MENU_VIEWPORT_PADDING = 8;
 
-function RowMenu({ onAttendees, onEdit }: { onAttendees: () => void; onEdit: () => void }) {
+function RowMenu({ onAttendees, onEdit }: { onAttendees: () => void; onEdit?: () => void }) {
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -469,18 +470,22 @@ function RowMenu({ onAttendees, onEdit }: { onAttendees: () => void; onEdit: () 
             </svg>
             Attendees
           </button>
-          <div className="mx-[10px] h-px bg-[var(--border)]" />
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onEdit(); }}
-            className="flex w-full items-center gap-[9px] px-[14px] py-[9px] text-left text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--bg)]"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            Edit
-          </button>
+          {onEdit ? (
+            <>
+              <div className="mx-[10px] h-px bg-[var(--border)]" />
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onEdit(); }}
+                className="flex w-full items-center gap-[9px] px-[14px] py-[9px] text-left text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--bg)]"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit
+              </button>
+            </>
+          ) : null}
         </div>
       )}
     </div>
@@ -592,6 +597,9 @@ function AttendeesPage({ view, onBack }: { view: AttendeesView; onBack: () => vo
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function EventsAndTrainingPage() {
+  const { canCreate, canUpdate } = usePermissions();
+  const canCreateEvents = canCreate("events");
+  const canUpdateEvents = canUpdate("events");
   const [eventRows, setEventRows] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -901,7 +909,9 @@ export default function EventsAndTrainingPage() {
             Create and manage IET Tanzania events, trainings and conferences
           </p>
         </div>
-        <Button tone="red" onClick={openCreateModal}>+ Create Event</Button>
+        {canCreateEvents ? (
+          <Button tone="red" onClick={openCreateModal}>+ Create Event</Button>
+        ) : null}
       </div>
 
       {pageError ? (
@@ -951,7 +961,7 @@ export default function EventsAndTrainingPage() {
                     <td>
                       <RowMenu
                         onAttendees={() => void openAttendeesPage(event)}
-                        onEdit={() => openEditModal(event)}
+                        onEdit={canUpdateEvents ? () => openEditModal(event) : undefined}
                       />
                     </td>
                   </tr>

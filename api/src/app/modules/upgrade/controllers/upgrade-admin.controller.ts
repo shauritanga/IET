@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../../auth/guards/admin.guard';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
 import { UpgradeService } from '../services/upgrade.service';
@@ -34,7 +35,7 @@ import {
 
 @ApiTags('Admin — Upgrade Applications')
 @Controller('admin/upgrades')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard, PermissionsGuard)
 @ApiBearerAuth()
 export class UpgradeAdminController {
   constructor(private readonly upgradeService: UpgradeService) {}

@@ -117,6 +117,26 @@ export class SmsService {
   }
 
   /**
+   * Send unpaid annual membership fee reminder
+   */
+  async sendMembershipFeeReminder(
+    phoneNumber: string,
+    memberName: string,
+    year: number,
+    amountLabel: string,
+    reminderStep: 1 | 2 | 3,
+  ): Promise<SmsResult> {
+    const prefix =
+      reminderStep === 3
+        ? 'Final reminder this month'
+        : reminderStep === 2
+          ? 'Second reminder'
+          : 'Reminder';
+    const message = `IET ${prefix}: Dear ${memberName}, your ${year} membership fee (${amountLabel}) is unpaid. Please pay via the member portal to stay in good standing.`;
+    return this.send({ to: phoneNumber, message });
+  }
+
+  /**
    * Send event reminder
    */
   async sendEventReminder(

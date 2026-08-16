@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { UserEntity } from '../../user/entities/user.entity';
 import { MembershipCategoryEntity } from '../../admin/entities/membership-category.entity';
 import { MessagingQueueService } from '../../queues/messaging-queue.service';
+import { EmailService } from '../../shared/services/email.service';
 import {
   CommunicationMessageEntity,
   CommunicationTemplateEntity,
@@ -74,6 +75,7 @@ export class CommunicationService {
     @InjectRepository(MembershipCategoryEntity)
     private categoryRepository: Repository<MembershipCategoryEntity>,
     private messagingQueue: MessagingQueueService,
+    private emailService: EmailService,
   ) {}
 
   async sendMessage(
@@ -369,15 +371,20 @@ export class CommunicationService {
         }
 
       try {
+        const content = this.emailService.buildCommunicationEmail({
+          body: dto.message,
+          subject: dto.subject?.trim(),
+          recipientName: this.formatRecipientName(recipient),
+        });
         const result = await this.messagingQueue.enqueueEmail({
           to: recipient.email,
           subject: dto.subject!.trim(),
-          html: this.renderEmailBody(dto.message),
-          text: dto.message,
+          html: content.html,
+          text: content.text,
         });
         return {
           success: result.success,
-        recipient: recipient.email,
+          recipient: recipient.email,
           error: result.success ? undefined : result.error ?? 'Email delivery failed',
         };
       } catch (error: any) {
@@ -424,14 +431,6 @@ export class CommunicationService {
       recipient.lastName,
     ].filter(Boolean);
     return parts.length ? parts.join(' ') : null;
-  }
-
-  private renderEmailBody(message: string): string {
-    const safe = message
-      .split('\n')
-      .map((line) => line.trim() ? line.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '&nbsp;')
-      .join('<br />');
-    return `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.7; color: #1f2937;">${safe}</div>`;
   }
 
   private mapMessage(

@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import {
@@ -102,6 +103,8 @@ const baseTextareaStyle: React.CSSProperties = {
 };
 
 export default function CommunicationSendPage() {
+  const { canCreate } = usePermissions();
+  const canSendMessages = canCreate("communication");
   const [form, setForm] = useState<SendFormState>(EMPTY_FORM);
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [templates, setTemplates] = useState<CommunicationTemplate[]>([]);
@@ -353,6 +356,12 @@ export default function CommunicationSendPage() {
               placeholder={form.type === "EMAIL" ? "Write the email body here..." : "Write the SMS message here..."}
               disabled={loadingOptions}
             />
+            {form.type === "EMAIL" ? (
+              <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
+                Emails are sent with the standard IET header and footer signature automatically.
+                You only need to write the message body.
+              </div>
+            ) : null}
           </div>
 
           {selectedTemplate && (
@@ -368,26 +377,28 @@ export default function CommunicationSendPage() {
             <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
               {form.recipients === "GROUP" ? "Messages will be sent to members in the selected category." : "Messages will be sent to all members."}
             </div>
-            <button
-              type="submit"
-              disabled={sending || loadingOptions}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: "white",
-                background: sending || loadingOptions ? "var(--muted)" : "var(--red)",
-                border: "none",
-                borderRadius: 8,
-                padding: "9px 18px",
-                cursor: sending || loadingOptions ? "not-allowed" : "pointer",
-              }}
-            >
-              <SendIcon />
-              {sending ? "Sending…" : "Send Now"}
-            </button>
+            {canSendMessages ? (
+              <button
+                type="submit"
+                disabled={sending || loadingOptions}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "white",
+                  background: sending || loadingOptions ? "var(--muted)" : "var(--red)",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "9px 18px",
+                  cursor: sending || loadingOptions ? "not-allowed" : "pointer",
+                }}
+              >
+                <SendIcon />
+                {sending ? "Sending…" : "Send Now"}
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

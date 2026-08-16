@@ -6,6 +6,7 @@ import {
   Card,
   PageHeader,
 } from "~/components/prototype-ui";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import { settings } from "~/data/admin-prototype";
@@ -37,11 +38,13 @@ function NumberInput({
   value,
   onChange,
   hint,
+  disabled,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -53,8 +56,9 @@ function NumberInput({
           type="number"
           min={0}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
+          className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
       {hint ? (
@@ -65,6 +69,8 @@ function NumberInput({
 }
 
 export default function SettingsPage() {
+  const { canUpdate } = usePermissions();
+  const canEditSettings = canUpdate("settings");
   const [showPaymentSecrets, setShowPaymentSecrets] = useState(false);
   const [fiscalYear, setFiscalYear] = useState<FiscalYearSettings>({
     startMonth: 7,
@@ -186,7 +192,7 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
-            <Button tone="dark">Save Changes</Button>
+            <Button tone="dark" disabled={!canEditSettings}>Save Changes</Button>
           </div>
         </Card>
 
@@ -220,6 +226,7 @@ export default function SettingsPage() {
                   <NumberInput
                     label="Application Fee (TZS)"
                     value={feeConfig.graduate.applicationFee}
+                    disabled={!canEditSettings}
                     onChange={(v) =>
                       setFeeConfig((prev) => ({
                         ...prev,
@@ -230,6 +237,7 @@ export default function SettingsPage() {
                   <NumberInput
                     label="Entry Fee (TZS)"
                     value={feeConfig.graduate.entryFee}
+                    disabled={!canEditSettings}
                     onChange={(v) =>
                       setFeeConfig((prev) => ({
                         ...prev,
@@ -248,6 +256,7 @@ export default function SettingsPage() {
                   <NumberInput
                     label="Application Fee (TZS)"
                     value={feeConfig.others.applicationFee}
+                    disabled={!canEditSettings}
                     onChange={(v) =>
                       setFeeConfig((prev) => ({
                         ...prev,
@@ -258,6 +267,7 @@ export default function SettingsPage() {
                   <NumberInput
                     label="Entry Fee (TZS)"
                     value={feeConfig.others.entryFee}
+                    disabled={!canEditSettings}
                     onChange={(v) =>
                       setFeeConfig((prev) => ({
                         ...prev,
@@ -268,9 +278,11 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <Button tone="dark" onClick={() => void saveApplicationEntryFees()} disabled={feesSaving}>
-                {feesSaving ? "Saving…" : "Save Fee Configuration"}
-              </Button>
+              {canEditSettings ? (
+                <Button tone="dark" onClick={() => void saveApplicationEntryFees()} disabled={feesSaving}>
+                  {feesSaving ? "Saving…" : "Save Fee Configuration"}
+                </Button>
+              ) : null}
             </div>
           )}
         </Card>
@@ -299,27 +311,33 @@ export default function SettingsPage() {
                 <NumberInput
                   label="Start Month"
                   value={fiscalYear.startMonth}
+                  disabled={!canEditSettings}
                   onChange={(v) => setFiscalYear((prev) => ({ ...prev, startMonth: v }))}
                 />
                 <NumberInput
                   label="Start Day"
                   value={fiscalYear.startDay}
+                  disabled={!canEditSettings}
                   onChange={(v) => setFiscalYear((prev) => ({ ...prev, startDay: v }))}
                 />
                 <NumberInput
                   label="End Month"
                   value={fiscalYear.endMonth}
+                  disabled={!canEditSettings}
                   onChange={(v) => setFiscalYear((prev) => ({ ...prev, endMonth: v }))}
                 />
                 <NumberInput
                   label="End Day"
                   value={fiscalYear.endDay}
+                  disabled={!canEditSettings}
                   onChange={(v) => setFiscalYear((prev) => ({ ...prev, endDay: v }))}
                 />
               </div>
-              <Button tone="dark" onClick={() => void saveFiscalYear()} disabled={fiscalSaving}>
-                {fiscalSaving ? "Saving…" : "Update Fiscal Year"}
-              </Button>
+              {canEditSettings ? (
+                <Button tone="dark" onClick={() => void saveFiscalYear()} disabled={fiscalSaving}>
+                  {fiscalSaving ? "Saving…" : "Update Fiscal Year"}
+                </Button>
+              ) : null}
             </div>
           )}
         </Card>
@@ -358,7 +376,7 @@ export default function SettingsPage() {
                 Selcom integration active
               </span>
             </div>
-            <Button tone="dark">Update Config</Button>
+            <Button tone="dark" disabled={!canEditSettings}>Update Config</Button>
           </div>
         </Card>
       </div>

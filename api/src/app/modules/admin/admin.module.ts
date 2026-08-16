@@ -20,6 +20,7 @@ import { GuestModule } from '../guest/guest.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { MembershipModule } from '../membership/membership.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { PaymentsModule } from '../payments/payments.module';
     EventsModule,
     NotificationsModule,
     PaymentsModule,
+    MembershipModule,
     forwardRef(() => GuestModule),
   ],
   controllers: [AdminController],

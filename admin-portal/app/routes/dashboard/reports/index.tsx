@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button, Modal, PageHeader } from "~/components/prototype-ui";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import { downloadBlob } from "~/utils/download";
 import type { ApiEnvelope } from "~/types";
@@ -54,6 +55,8 @@ function groupColumnsByEntity(entityIds: string[], entities: ReportEntity[]) {
 }
 
 export default function ReportsPage() {
+  const { canRead } = usePermissions();
+  const canUseReports = canRead("reports");
   const [tab, setTab] = useState<"templates" | "custom">("templates");
   const [data, setData] = useState<BasesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,15 +93,21 @@ export default function ReportsPage() {
       ) : !data ? (
         <div className="py-10 text-center text-[12px] text-[var(--muted)]">Failed to load reports.</div>
       ) : tab === "templates" ? (
-        <TemplatesTab cannedReports={data.cannedReports} />
+        <TemplatesTab cannedReports={data.cannedReports} canUseReports={canUseReports} />
       ) : (
-        <CustomReportTab entities={data.entities} relations={data.relations} />
+        <CustomReportTab entities={data.entities} relations={data.relations} canUseReports={canUseReports} />
       )}
     </section>
   );
 }
 
-function TemplatesTab({ cannedReports }: { cannedReports: CannedReport[] }) {
+function TemplatesTab({
+  cannedReports,
+  canUseReports,
+}: {
+  cannedReports: CannedReport[];
+  canUseReports: boolean;
+}) {
   const [activeReport, setActiveReport] = useState<CannedReport | null>(null);
   const [previewResult, setPreviewResult] = useState<ReportPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -174,6 +183,7 @@ function TemplatesTab({ cannedReports }: { cannedReports: CannedReport[] }) {
               key={report.id}
               report={report}
               icon={REPORT_ICONS[report.id] ?? FileText}
+              canUseReports={canUseReports}
               onPreview={() => openPreview(report)}
               onExport={(format) => handleExport(report, format)}
               exportingFormat={exportingFormat}
@@ -197,12 +207,14 @@ function TemplatesTab({ cannedReports }: { cannedReports: CannedReport[] }) {
 function TemplateReportCard({
   report,
   icon: Icon,
+  canUseReports,
   onPreview,
   onExport,
   exportingFormat,
 }: {
   report: CannedReport;
   icon: LucideIcon;
+  canUseReports: boolean;
   onPreview: () => void;
   onExport: (format: ExportFormat) => void;
   exportingFormat: ExportFormat | null;
@@ -232,43 +244,55 @@ function TemplateReportCard({
       </div>
 
       <div className="flex items-center justify-center gap-[8px] border-t border-[var(--border)] px-4 py-3">
-        <Button tone="dark" onClick={onPreview}>
-          <Eye size={13} />
-          Preview
-        </Button>
-        <div className="relative" ref={menuRef}>
-          <Button
-            disabled={!!exportingFormat}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <Download size={13} />
-            {exportingFormat ? "Exporting…" : "Export"}
-            <ChevronDown size={11} className={`transition-transform duration-150 ${menuOpen ? "rotate-180" : ""}`} />
-          </Button>
-          {menuOpen ? (
-            <div className="absolute right-0 top-[calc(100%+6px)] z-[60] w-[104px] overflow-hidden rounded-[10px] border border-[var(--border)] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
-              {(["csv", "xlsx", "pdf"] as ExportFormat[]).map((format) => (
-                <button
-                  key={format}
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onExport(format);
-                  }}
-                  className="block w-full px-3 py-[9px] text-left text-[11px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
-                >
-                  {format.toUpperCase()}
-                </button>
-              ))}
+        {canUseReports ? (
+          <>
+            <Button tone="dark" onClick={onPreview}>
+              <Eye size={13} />
+              Preview
+            </Button>
+            <div className="relative" ref={menuRef}>
+              <Button
+                disabled={!!exportingFormat}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <Download size={13} />
+                {exportingFormat ? "Exporting…" : "Export"}
+                <ChevronDown size={11} className={`transition-transform duration-150 ${menuOpen ? "rotate-180" : ""}`} />
+              </Button>
+              {menuOpen ? (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-[60] w-[104px] overflow-hidden rounded-[10px] border border-[var(--border)] bg-white shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
+                  {(["csv", "xlsx", "pdf"] as ExportFormat[]).map((format) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onExport(format);
+                      }}
+                      className="block w-full px-3 py-[9px] text-left text-[11px] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--red-pale)] hover:text-[var(--red-dark)]"
+                    >
+                      {format.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
+          </>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function CustomReportTab({ entities, relations }: { entities: ReportEntity[]; relations: ReportRelation[] }) {
+function CustomReportTab({
+  entities,
+  relations,
+  canUseReports,
+}: {
+  entities: ReportEntity[];
+  relations: ReportRelation[];
+  canUseReports: boolean;
+}) {
   const [baseId, setBaseId] = useState<string>(entities[0]?.id ?? "");
   const [checkedRelationIds, setCheckedRelationIds] = useState<Set<string>>(new Set());
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
@@ -485,9 +509,11 @@ function CustomReportTab({ entities, relations }: { entities: ReportEntity[]; re
           </div>
         ) : null}
 
-        <Button tone="dark" className="w-full" disabled={selectedColumns.size === 0} onClick={() => runPreview(1)}>
-          Preview
-        </Button>
+        {canUseReports ? (
+          <Button tone="dark" className="w-full" disabled={selectedColumns.size === 0} onClick={() => runPreview(1)}>
+            Preview
+          </Button>
+        ) : null}
       </div>
 
       <div className="rounded-[12px] border border-[var(--border)] bg-white p-4">
@@ -496,7 +522,7 @@ function CustomReportTab({ entities, relations }: { entities: ReportEntity[]; re
           loading={previewLoading}
           page={page}
           onPageChange={runPreview}
-          onExport={handleExport}
+          onExport={canUseReports ? handleExport : undefined}
           exportingFormat={exportingFormat}
         />
       </div>

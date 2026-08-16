@@ -2,8 +2,17 @@ import type { AxiosError } from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Mail, MoreVertical, PencilLine, Trash2 } from "lucide-react";
 import { Button, Modal, PageHeader, StatusBadge } from "~/components/prototype-ui";
+import { PermissionMatrixEditor } from "~/components/permission-matrix-editor";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
-import { getStoredUser } from "~/utils/auth";
+import {
+  cloneMatrix,
+  emptyMatrix,
+  matricesEqual,
+  roleDefaultMatrix,
+  type PermissionMatrix,
+  type PermissionResource,
+} from "~/utils/permissions";
 import type { AdminRole, ApiEnvelope } from "~/types";
 
 type DisciplineTag = { id: string; name: string };
@@ -27,6 +36,8 @@ type AdminUser = {
   profilePhotoUrl?: string | null;
   disciplines?: DisciplineTag[];
   updatedAt?: string | null;
+  permissions?: PermissionMatrix;
+  usingRoleDefaults?: boolean;
 };
 
 type AdminUserForm = {
@@ -38,6 +49,14 @@ type AdminUserForm = {
   isActive: boolean;
   password: string;
   disciplineIds: string[];
+  permissions: PermissionMatrix;
+  useRoleDefaults: boolean;
+};
+
+type PermissionsCatalog = {
+  resources: Array<{ key: PermissionResource; label: string; description: string }>;
+  actions: string[];
+  roleDefaults: Partial<Record<string, PermissionMatrix>>;
 };
 
 const ROLE_OPTIONS: AdminRole[] = [
@@ -72,6 +91,20 @@ const EMPTY_FORM: AdminUserForm = {
   isActive: true,
   password: "",
   disciplineIds: [],
+  permissions: emptyMatrix([
+    "dashboard",
+    "applications",
+    "members",
+    "membership_categories",
+    "institutions",
+    "communication",
+    "events",
+    "payments",
+    "reports",
+    "admin_users",
+    "settings",
+  ]),
+  useRoleDefaults: true,
 };
 
 function roleLabel(role?: string | null) {
@@ -167,9 +200,18 @@ function TextField({
 }
 
 export default function AdminUsersPage() {
-  const currentUser = getStoredUser();
+  const {
+    user: currentUser,
+    canRead,
+    canCreate: canCreateUsers,
+    canUpdate,
+    canDelete,
+  } = usePermissions();
   const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
-  const canManage = isSuperAdmin || currentUser?.role === "ADMIN";
+  const canManage = canRead("admin_users");
+  const canCreate = canCreateUsers("admin_users");
+  const canUpdateUsers = canUpdate("admin_users");
+  const canDeleteUsers = canDelete("admin_users");
   // Roles the current actor may assign in the create/edit form.
   const assignableRoles = isSuperAdmin
     ? ROLE_OPTIONS
@@ -192,6 +234,18 @@ export default function AdminUsersPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
+  const [catalog, setCatalog] = useState<PermissionsCatalog | null>(null);
+
+  const resourceKeys = useMemo(
+    () =>
+      (catalog?.resources.map((r) => r.key) ??
+        Object.keys(EMPTY_FORM.permissions)) as PermissionResource[],
+    [catalog],
+  );
+
+  function defaultsForRole(role: AdminRole): PermissionMatrix {
+    return roleDefaultMatrix(role, catalog?.roleDefaults, resourceKeys);
+  }
 
   async function loadUsers() {
     if (!canManage) {
@@ -226,10 +280,14 @@ export default function AdminUsersPage() {
     if (!canManage) return;
     void (async () => {
       try {
-        const { data } = await http.get<ApiEnvelope<Discipline[]>>("/admin/disciplines?activeOnly=true");
-        setDisciplines(data.data ?? []);
+        const [{ data: disciplineData }, { data: catalogData }] = await Promise.all([
+          http.get<ApiEnvelope<Discipline[]>>("/admin/disciplines?activeOnly=true"),
+          http.get<ApiEnvelope<PermissionsCatalog>>("/admin/permissions/catalog"),
+        ]);
+        setDisciplines(disciplineData.data ?? []);
+        setCatalog(catalogData.data ?? null);
       } catch {
-        // Disciplines are optional; ignore load failures here.
+        // Disciplines/catalog are optional for listing; ignore load failures here.
       }
     })();
   }, [canManage]);
@@ -265,13 +323,20 @@ export default function AdminUsersPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    const role: AdminRole = "SECRETARIAT";
+    setForm({
+      ...EMPTY_FORM,
+      role,
+      permissions: defaultsForRole(role),
+      useRoleDefaults: true,
+    });
     setFormError(null);
     setModalOpen(true);
   }
 
   function openEdit(user: AdminUser) {
     setEditing(user);
+    const useRoleDefaults = user.usingRoleDefaults !== false;
     setForm({
       email: user.email,
       firstName: user.firstName ?? "",
@@ -281,6 +346,10 @@ export default function AdminUsersPage() {
       isActive: user.isActive,
       password: "",
       disciplineIds: (user.disciplines ?? []).map((d) => d.id),
+      permissions: user.permissions
+        ? cloneMatrix(user.permissions)
+        : defaultsForRole(user.role),
+      useRoleDefaults,
     });
     setFormError(null);
     setModalOpen(true);
@@ -294,11 +363,11 @@ export default function AdminUsersPage() {
   }
 
   function canEditRow(user: AdminUser) {
-    return canManageTarget(user);
+    return canManageTarget(user) && canUpdateUsers;
   }
 
   function canDeleteRow(user: AdminUser) {
-    return canManageTarget(user);
+    return canManageTarget(user) && canDeleteUsers;
   }
 
   function openView(user: AdminUser) {
@@ -369,6 +438,14 @@ export default function AdminUsersPage() {
 
     try {
       const disciplineIds = isPanelRole(form.role) ? form.disciplineIds : [];
+      const defaults = defaultsForRole(form.role);
+      const useRoleDefaults =
+        form.useRoleDefaults || matricesEqual(form.permissions, defaults);
+      const permissionPayload = {
+        useRoleDefaults,
+        permissions: useRoleDefaults ? undefined : form.permissions,
+      };
+
       if (editing) {
         await http.patch(`/admin/users/${editing.id}`, {
           firstName: form.firstName,
@@ -377,6 +454,7 @@ export default function AdminUsersPage() {
           role: form.role,
           isActive: form.isActive,
           disciplineIds,
+          ...permissionPayload,
         });
       } else {
         await http.post("/admin/users", {
@@ -388,6 +466,7 @@ export default function AdminUsersPage() {
           isActive: form.isActive,
           password: form.password || undefined,
           disciplineIds,
+          ...permissionPayload,
         });
       }
       setModalOpen(false);
@@ -487,7 +566,7 @@ export default function AdminUsersPage() {
       <PageHeader
         title="Users"
         description="Manage portal users and membership application workflow roles"
-        actions={canManage ? <Button tone="dark" onClick={openCreate}>Add User</Button> : undefined}
+        actions={canCreate ? <Button tone="dark" onClick={openCreate}>Add User</Button> : undefined}
       />
 
       {!canManage ? (
@@ -662,7 +741,16 @@ export default function AdminUsersPage() {
               <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Role</span>
               <select
                 value={form.role}
-                onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value as AdminRole }))}
+                onChange={(event) => {
+                  const role = event.target.value as AdminRole;
+                  setForm((prev) => ({
+                    ...prev,
+                    role,
+                    ...(prev.useRoleDefaults
+                      ? { permissions: defaultsForRole(role) }
+                      : {}),
+                  }));
+                }}
                 className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
                 >
                   {assignableRoles.map((role) => (
@@ -746,6 +834,32 @@ export default function AdminUsersPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {form.role !== "SUPER_ADMIN" && (
+            <PermissionMatrixEditor
+              resources={catalog?.resources ?? []}
+              value={form.permissions}
+              usingRoleDefaults={form.useRoleDefaults}
+              disabled={saving}
+              onResetToRoleDefaults={() =>
+                setForm((prev) => ({
+                  ...prev,
+                  useRoleDefaults: true,
+                  permissions: defaultsForRole(prev.role),
+                }))
+              }
+              onChange={(permissions) =>
+                setForm((prev) => ({
+                  ...prev,
+                  permissions,
+                  useRoleDefaults: matricesEqual(
+                    permissions,
+                    defaultsForRole(prev.role),
+                  ),
+                }))
+              }
+            />
           )}
         </form>
       </Modal>

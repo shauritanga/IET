@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useRef, useState } from "react";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -132,8 +133,8 @@ function RowMenu({
   onEdit,
   onDelete,
 }: {
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -173,6 +174,8 @@ function RowMenu({
     setOpen((o) => !o);
   }
 
+  if (!onEdit && !onDelete) return null;
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -197,35 +200,39 @@ function RowMenu({
           background: "var(--white)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "0 8px 24px rgba(0,0,0,.12)", width: 140, overflow: "hidden",
         }}>
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onEdit(); }}
-            style={{
-              width: "100%", padding: "9px 14px", border: "none", background: "none",
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
-              fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left",
-              transition: "background .12s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <EditIcon /> Edit
-          </button>
-          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onDelete(); }}
-            style={{
-              width: "100%", padding: "9px 14px", border: "none", background: "none",
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
-              fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left",
-              transition: "background .12s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "#fef2f2")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <TrashIcon /> Delete
-          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onEdit(); }}
+              style={{
+                width: "100%", padding: "9px 14px", border: "none", background: "none",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
+                fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left",
+                transition: "background .12s",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <EditIcon /> Edit
+            </button>
+          ) : null}
+          {onEdit && onDelete ? <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} /> : null}
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onDelete(); }}
+              style={{
+                width: "100%", padding: "9px 14px", border: "none", background: "none",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 9,
+                fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left",
+                transition: "background .12s",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "#fef2f2")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <TrashIcon /> Delete
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -411,6 +418,10 @@ function CategoryFormFields({
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function MembershipCategoriesPage() {
+  const { canCreate, canUpdate, canDelete } = usePermissions();
+  const canCreateCategories = canCreate("membership_categories");
+  const canUpdateCategories = canUpdate("membership_categories");
+  const canDeleteCategories = canDelete("membership_categories");
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -585,15 +596,17 @@ export default function MembershipCategoriesPage() {
             Define IET membership grades — fees and eligibility requirements
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "background .15s", flexShrink: 0 }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
-        >
-          <PlusIcon /> New Category
-        </button>
+        {canCreateCategories ? (
+          <button
+            type="button"
+            onClick={openCreate}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "background .15s", flexShrink: 0 }}
+            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
+          >
+            <PlusIcon /> New Category
+          </button>
+        ) : null}
       </div>
 
       {/* KPIs */}
@@ -753,7 +766,10 @@ export default function MembershipCategoriesPage() {
 
                     {/* Actions */}
                     <td>
-                      <RowMenu onEdit={() => openEdit(cat)} onDelete={() => setDeleteTarget(cat)} />
+                      <RowMenu
+                        onEdit={canUpdateCategories ? () => openEdit(cat) : undefined}
+                        onDelete={canDeleteCategories ? () => setDeleteTarget(cat) : undefined}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -786,7 +802,10 @@ export default function MembershipCategoriesPage() {
                     )}
                   </div>
                 </div>
-                <RowMenu onEdit={() => openEdit(cat)} onDelete={() => setDeleteTarget(cat)} />
+                <RowMenu
+                  onEdit={canUpdateCategories ? () => openEdit(cat) : undefined}
+                  onDelete={canDeleteCategories ? () => setDeleteTarget(cat) : undefined}
+                />
               </div>
               <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 18, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                 <div>

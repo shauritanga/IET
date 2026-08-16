@@ -38,6 +38,7 @@ const pageLabelMap: Record<string, string> = {
     "/dashboard/home": "Overview",
     "/dashboard/memberships": "Payment",
     "/dashboard/membership": "Membership",
+    "/dashboard/membership-card": "Membership Card",
     "/dashboard/events": "Events & Training",
     "/dashboard/profile": "Profile",
 }

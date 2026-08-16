@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useRef, useState } from "react";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -341,8 +342,8 @@ function RowMenu({
   onEdit,
   onDisable,
 }: {
-  onEdit: () => void;
-  onDisable: () => void;
+  onEdit?: () => void;
+  onDisable?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -413,6 +414,8 @@ function RowMenu({
     textAlign: "left",
   };
 
+  if (!onEdit && !onDisable) return null;
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
       <button
@@ -463,31 +466,35 @@ function RowMenu({
             overflowY: "auto",
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-            style={itemStyle}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <EditIcon /> Edit
-          </button>
-          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onDisable();
-            }}
-            style={{ ...itemStyle, color: "var(--red)" }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-pale)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <DisableIcon /> Disable
-          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onEdit();
+              }}
+              style={itemStyle}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <EditIcon /> Edit
+            </button>
+          ) : null}
+          {onEdit && onDisable ? <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} /> : null}
+          {onDisable ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onDisable();
+              }}
+              style={{ ...itemStyle, color: "var(--red)" }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-pale)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <DisableIcon /> Disable
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -495,6 +502,10 @@ function RowMenu({
 }
 
 export default function EngineeringInstitutionsPage() {
+  const { canCreate, canUpdate, canDelete } = usePermissions();
+  const canCreateInstitutions = canCreate("institutions");
+  const canUpdateInstitutions = canUpdate("institutions");
+  const canDeleteInstitutions = canDelete("institutions");
   const [items, setItems] = useState<EngineeringInstitution[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -629,28 +640,30 @@ export default function EngineeringInstitutionsPage() {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={openCreate}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "var(--red)",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              padding: "8px 14px",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background .15s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
-          >
-            <PlusIcon /> Add Institution
-          </button>
+          {canCreateInstitutions ? (
+            <button
+              type="button"
+              onClick={openCreate}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "var(--red)",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 14px",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "background .15s",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--red-mid)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "var(--red)")}
+            >
+              <PlusIcon /> Add Institution
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -803,8 +816,8 @@ export default function EngineeringInstitutionsPage() {
                       </td>
                       <td>
                         <RowMenu
-                          onEdit={() => openEdit(item)}
-                          onDisable={() => setDeleteTarget(item)}
+                          onEdit={canUpdateInstitutions ? () => openEdit(item) : undefined}
+                          onDisable={canDeleteInstitutions ? () => setDeleteTarget(item) : undefined}
                         />
                       </td>
                     </tr>
@@ -880,7 +893,10 @@ export default function EngineeringInstitutionsPage() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{item.name}</div>
                   <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{item.country}</div>
                 </div>
-                <RowMenu onEdit={() => openEdit(item)} onDisable={() => setDeleteTarget(item)} />
+                <RowMenu
+                  onEdit={canUpdateInstitutions ? () => openEdit(item) : undefined}
+                  onDisable={canDeleteInstitutions ? () => setDeleteTarget(item) : undefined}
+                />
               </div>
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--red-dark)", background: "var(--red-pale)", borderRadius: 6, padding: "2px 8px" }}>

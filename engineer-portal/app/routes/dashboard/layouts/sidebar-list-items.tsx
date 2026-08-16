@@ -33,6 +33,11 @@ export const navSections: NavSection[] = [
                 icon: <StarIcon />,
             },
             {
+                title: "Membership Card",
+                url: "/dashboard/membership-card",
+                icon: <FileIcon />,
+            },
+            {
                 title: "My Application",
                 url: "/dashboard/status",
                 icon: <FileIcon />,

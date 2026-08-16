@@ -1,5 +1,6 @@
 import { redirect, type LoaderFunctionArgs } from "react-router";
 import AdminShell from "~/components/admin-shell";
+import { PermissionsProvider } from "~/providers/permissions";
 import { getCookieValue } from "~/utils/cookies";
 import { isAdminRole, ROLE_KEY, TOKEN_KEY } from "~/utils/auth";
 
@@ -15,5 +16,9 @@ export const loader = ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function DashboardLayout() {
-  return <AdminShell />;
+  return (
+    <PermissionsProvider>
+      <AdminShell />
+    </PermissionsProvider>
+  );
 }

@@ -1,5 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -83,7 +84,7 @@ function MoreVerticalIcon() {
 
 // ── Row Action Menu ────────────────────────────────────────────────
 
-function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function RowMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete?: () => void }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -122,6 +123,8 @@ function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
     setOpen((o) => !o);
   }
 
+  if (!onEdit && !onDelete) return null;
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -142,25 +145,29 @@ function RowMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
           background: "var(--white)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "0 8px 24px rgba(0,0,0,.12)", width: 140, overflow: "hidden",
         }}>
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onEdit(); }}
-            style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left" }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <EditIcon /> Edit
-          </button>
-          <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onDelete(); }}
-            style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "#fef2f2")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <TrashIcon /> Delete
-          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onEdit(); }}
+              style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "var(--text)", textAlign: "left" }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <EditIcon /> Edit
+            </button>
+          ) : null}
+          {onEdit && onDelete ? <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} /> : null}
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onDelete(); }}
+              style={{ width: "100%", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, fontWeight: 600, color: "#dc2626", textAlign: "left" }}
+              onMouseOver={(e) => (e.currentTarget.style.background = "#fef2f2")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <TrashIcon /> Delete
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -255,6 +262,10 @@ function DisciplineFormFields({
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function DisciplinesPage() {
+  const { canCreate, canUpdate, canDelete } = usePermissions();
+  const canCreateDisciplines = canCreate("membership_categories");
+  const canUpdateDisciplines = canUpdate("membership_categories");
+  const canDeleteDisciplines = canDelete("membership_categories");
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -422,13 +433,15 @@ export default function DisciplinesPage() {
             Manage disciplines and sub-disciplines used to route applications to evaluators
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
-        >
-          <PlusIcon /> New Discipline
-        </button>
+        {canCreateDisciplines ? (
+          <button
+            type="button"
+            onClick={openCreate}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--red)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+          >
+            <PlusIcon /> New Discipline
+          </button>
+        ) : null}
       </div>
 
       {pageError && (
@@ -481,7 +494,10 @@ export default function DisciplinesPage() {
                       </span>
                     </td>
                     <td>
-                      <RowMenu onEdit={() => openEdit(d)} onDelete={() => setDeleteTarget(d)} />
+                      <RowMenu
+                        onEdit={canUpdateDisciplines ? () => openEdit(d) : undefined}
+                        onDelete={canDeleteDisciplines ? () => setDeleteTarget(d) : undefined}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -505,7 +521,10 @@ export default function DisciplinesPage() {
                   {depth > 0 && <span style={{ color: "var(--muted)", fontSize: 13 }}>↳</span>}
                   <span style={{ fontSize: 13, fontWeight: depth === 0 ? 700 : 600, color: "var(--text)" }}>{d.name}</span>
                 </div>
-                <RowMenu onEdit={() => openEdit(d)} onDelete={() => setDeleteTarget(d)} />
+                <RowMenu
+                  onEdit={canUpdateDisciplines ? () => openEdit(d) : undefined}
+                  onDelete={canDeleteDisciplines ? () => setDeleteTarget(d) : undefined}
+                />
               </div>
               <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>{depth === 0 ? "Top-level" : "Sub-discipline"}</span>
