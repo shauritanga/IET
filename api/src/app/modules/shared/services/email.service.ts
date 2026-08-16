@@ -62,6 +62,9 @@ export class EmailService implements OnModuleInit {
           pass: configService.get('SMTP_PASS'),
         },
         tls: { rejectUnauthorized },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
       });
       this.logger.log(
         `SMTP transport configured: ${configService.get('SMTP_HOST')}:${configService.get('SMTP_PORT', 465)}`,
@@ -77,7 +80,15 @@ export class EmailService implements OnModuleInit {
     }
 
     try {
-      await this.transporter.verify();
+      await Promise.race([
+        this.transporter.verify(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('SMTP verification timed out after 10s')),
+            10_000,
+          ),
+        ),
+      ]);
       this.logger.log('SMTP connection verified successfully');
     } catch (error: any) {
       this.logger.error(`SMTP verification failed: ${error.message}`);
