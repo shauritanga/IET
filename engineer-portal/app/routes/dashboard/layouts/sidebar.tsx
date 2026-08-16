@@ -54,7 +54,7 @@ export function AppSidebar({ open, userName, userEmail, userInitials, userPhotoU
         <aside className={`sidebar ${open ? "open" : "collapsed"}`}>
             <div className="sidebar-logo">
                 <div className="logo-img">
-                    <img src="/IET-Logo-2.png" alt="IET Tanzania" />
+                    <img src="/IET-logo.png" alt="IET Tanzania" />
                 </div>
                 <div className="logo-text">
                     <span className="org-name">
