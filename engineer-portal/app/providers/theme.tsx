@@ -20,11 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
     const nextTheme: ThemeMode =
-      stored === "dark" || stored === "light"
-        ? stored
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
+      stored === "dark" || stored === "light" ? stored : "light";
 
     setTheme(nextTheme);
   }, []);

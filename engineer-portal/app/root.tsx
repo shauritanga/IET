@@ -33,9 +33,7 @@ const themeInitScript = `
   try {
     var key = "iet-theme";
     var stored = window.localStorage.getItem(key);
-    var theme = stored === "dark" || stored === "light"
-      ? stored
-      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var theme = stored === "dark" || stored === "light" ? stored : "light";
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.colorScheme = theme;
   } catch (error) {}

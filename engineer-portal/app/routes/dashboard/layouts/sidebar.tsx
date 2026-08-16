@@ -60,7 +60,7 @@ export function AppSidebar({ open, userName, userEmail, userInitials, userPhotoU
                     <span className="org-name">
                         Institution of Engineers<br />Tanzania
                     </span>
-                    <span className="org-sub">Member Portal</span>
+                    <span className="org-sub">MEMBERS PORTAL</span>
                 </div>
             </div>
 
