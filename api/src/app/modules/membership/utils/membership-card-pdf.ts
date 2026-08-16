@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
-import axios from 'axios';
 
 export type MembershipCardPdfInput = {
   memberName: string;
@@ -38,11 +37,15 @@ async function loadImageBuffer(urlOrPath?: string | null): Promise<Buffer | null
   if (!urlOrPath) return null;
   try {
     if (/^https?:\/\//i.test(urlOrPath)) {
-      const response = await axios.get<ArrayBuffer>(urlOrPath, {
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-      return Buffer.from(response.data);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(urlOrPath, { signal: controller.signal });
+        if (!response.ok) return null;
+        return Buffer.from(await response.arrayBuffer());
+      } finally {
+        clearTimeout(timer);
+      }
     }
     const local = path.isAbsolute(urlOrPath)
       ? urlOrPath
