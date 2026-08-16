@@ -15,6 +15,7 @@ import { GuestModule } from './modules/guest/guest.module';
 import { UpgradeModule } from './modules/upgrade/upgrade.module';
 import { ReferenceModule } from './modules/reference/reference.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { QueuesModule } from './modules/queues';
 
 import { HealthController } from './controllers/health.controller';
 import { RootController } from './controllers/root.controller';
@@ -75,7 +76,8 @@ import * as Joi from 'joi';
         JWT_REFRESH_SECRET: Joi.string().required(),
         JWT_REFRESH_EXPIRATION: Joi.string().default('7d'),
         THROTTLE_TTL: Joi.number().default(60),
-        THROTTLE_LIMIT: Joi.number().default(10),
+        // Admin/dashboard UIs fire several parallel requests; 10/min is too low.
+        THROTTLE_LIMIT: Joi.number().default(200),
         SMTP_HOST: Joi.string().optional().allow(''),
         SMTP_PORT: Joi.number().default(587),
         SMTP_SECURE: Joi.boolean().default(false),
@@ -90,8 +92,10 @@ import * as Joi from 'joi';
         DO_SPACES_REGION: Joi.string().default('us-east-1'),
         DO_SPACES_BUCKET: Joi.string().optional().allow(''),
         DO_SPACES_CDN_URL: Joi.string().optional().allow(''),
-        APPLICATION_FEE_GRADUATE: Joi.number().default(5000),
-        APPLICATION_FEE_STANDARD: Joi.number().default(10000),
+        MESSAGING_QUEUE_ENABLED: Joi.boolean().default(true),
+        REDIS_HOST: Joi.string().default('localhost'),
+        REDIS_PORT: Joi.number().default(6379),
+        REDIS_PASSWORD: Joi.string().optional().allow(''),
       }),
     }),
 
@@ -120,6 +124,7 @@ import * as Joi from 'joi';
     AuthModule,
     UserModule,
     SharedModule,
+    QueuesModule.forRoot(),
     RegistrationModule,
     MembershipModule,
     EventsModule,

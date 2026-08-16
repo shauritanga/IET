@@ -7,6 +7,9 @@ export type AuthenticatedAuthResponse = {
 export type TwoFactorChallengeResponse = {
     validate2FA: string;
     smsDestination?: string;
+    emailDestination?: string;
+    channel?: "sms" | "email";
+    smsSent?: boolean;
     message: string;
 };
 

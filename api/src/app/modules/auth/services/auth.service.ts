@@ -18,8 +18,7 @@ import { Enable2FAType } from '../types/enable-2fa.type';
 import { UpdateResult } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../../../common/services/encryption.service';
-import { EmailService } from '../../shared/services/email.service';
-import { SmsService } from '../../shared/services/sms.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { RegistrationEntity } from '../../registration/entities';
 import { AuthPortal, UserRole } from '../../../common/enums';
@@ -34,8 +33,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private encryptionService: EncryptionService,
-    private emailService: EmailService,
-    private smsService: SmsService,
+    private messagingQueue: MessagingQueueService,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
   ) {}
@@ -87,7 +85,7 @@ export class AuthService {
         enable2FA: true,
       });
 
-      const emailResult = await this.emailService.sendVerificationEmail(
+      const emailResult = await this.messagingQueue.enqueueVerificationEmail(
         user.email,
         user.firstName || user.email,
         user.emailVerificationCode,
@@ -98,7 +96,7 @@ export class AuthService {
           `Verification email failed for ${user.email}: ${emailResult.error}`,
         );
         throw new InternalServerErrorException(
-          'Registration succeeded but verification email could not be sent. Please verify SMTP configuration and try again.',
+          'Registration succeeded but verification email could not be queued. Please try again.',
         );
       }
 
@@ -166,7 +164,7 @@ export class AuthService {
     // Get user info for email
     const user = await this.usersService.findByEmail(email);
     if (user) {
-      const emailResult = await this.emailService.sendVerificationEmail(
+      const emailResult = await this.messagingQueue.enqueueVerificationEmail(
         user.email,
         user.firstName || user.email,
         code,
@@ -177,7 +175,7 @@ export class AuthService {
           `Failed to resend verification email to ${user.email}: ${emailResult.error}`,
         );
         throw new InternalServerErrorException(
-          'Verification email could not be sent. Please verify SMTP configuration and try again.',
+          'Verification email could not be queued. Please try again.',
         );
       }
     }
@@ -192,7 +190,14 @@ export class AuthService {
     loginDTO: UserLoginDto,
   ): Promise<
     | { accessToken: string; refreshToken: string; user: Partial<UserEntity> & { registrationStatus?: string | null } }
-    | { validate2FA: string; smsDestination?: string; message: string }
+    | {
+        validate2FA: string;
+        smsDestination?: string;
+        emailDestination?: string;
+        channel: 'sms';
+        smsSent: boolean;
+        message: string;
+      }
   > {
     try {
       // Check if account is locked
@@ -233,7 +238,7 @@ export class AuthService {
         );
       }
 
-      // Check if 2FA is enabled — generate SMS OTP and send it
+      // Check if 2FA is enabled — generate SMS OTP by default
       if (user.enable2FA) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         await this.usersService.saveLoginOtp(user.id, otp);
@@ -244,27 +249,33 @@ export class AuthService {
           );
         }
 
-        const smsResult = await this.smsService.sendLoginOtp(
+        const portal =
+          loginDTO.portal ??
+          ([UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
+            ? AuthPortal.ADMIN_PORTAL
+            : AuthPortal.MEMBER_PORTAL);
+
+        const smsResult = await this.messagingQueue.enqueueLoginOtpSms(
           user.phoneNumber,
           otp,
-          loginDTO.portal ??
-            ([UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
-              ? AuthPortal.ADMIN_PORTAL
-              : AuthPortal.MEMBER_PORTAL),
+          portal,
         );
+
         if (!smsResult.success) {
           this.logger.error(
-            `Failed to send login OTP to ${user.email}: ${smsResult.error}`,
-          );
-          throw new BadRequestException(
-            'Two-factor authentication code could not be sent. Please verify your phone number and try again.',
+            `Failed to send login OTP SMS to ${user.email}: ${smsResult.error}`,
           );
         }
 
         return {
           validate2FA: user.id,
           smsDestination: this.maskPhoneNumber(user.phoneNumber),
-          message: 'A 6-digit code has been sent to your registered phone number',
+          emailDestination: this.maskEmail(user.email),
+          channel: 'sms' as const,
+          smsSent: smsResult.success,
+          message: smsResult.success
+            ? 'A 6-digit code has been sent to your registered phone number'
+            : 'SMS could not be delivered. You can request the code by email on the next screen.',
         };
       }
 
@@ -324,8 +335,8 @@ export class AuthService {
           ([UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
             ? AuthPortal.ADMIN_PORTAL
             : AuthPortal.MEMBER_PORTAL);
-        this.emailService
-          .sendPasswordResetEmail(
+        void this.messagingQueue
+          .enqueuePasswordResetEmail(
             user.email,
             user.firstName,
             token,
@@ -333,7 +344,7 @@ export class AuthService {
           )
           .catch((err) =>
             this.logger.error(
-              `Failed to send password reset email: ${err.message}`,
+              `Failed to queue password reset email: ${err.message}`,
             ),
           );
       }
@@ -591,10 +602,101 @@ export class AuthService {
     return this.usersService.disable2FA(userId);
   }
 
+  /**
+   * Resend login OTP via SMS or email
+   */
+  async resendLoginOtp(
+    userId: string,
+    channel: 'sms' | 'email',
+  ): Promise<{
+    channel: 'sms' | 'email';
+    destination: string;
+    message: string;
+  }> {
+    const user = await this.usersService.findById(userId);
+
+    if (!user.isActive) {
+      throw new ForbiddenException(
+        'Account is deactivated. Please contact support.',
+      );
+    }
+
+    if (!user.enable2FA) {
+      throw new BadRequestException(
+        'Two-factor authentication is not enabled for this account.',
+      );
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await this.usersService.saveLoginOtp(user.id, otp);
+
+    const portal = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role)
+      ? AuthPortal.ADMIN_PORTAL
+      : AuthPortal.MEMBER_PORTAL;
+
+    if (channel === 'email') {
+      const emailResult = await this.messagingQueue.enqueueLoginOtpEmail(
+        user.email,
+        user.firstName || user.email,
+        otp,
+        portal,
+      );
+
+      if (!emailResult.success) {
+        this.logger.error(
+          `Failed to send login OTP email to ${user.email}: ${emailResult.error}`,
+        );
+        throw new BadRequestException(
+          'Login code could not be sent by email. Please try SMS or try again later.',
+        );
+      }
+
+      return {
+        channel: 'email',
+        destination: this.maskEmail(user.email),
+        message: 'A 6-digit code has been sent to your email address',
+      };
+    }
+
+    if (!user.phoneNumber) {
+      throw new BadRequestException(
+        'No phone number is registered for SMS delivery. Please use email instead.',
+      );
+    }
+
+    const smsResult = await this.messagingQueue.enqueueLoginOtpSms(
+      user.phoneNumber,
+      otp,
+      portal,
+    );
+
+    if (!smsResult.success) {
+      this.logger.error(
+        `Failed to resend login OTP SMS to ${user.email}: ${smsResult.error}`,
+      );
+      throw new BadRequestException(
+        'Login code could not be sent by SMS. Please try email instead.',
+      );
+    }
+
+    return {
+      channel: 'sms',
+      destination: this.maskPhoneNumber(user.phoneNumber),
+      message: 'A 6-digit code has been sent to your registered phone number',
+    };
+  }
+
   private maskPhoneNumber(phoneNumber: string): string {
     const digits = phoneNumber.replace(/\D/g, '');
     if (digits.length < 4) return 'your registered phone number';
     return `+${digits.slice(0, 3)}****${digits.slice(-3)}`;
+  }
+
+  private maskEmail(email: string): string {
+    const [localPart, domain = ''] = email.split('@');
+    if (!localPart) return 'your email';
+    const start = localPart.slice(0, 2);
+    return `${start}${'*'.repeat(Math.max(localPart.length - 2, 2))}@${domain}`;
   }
 
   /**

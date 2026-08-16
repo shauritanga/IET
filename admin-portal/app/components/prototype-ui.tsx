@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { AvatarTone, StatusTone } from "~/data/admin-prototype";
 
@@ -258,6 +259,9 @@ export function Modal({
   footer,
   bodyClassName,
   maxWidthClassName = "max-w-[520px]",
+  closeOnOverlay = true,
+  closeOnEscape = true,
+  overlayClassName,
 }: {
   title: string;
   open: boolean;
@@ -266,13 +270,35 @@ export function Modal({
   footer?: ReactNode;
   bodyClassName?: string;
   maxWidthClassName?: string;
+  /** When false, clicking the backdrop does not close the modal. Default true. */
+  closeOnOverlay?: boolean;
+  /** When false, Escape does not close the modal. Default true. */
+  closeOnEscape?: boolean;
+  overlayClassName?: string;
 }) {
+  useEffect(() => {
+    if (!open || !closeOnEscape) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, closeOnEscape, onClose]);
+
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[5000] flex items-center justify-center bg-[rgba(57,9,9,0.4)] px-6 backdrop-blur-[2px]"
-      onClick={onClose}
+      className={cx(
+        "fixed inset-0 z-[5000] flex items-center justify-center bg-[rgba(57,9,9,0.4)] px-6 backdrop-blur-[2px]",
+        overlayClassName,
+      )}
+      onClick={closeOnOverlay ? onClose : undefined}
     >
       <div
         className={cx(
@@ -280,12 +306,16 @@ export function Modal({
           maxWidthClassName,
         )}
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
       >
         <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[var(--border)] bg-white px-[22px] py-[18px]">
           <span className="text-[14px] font-bold text-[var(--red-dark)]">{title}</span>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="flex h-7 w-7 items-center justify-center rounded-full border-[1.5px] border-[var(--border)] text-[var(--muted)] transition-all duration-150 hover:border-[var(--red)] hover:text-[var(--red)]"
           >
             <X size={13} />

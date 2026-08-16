@@ -225,30 +225,17 @@ export default function DashboardOverviewPage() {
       setPageError(null);
 
       try {
-        const [statsResponse, inReviewResponse, approvedResponse, rejectedResponse, changesResponse, paymentsResponse, membersResponse] =
+        const [statsResponse, applicationsResponse, paymentsResponse, membersResponse] =
           await Promise.all([
             http.get<ApiEnvelope<AdminStats>>("/admin/dashboard/stats"),
-            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=IN_REVIEW&limit=6"),
-            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=APPROVED&limit=6"),
-            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=REJECTED&limit=6"),
-            http.get<ApiEnvelope<DashboardApplicationRow[]>>("/admin/applications?status=CHANGES_REQUESTED&limit=6"),
+            http.get<ApiEnvelope<DashboardApplicationRow[]>>(
+              "/admin/applications?status=IN_REVIEW,APPROVED,REJECTED,CHANGES_REQUESTED&limit=20",
+            ),
             http.get<ApiEnvelope<DashboardPaymentRow[]>>("/admin/payments?limit=4"),
             http.get<ApiEnvelope<MemberSummary[]>>("/admin/members?limit=4"),
           ]);
 
-        const allApplications = [
-          ...(inReviewResponse.data.data ?? []),
-          ...(approvedResponse.data.data ?? []),
-          ...(rejectedResponse.data.data ?? []),
-          ...(changesResponse.data.data ?? []),
-        ];
-
-        const seenIds = new Set<string>();
-        const uniqueApplications = allApplications.filter((application) => {
-          if (seenIds.has(application.id)) return false;
-          seenIds.add(application.id);
-          return true;
-        });
+        const uniqueApplications = [...(applicationsResponse.data.data ?? [])];
 
         uniqueApplications.sort((left, right) => {
           const leftDate = new Date(left.submittedAt ?? left.createdAt ?? 0).getTime();

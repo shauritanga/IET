@@ -11,6 +11,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PaymentEntity } from '../entities/payment.entity';
 import { UserEntity } from '../../user/entities/user.entity';
 import { RegistrationEntity } from '../../registration/entities';
+import { SystemSettingEntity } from '../../admin/entities/system-setting.entity';
 import {
   InitiatePaymentDto,
   InitiateApplicationPaymentDto,
@@ -30,10 +31,14 @@ import {
   EventRegistrationStatus,
 } from '../../../common/enums';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
-import { SmsService } from '../../shared/services/sms.service';
-import { EmailService } from '../../shared/services/email.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import { EventRegistrationEntity } from '../../events/entities';
 import { GuestRegistrationEntity } from '../../guest/entities/guest-registration.entity';
+import {
+  APPLICATION_ENTRY_FEES_SETTING_KEY,
+  DEFAULT_APPLICATION_ENTRY_FEES,
+  type ApplicationEntryFeesConfig,
+} from '../../admin/constants/application-entry-fees';
 import { v4 as uuid4 } from 'uuid';
 
 @Injectable()
@@ -68,10 +73,11 @@ export class PaymentsService {
     private eventRegistrationRepository: Repository<EventRegistrationEntity>,
     @InjectRepository(GuestRegistrationEntity)
     private guestRegistrationRepository: Repository<GuestRegistrationEntity>,
+    @InjectRepository(SystemSettingEntity)
+    private settingRepository: Repository<SystemSettingEntity>,
     private configService: ConfigService,
     private paymentGateway: PaymentGatewayService,
-    private smsService: SmsService,
-    private emailService: EmailService,
+    private messagingQueue: MessagingQueueService,
   ) {}
 
   /**
@@ -258,7 +264,7 @@ export class PaymentsService {
         paymentStatus: completedPayment?.status ?? PaymentStatus.COMPLETED,
         amount:
           completedPayment?.amount ??
-          this.getApplicationFeeAmount(dto.applicationType),
+          (await this.getApplicationFeeAmount(dto.applicationType)),
         currency: completedPayment?.currency ?? 'TZS',
         paymentMethod: completedPayment?.paymentMethod ?? PaymentMethod.SELCOM,
         paymentUrl: completedPayment?.paymentUrl,
@@ -300,7 +306,7 @@ export class PaymentsService {
       };
     }
 
-    const amount = this.getApplicationFeeAmount(dto.applicationType);
+    const amount = await this.getApplicationFeeAmount(dto.applicationType);
 
     const result = await this.initiatePayment(userId, {
       paymentType: PaymentType.APPLICATION_FEE,
@@ -351,6 +357,12 @@ export class PaymentsService {
     });
 
     if (!payment) {
+      const applicationType =
+        registration.registrationCategory === RegistrationCategory.GRADUATE
+          ? RegistrationCategory.GRADUATE
+          : RegistrationCategory.STANDARD;
+      const expectedAmount = await this.getApplicationFeeAmount(applicationType);
+
       return {
         applicationId: registration.id,
         paymentCompleted: registration.paymentCompleted,
@@ -362,9 +374,9 @@ export class PaymentsService {
         paymentUrl: null,
         phoneNumber: null,
         transactionRef: null,
-        amount: null,
+        amount: expectedAmount,
         currency: 'TZS',
-        applicationType: null,
+        applicationType,
         message: registration.paymentCompleted
           ? 'Application fee payment completed'
           : 'Application fee payment has not been initiated yet',
@@ -374,8 +386,8 @@ export class PaymentsService {
     const syncedPayment = await this.syncPaymentState(payment);
     const expectedAmount =
       syncedPayment.metadata?.applicationType === RegistrationCategory.GRADUATE
-        ? this.getApplicationFeeAmount(RegistrationCategory.GRADUATE)
-        : this.getApplicationFeeAmount(RegistrationCategory.STANDARD);
+        ? await this.getApplicationFeeAmount(RegistrationCategory.GRADUATE)
+        : await this.getApplicationFeeAmount(RegistrationCategory.STANDARD);
 
     if (
       [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
@@ -546,7 +558,7 @@ export class PaymentsService {
 
     if (opts?.sendEmail !== false && user.email) {
       try {
-        await this.emailService.send({
+        await this.messagingQueue.enqueueEmail({
           to: user.email,
           subject: 'Complete your IET payment',
           html: `
@@ -567,7 +579,7 @@ export class PaymentsService {
     const phone = payment.phoneNumber || user.phoneNumber;
     if (opts?.sendSms !== false && phone) {
       try {
-        await this.smsService.send({
+        await this.messagingQueue.enqueueSms({
           to: phone,
           message: `Complete your IET payment of ${amountLabel}: ${link}`,
         });
@@ -587,6 +599,7 @@ export class PaymentsService {
       [PaymentType.MEMBERSHIP_FEE]: 'Annual Membership Fee',
       [PaymentType.EVENT_REGISTRATION]: 'Event Registration Fee',
       [PaymentType.APPLICATION_FEE]: 'Membership Application Fee',
+      [PaymentType.ENTRY_FEE]: 'Membership Entry Fee',
       [PaymentType.UPGRADE_FEE]: 'Membership Upgrade Fee',
     };
     return descriptions[type] || 'IET Payment';
@@ -954,7 +967,7 @@ export class PaymentsService {
 
       // Send SMS confirmation
       if (user.phoneNumber) {
-        await this.smsService.sendPaymentConfirmation(
+        await this.messagingQueue.enqueuePaymentConfirmationSms(
           user.phoneNumber,
           payment.amount,
           payment.currency,
@@ -963,7 +976,7 @@ export class PaymentsService {
       }
 
       // Send email receipt
-      await this.emailService.sendPaymentReceipt(
+      await this.messagingQueue.enqueuePaymentReceipt(
         user.email,
         user.firstName || 'Member',
         {
@@ -975,7 +988,7 @@ export class PaymentsService {
         },
       );
 
-      this.logger.log(`Payment notifications sent for payment ${payment.id}`);
+      this.logger.log(`Payment notifications queued for payment ${payment.id}`);
     } catch (error) {
       this.logger.error(
         `Failed to send payment notifications: ${error.message}`,
@@ -1039,10 +1052,141 @@ export class PaymentsService {
       ].includes(method);
   }
 
-  private getApplicationFeeAmount(category: RegistrationCategory): number {
-    return category === RegistrationCategory.GRADUATE
-      ? Number(this.configService.get('APPLICATION_FEE_GRADUATE') || 5000)
-      : Number(this.configService.get('APPLICATION_FEE_STANDARD') || 10000);
+  /**
+   * Create a pending one-time entry/joining fee after application approval.
+   * Skips when the configured amount is 0 or an obligation already exists.
+   */
+  async createEntryFeeObligation(
+    userId: string,
+    registrationId: string,
+    category: RegistrationCategory,
+  ): Promise<PaymentEntity | null> {
+    const amount = await this.getEntryFeeAmount(category);
+    if (amount <= 0) {
+      this.logger.log(
+        `Entry fee is 0 for ${category}; skipping obligation for registration ${registrationId}`,
+      );
+      return null;
+    }
+
+    const existing = await this.paymentRepository.findOne({
+      where: {
+        userId,
+        referenceId: registrationId,
+        referenceType: 'entry_fee',
+        paymentType: PaymentType.ENTRY_FEE,
+        status: In([
+          PaymentStatus.PENDING,
+          PaymentStatus.PROCESSING,
+          PaymentStatus.COMPLETED,
+        ]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (existing) {
+      this.logger.log(
+        `Entry fee obligation already exists (${existing.id}) for registration ${registrationId}`,
+      );
+      return existing;
+    }
+
+    const payment = new PaymentEntity();
+    payment.userId = userId;
+    payment.paymentType = PaymentType.ENTRY_FEE;
+    payment.amount = amount;
+    payment.currency = 'TZS';
+    payment.status = PaymentStatus.PENDING;
+    payment.paymentMethod = PaymentMethod.SELCOM;
+    payment.description =
+      category === RegistrationCategory.GRADUATE
+        ? 'Graduate membership entry fee'
+        : 'Standard membership entry fee';
+    payment.referenceId = registrationId;
+    payment.referenceType = 'entry_fee';
+    payment.metadata = {
+      registrationId,
+      feeCategory:
+        category === RegistrationCategory.GRADUATE ? 'GRADUATE' : 'OTHERS',
+      obligation: true,
+    };
+    payment.idempotencyKey = uuid4();
+
+    const saved = await this.paymentRepository.save(payment);
+    this.logger.log(
+      `Created entry fee obligation ${saved.id} for user ${userId} amount ${amount}`,
+    );
+    return saved;
+  }
+
+  private async getApplicationFeeAmount(
+    category: RegistrationCategory,
+  ): Promise<number> {
+    const config = await this.getApplicationEntryFeesConfig();
+    const pair =
+      category === RegistrationCategory.GRADUATE
+        ? config.graduate
+        : config.others;
+    return pair.applicationFee;
+  }
+
+  private async getEntryFeeAmount(
+    category: RegistrationCategory,
+  ): Promise<number> {
+    const config = await this.getApplicationEntryFeesConfig();
+    const pair =
+      category === RegistrationCategory.GRADUATE
+        ? config.graduate
+        : config.others;
+    return pair.entryFee;
+  }
+
+  private async getApplicationEntryFeesConfig(): Promise<ApplicationEntryFeesConfig> {
+    const fallback: ApplicationEntryFeesConfig = {
+      graduate: { ...DEFAULT_APPLICATION_ENTRY_FEES.graduate },
+      others: { ...DEFAULT_APPLICATION_ENTRY_FEES.others },
+    };
+
+    const setting = await this.settingRepository.findOneBy({
+      key: APPLICATION_ENTRY_FEES_SETTING_KEY,
+    });
+    if (!setting) {
+      return fallback;
+    }
+
+    try {
+      const parsed = JSON.parse(setting.value) as Partial<ApplicationEntryFeesConfig>;
+      const toNonNegativeInt = (value: unknown, defaultValue: number): number => {
+        const n = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(n) || n < 0) return defaultValue;
+        return Math.round(n);
+      };
+
+      return {
+        graduate: {
+          applicationFee: toNonNegativeInt(
+            parsed.graduate?.applicationFee,
+            fallback.graduate.applicationFee,
+          ),
+          entryFee: toNonNegativeInt(
+            parsed.graduate?.entryFee,
+            fallback.graduate.entryFee,
+          ),
+        },
+        others: {
+          applicationFee: toNonNegativeInt(
+            parsed.others?.applicationFee,
+            fallback.others.applicationFee,
+          ),
+          entryFee: toNonNegativeInt(
+            parsed.others?.entryFee,
+            fallback.others.entryFee,
+          ),
+        },
+      };
+    } catch {
+      return fallback;
+    }
   }
 
   private isOutdatedApplicationPaymentAmount(

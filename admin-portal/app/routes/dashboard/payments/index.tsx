@@ -52,6 +52,7 @@ const STATUS_OPTIONS = ["All Statuses", "COMPLETED", "PENDING", "PROCESSING", "F
 const TYPE_OPTIONS = [
   { value: "", label: "All Types" },
   { value: "APPLICATION_FEE", label: "Application Fee" },
+  { value: "ENTRY_FEE", label: "Entry Fee" },
   { value: "MEMBERSHIP_FEE", label: "Membership Fee" },
   { value: "EVENT_REGISTRATION", label: "Event Registration" },
   { value: "UPGRADE_FEE", label: "Upgrade Fee" },
@@ -70,6 +71,7 @@ const METHOD_LABELS: Record<string, string> = {
 
 const TYPE_LABELS: Record<string, string> = {
   APPLICATION_FEE: "Application Fee",
+  ENTRY_FEE: "Entry Fee",
   MEMBERSHIP_FEE: "Membership Fee",
   EVENT_REGISTRATION: "Event Registration",
   UPGRADE_FEE: "Upgrade Fee",

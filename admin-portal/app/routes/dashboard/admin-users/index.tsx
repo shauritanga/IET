@@ -1,6 +1,6 @@
 import type { AxiosError } from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff, MoreVertical, PencilLine, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Mail, MoreVertical, PencilLine, Trash2 } from "lucide-react";
 import { Button, Modal, PageHeader, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
@@ -179,6 +179,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
@@ -345,6 +346,22 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function resendCredentials(user: AdminUser) {
+    setActionMenuUserId(null);
+    setActionMenuPosition(null);
+    setFormError(null);
+    setSuccessMessage(null);
+    try {
+      await http.post(`/admin/users/${user.id}/resend-credentials`);
+      setPageError(null);
+      setSuccessMessage(`Welcome email sent to ${user.email} with a new temporary password.`);
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setSuccessMessage(null);
+      setPageError(apiError.response?.data?.message ?? "Failed to resend welcome email.");
+    }
+  }
+
   async function saveUser(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -428,6 +445,19 @@ export default function AdminUsersPage() {
               Edit
             </button>
           )}
+          {canEditRow(user) && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                void resendCredentials(user);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] font-semibold text-[var(--text)] hover:bg-[var(--red-pale)]"
+            >
+              <Mail size={14} className="text-[var(--muted)]" />
+              Resend welcome email
+            </button>
+          )}
           {canDeleteRow(user) && (
             <>
               <div className="h-px bg-[var(--border)]" />
@@ -488,6 +518,11 @@ export default function AdminUsersPage() {
           {pageError && (
             <div className="mb-[14px] rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-4 py-3 text-[11.5px] font-semibold text-[var(--red)]">
               {pageError}
+            </div>
+          )}
+          {successMessage && (
+            <div className="mb-[14px] rounded-[10px] border border-[#86efac] bg-[#f0fdf4] px-4 py-3 text-[11.5px] font-semibold text-[#15803d]">
+              {successMessage}
             </div>
           )}
 
@@ -618,7 +653,7 @@ export default function AdminUsersPage() {
             <div>
               <TextField label="Initial Password" value={form.password} onChange={(value) => setForm((prev) => ({ ...prev, password: value }))} type="password" />
               <p className="mt-1 text-[10.5px] text-[var(--muted)]">
-                Leave blank to auto-generate a temporary password and email login credentials to the user.
+                Optional. Leave blank to auto-generate a temporary password. Either way, the user is emailed that their account was created (temp password is included only when auto-generated).
               </p>
             </div>
           )}
@@ -666,12 +701,22 @@ export default function AdminUsersPage() {
                 <div className="max-h-[180px] overflow-y-auto rounded-[8px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] p-2">
                   {disciplines
                     .filter((d) => !d.parentId)
-                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .sort((a, b) => {
+                      const aOther = a.name.trim().toLowerCase() === "other";
+                      const bOther = b.name.trim().toLowerCase() === "other";
+                      if (aOther !== bOther) return aOther ? 1 : -1;
+                      return a.name.localeCompare(b.name);
+                    })
                     .flatMap((parent) => [
                       parent,
                       ...disciplines
                         .filter((c) => c.parentId === parent.id)
-                        .sort((a, b) => a.name.localeCompare(b.name)),
+                        .sort((a, b) => {
+                          const aOther = a.name.trim().toLowerCase() === "other";
+                          const bOther = b.name.trim().toLowerCase() === "other";
+                          if (aOther !== bOther) return aOther ? 1 : -1;
+                          return a.name.localeCompare(b.name);
+                        }),
                     ])
                     .map((d) => {
                       const checked = form.disciplineIds.includes(d.id);

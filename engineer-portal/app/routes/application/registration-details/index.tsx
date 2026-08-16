@@ -9,9 +9,16 @@ import {
 import {useSubmitRegistrationDetails} from "./repository/useSubmitRegistrationDetails";
 import FormPageLayout from "~/routes/application/components/form-page-layout";
 import { mapServerErrors } from "~/utils/map-server-errors";
+import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
+import {
+    getRouteAfterSavingStep,
+    getSubmitLabel,
+} from "~/routes/application/utils/application-steps";
 
 const RegistrationDetails = () => {
     const navigate = useNavigate();
+    const { data: draft } = useGetApplicationDraft();
+    const completedSteps = draft?.data?.completedSteps ?? [];
     const {
         form: formOptions,
         institutionsFieldArray,
@@ -21,7 +28,15 @@ const RegistrationDetails = () => {
     } = useManageRegistrationDetailsForm();
 
     const mutation = useSubmitRegistrationDetails(
-        () => navigate("/application/experience", { replace: true }),
+        () =>
+            navigate(
+                getRouteAfterSavingStep(
+                    completedSteps,
+                    "REGISTRATION_DETAILS",
+                    "/application/experience",
+                ),
+                { replace: true },
+            ),
         (error) => mapServerErrors(error, formOptions),
     );
 
@@ -30,7 +45,6 @@ const RegistrationDetails = () => {
             ...value,
             institutions: value.institutions?.slice(0, savedInstitutionCount),
         };
-        console.log(payload);
         mutation.mutate(payload);
     };
 
@@ -46,6 +60,7 @@ const RegistrationDetails = () => {
                     subtitle="Provide your identification and professional registration details."
                     backHref="/application/personal-details"
                     isPending={mutation.isPending}
+                    submitLabel={getSubmitLabel(completedSteps, "REGISTRATION_DETAILS")}
                 >
                     <RegistrationDetailsForm
                         institutionsFieldArray={institutionsFieldArray}

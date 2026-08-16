@@ -20,6 +20,7 @@ import {
   EventCategory,
   AttendeeType,
   PaymentMethod,
+  EventFeePricingMode,
 } from '../../../common/enums';
 
 // ============================================
@@ -215,6 +216,15 @@ export class CreateEventDto {
   agenda?: AgendaItemDto[];
 
   @ApiPropertyOptional({
+    example: 'https://cdn.iet.or.tz/events/agenda-uuid.pdf',
+    description: 'Optional full agenda PDF URL (upload via /uploads)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  agendaPdf?: string;
+
+  @ApiPropertyOptional({
     example: ['https://cdn.iet.or.tz/events/gallery-1.jpg'],
   })
   @IsOptional()
@@ -232,6 +242,26 @@ export class CreateEventDto {
   @IsNumber()
   @Min(0)
   registrationFee?: number;
+
+  @ApiPropertyOptional({
+    example: 'FLAT',
+    enum: EventFeePricingMode,
+    description:
+      'FLAT = one fee for everyone; DIFFERENT = separate member / non-member fees',
+  })
+  @IsOptional()
+  @IsEnum(EventFeePricingMode)
+  feePricingMode?: EventFeePricingMode;
+
+  @ApiPropertyOptional({
+    example: 30000,
+    description:
+      'Active-member fee when feePricingMode is DIFFERENT (ignored for FLAT)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  memberRegistrationFee?: number;
 
   @ApiPropertyOptional({ example: 8 })
   @IsOptional()

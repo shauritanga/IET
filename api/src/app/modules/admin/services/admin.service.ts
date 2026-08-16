@@ -26,8 +26,8 @@ import { DisciplineEntity } from '../entities/discipline.entity';
 import { UserDisciplineEntity } from '../../user/entities/user-discipline.entity';
 import { UserService } from '../../user/services/user.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
-import { EmailService } from '../../shared/services/email.service';
 import { PaymentsService } from '../../payments/services/payments.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import {
   MemberQueryDto,
   ApplicationQueryDto,
@@ -39,6 +39,7 @@ import {
   CreateAdminUserDto,
   UpdateAdminUserDto,
   FiscalYearSettingsDto,
+  ApplicationEntryFeesDto,
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
@@ -64,7 +65,14 @@ import {
   NotificationType,
   DocumentStatus,
   EventRegistrationStatus,
+  AuthPortal,
+  RegistrationCategory,
 } from '../../../common/enums';
+import {
+  APPLICATION_ENTRY_FEES_SETTING_KEY,
+  DEFAULT_APPLICATION_ENTRY_FEES,
+  type ApplicationEntryFeesConfig,
+} from '../constants/application-entry-fees';
 
 type LegacyMemberImportResult = {
   created: number;
@@ -165,8 +173,8 @@ export class AdminService {
     private userDisciplineRepository: Repository<UserDisciplineEntity>,
     private userService: UserService,
     private notificationsService: NotificationsService,
-    private emailService: EmailService,
     private paymentsService: PaymentsService,
+    private messagingQueue: MessagingQueueService,
   ) {}
 
   private hasThreeConsecutiveUnpaidFeeYears(
@@ -539,10 +547,10 @@ export class AdminService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    // When no password is supplied, generate a temporary one and email the
-    // login credentials to the panel member (same pattern as createMember).
+    // When no password is supplied, generate a temporary one.
+    // Always email the new user that their portal account exists.
     const plainPassword = dto.password || this.generateTemporaryPassword();
-    const sendCredentials = !dto.password;
+    const usedTemporaryPassword = !dto.password;
 
     const user = this.userRepository.create({
       email: dto.email,
@@ -567,28 +575,74 @@ export class AdminService {
       await this.setUserDisciplines(saved.id, dto.disciplineIds);
     }
 
-    if (sendCredentials) {
-      void this.emailService
-        .send({
-          to: saved.email,
-          subject: 'Your IET portal account has been created',
-          html: `
-        <p>Hello ${saved.firstName ?? 'there'},</p>
-        <p>An IET portal account has been created for you (${saved.role}).</p>
-        <p><strong>Login email:</strong> ${saved.email}</p>
-        <p><strong>Temporary password:</strong> ${plainPassword}</p>
-        <p>Please sign in and change your password immediately.</p>
-      `,
-        })
-        .catch((error: any) => {
+    void this.messagingQueue
+      .enqueuePortalWelcomeEmail({
+        email: saved.email,
+        firstName: saved.firstName ?? 'there',
+        role: saved.role,
+        temporaryPassword: usedTemporaryPassword ? plainPassword : undefined,
+        portal: AuthPortal.ADMIN_PORTAL,
+      })
+      .then((result) => {
+        if (!result.success) {
           this.logger.warn(
-            `Failed to send portal credentials email to ${saved.email}: ${error.message}`,
+            `Portal welcome email to ${saved.email} failed: ${result.error}`,
           );
-        });
-    }
+        } else {
+          this.logger.log(
+            `Portal welcome email queued for ${saved.email} (${result.provider})`,
+          );
+        }
+      })
+      .catch((error: any) => {
+        this.logger.warn(
+          `Failed to queue portal welcome email to ${saved.email}: ${error.message}`,
+        );
+      });
 
     const disciplines = await this.getUserDisciplines(saved.id);
-    return this.toAdminUserSummary(saved, disciplines);
+    return {
+      ...this.toAdminUserSummary(saved, disciplines),
+      credentialsEmailQueued: true,
+      temporaryPasswordIssued: usedTemporaryPassword,
+    };
+  }
+
+  /**
+   * Reset temporary password and resend welcome credentials email.
+   */
+  async resendAdminUserCredentials(actor: UserEntity, userId: string) {
+    this.assertCanManagePortalUsers(actor);
+
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user || !PORTAL_ROLES.includes(user.role as any)) {
+      throw new NotFoundException('Admin portal user not found');
+    }
+    this.assertCanManageTarget(actor, user);
+
+    const temporaryPassword = this.generateTemporaryPassword();
+    user.password = await bcrypt.hash(temporaryPassword, 10);
+    await this.userRepository.save(user);
+
+    const result = await this.messagingQueue.enqueuePortalWelcomeEmail({
+      email: user.email,
+      firstName: user.firstName ?? 'there',
+      role: user.role,
+      temporaryPassword,
+      portal: AuthPortal.ADMIN_PORTAL,
+    });
+
+    if (!result.success) {
+      throw new BadRequestException(
+        result.error || 'Failed to queue welcome email',
+      );
+    }
+
+    return {
+      email: user.email,
+      sent: true,
+      messageId: result.messageId,
+    };
   }
 
   async listEvaluators() {
@@ -955,19 +1009,19 @@ export class AdminService {
       await this.userRepository.save(user);
     }
 
-    void this.emailService.send({
-      to: user.email,
-      subject: 'Your IET member account has been created',
-      html: `
-        <p>Hello ${user.firstName ?? 'Member'},</p>
-        <p>Your IET member account has been created by the admin team.</p>
-        <p><strong>Login email:</strong> ${user.email}</p>
-        <p><strong>Temporary password:</strong> ${temporaryPassword}</p>
-        <p>Please sign in and change your password immediately.</p>
-      `,
-    }).catch((error: any) => {
-      this.logger.warn(`Failed to send member credentials email to ${user.email}: ${error.message}`);
-    });
+    void this.messagingQueue
+      .enqueuePortalWelcomeEmail({
+        email: user.email,
+        firstName: user.firstName ?? 'Member',
+        role: user.role,
+        temporaryPassword,
+        portal: AuthPortal.MEMBER_PORTAL,
+      })
+      .catch((error: any) => {
+        this.logger.warn(
+          `Failed to queue member welcome email to ${user.email}: ${error.message}`,
+        );
+      });
 
     return user;
   }
@@ -1105,14 +1159,19 @@ export class AdminService {
       .createQueryBuilder('reg')
       .leftJoinAndSelect('reg.user', 'user');
 
-    if (status) {
-      queryBuilder.andWhere('reg.status = :status', { status });
+    const statuses = (status ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean) as ApplicationStatus[];
+
+    if (statuses.length === 1) {
+      queryBuilder.andWhere('reg.status = :status', { status: statuses[0] });
+    } else if (statuses.length > 1) {
+      queryBuilder.andWhere('reg.status IN (:...statuses)', { statuses });
     } else {
       // Default to pending applications
       queryBuilder.andWhere('reg.status IN (:...statuses)', {
-        statuses: [
-          ApplicationStatus.IN_REVIEW,
-        ],
+        statuses: [ApplicationStatus.IN_REVIEW],
       });
     }
     if (reviewStage) {
@@ -1419,6 +1478,23 @@ export class AdminService {
           membershipClass: dto.membershipClass,
         },
       );
+
+      // Create a one-time entry/joining fee obligation (if configured > 0).
+      const feeCategory =
+        registration.registrationCategory === RegistrationCategory.GRADUATE
+          ? RegistrationCategory.GRADUATE
+          : RegistrationCategory.STANDARD;
+      try {
+        await this.paymentsService.createEntryFeeObligation(
+          registration.userId,
+          registration.id,
+          feeCategory,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to create entry fee obligation for application ${applicationId}: ${(error as Error).message}`,
+        );
+      }
     } else if (dto.action === 'REJECT') {
       await this.notificationsService.sendApplicationStatusNotification(
         registration.userId,
@@ -2751,6 +2827,73 @@ export class AdminService {
     setting.value = JSON.stringify(fees);
     await this.settingRepository.save(setting);
     return fees;
+  }
+
+  async getApplicationEntryFeesConfig(): Promise<ApplicationEntryFeesConfig> {
+    const setting = await this.settingRepository.findOneBy({
+      key: APPLICATION_ENTRY_FEES_SETTING_KEY,
+    });
+    if (!setting) {
+      return { ...DEFAULT_APPLICATION_ENTRY_FEES };
+    }
+
+    try {
+      const parsed = JSON.parse(setting.value) as Partial<ApplicationEntryFeesConfig>;
+      return this.normalizeApplicationEntryFees(parsed);
+    } catch {
+      return { ...DEFAULT_APPLICATION_ENTRY_FEES };
+    }
+  }
+
+  async updateApplicationEntryFeesConfig(
+    dto: ApplicationEntryFeesDto,
+  ): Promise<ApplicationEntryFeesConfig> {
+    const normalized = this.normalizeApplicationEntryFees(dto);
+    let setting = await this.settingRepository.findOneBy({
+      key: APPLICATION_ENTRY_FEES_SETTING_KEY,
+    });
+    if (!setting) {
+      setting = this.settingRepository.create({
+        key: APPLICATION_ENTRY_FEES_SETTING_KEY,
+        value: '{}',
+      });
+    }
+    setting.value = JSON.stringify(normalized);
+    await this.settingRepository.save(setting);
+    return normalized;
+  }
+
+  private normalizeApplicationEntryFees(
+    input: Partial<ApplicationEntryFeesConfig> | ApplicationEntryFeesDto,
+  ): ApplicationEntryFeesConfig {
+    const toNonNegativeInt = (value: unknown, fallback: number): number => {
+      const n = typeof value === 'number' ? value : Number(value);
+      if (!Number.isFinite(n) || n < 0) return fallback;
+      return Math.round(n);
+    };
+
+    return {
+      graduate: {
+        applicationFee: toNonNegativeInt(
+          input.graduate?.applicationFee,
+          DEFAULT_APPLICATION_ENTRY_FEES.graduate.applicationFee,
+        ),
+        entryFee: toNonNegativeInt(
+          input.graduate?.entryFee,
+          DEFAULT_APPLICATION_ENTRY_FEES.graduate.entryFee,
+        ),
+      },
+      others: {
+        applicationFee: toNonNegativeInt(
+          input.others?.applicationFee,
+          DEFAULT_APPLICATION_ENTRY_FEES.others.applicationFee,
+        ),
+        entryFee: toNonNegativeInt(
+          input.others?.entryFee,
+          DEFAULT_APPLICATION_ENTRY_FEES.others.entryFee,
+        ),
+      },
+    };
   }
 
   async getFiscalYearSettings(): Promise<FiscalYearSettingsDto> {

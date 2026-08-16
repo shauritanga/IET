@@ -1,10 +1,11 @@
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import toast from "react-hot-toast"
 import { Link, useNavigate } from "react-router"
-import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/components/ui/dialog"
+import { BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ClockIcon, DollarIcon, FileIcon, GridIcon, ListIcon, PaymentIcon, SearchIcon, StarIcon, UserIcon, UsersIcon } from "~/components/portal/icons"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog"
+import { Button } from "~/components/ui/button"
 import { membershipBenefits, profileDocumentItems, type KpiItem } from "~/components/portal/mock-data"
 import { useUpcomingEvents } from "~/routes/dashboard/home/repositories/useUpcomingEvents"
 import { useEvents } from "~/routes/dashboard/events/repositories/use-events"
@@ -24,8 +25,6 @@ const EVENT_TYPE_FILTERS = [
     { value: "AGM", label: "AGM" },
     { value: "NETWORKING", label: "Networking" },
 ] as const
-
-type EventPaymentMethod = "SELCOM"
 
 type DashboardNotification = {
     id: string
@@ -593,25 +592,18 @@ export const DashboardProfilePage = () => (
 )
 
 export const DashboardEventsPage = () => {
+    const navigate = useNavigate()
+    const queryClient = useQueryClient()
     const [query, setQuery] = useState("")
     const [type, setType] = useState("")
     const [location, setLocation] = useState("")
     const [cost, setCost] = useState("")
     const [view, setView] = useState<"list" | "grid">("list")
-    const [selectedEvent, setSelectedEvent] = useState<PortalEventCard | null>(null)
     const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set())
-    const [drawerVisible, setDrawerVisible] = useState(false)
-    const [drawerOpen, setDrawerOpen] = useState(false)
-    const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
-    const eventPaymentMethod: EventPaymentMethod = "SELCOM"
+    const [paymentEvent, setPaymentEvent] = useState<PortalEventCard | null>(null)
 
     const { data: profileData } = useGetUserProfile()
     const profile = profileData?.data
-    const hasMemberDiscount = !!(
-        profile?.membershipClass &&
-        profile?.membershipStatus === "ACTIVE" &&
-        !profile?.isMembershipExpired
-    )
 
     const storageKey = profile?.id ? `iet_event_registrations_${profile.id}` : null
 
@@ -655,13 +647,14 @@ export const DashboardEventsPage = () => {
             return next
         })
     }, [data])
+
     const registerMutation = useMutation({
         mutationFn: async ({
             event,
             paymentMethod,
         }: {
             event: PortalEventCard
-            paymentMethod?: EventPaymentMethod
+            paymentMethod?: "SELCOM"
         }) => {
             const response = await http.post(`/events/${event.id}/register`, {
                 attendeeType: "MEMBER",
@@ -671,24 +664,16 @@ export const DashboardEventsPage = () => {
         },
         onSuccess: async ({ event, result }) => {
             if (result?.paymentUrl) {
-                setPaymentDialogOpen(false)
+                setPaymentEvent(null)
                 toast.success("Redirecting to payment gateway…")
                 window.location.href = result.paymentUrl
                 return
             }
             toast.success(event.free ? "Registration confirmed." : "Registration pending payment.")
             setRegisteredEventIds((current) => new Set(current).add(event.id))
-            setSelectedEvent((current) => current?.id === event.id
-                ? {
-                    ...current,
-                    isRegistered: true,
-                    registeredCount: (current.registeredCount ?? 0) + 1,
-                    isFull: current.availableSlots ? (current.registeredCount ?? 0) + 1 >= current.availableSlots : current.isFull,
-                }
-                : current,
-            )
-            setPaymentDialogOpen(false)
+            setPaymentEvent(null)
             await refetch()
+            await queryClient.invalidateQueries({ queryKey: ["my-registrations"] })
         },
         onError: (error: any) => {
             toast.error(error?.response?.data?.message ?? "Failed to register for this event.")
@@ -710,58 +695,30 @@ export const DashboardEventsPage = () => {
         [cost, events],
     )
 
-    const openDrawer = (event: PortalEventCard) => {
-        setSelectedEvent({ ...event, isRegistered: event.isRegistered || registeredEventIds.has(event.id) })
-        setPaymentDialogOpen(false)
-        setDrawerVisible(true)
-        requestAnimationFrame(() => setDrawerOpen(true))
+    const openEventDetails = (event: PortalEventCard) => {
+        navigate(`/dashboard/events/${event.id}`)
     }
 
-    const closeDrawer = () => {
-        setDrawerOpen(false)
-        setPaymentDialogOpen(false)
-        setTimeout(() => {
-            setDrawerVisible(false)
-            setSelectedEvent(null)
-        }, 280)
-    }
-
-    const registerForSelectedEvent = () => {
-        if (!selectedEvent || selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending) return
-
-        if (!selectedEvent.free) {
-            setDrawerOpen(false)
-            setTimeout(() => {
-                setDrawerVisible(false)
-                setPaymentDialogOpen(true)
-            }, 280)
+    const registerForEvent = (event: PortalEventCard) => {
+        if (event.isRegistered || event.isFull || registerMutation.isPending) return
+        if (!event.free) {
+            setPaymentEvent(event)
             return
         }
-
-        registerMutation.mutate({ event: selectedEvent })
+        registerMutation.mutate({ event })
     }
 
-    const closePaymentDialog = () => {
-        setPaymentDialogOpen(false)
-        setSelectedEvent(null)
+    const registerButtonLabel = (event: PortalEventCard) => {
+        if (event.isRegistered) return "Registered"
+        if (event.isFull) return "Full"
+        if (registerMutation.isPending && registerMutation.variables?.event.id === event.id) {
+            return "Registering…"
+        }
+        return "Register"
     }
 
-    const completePaidEventRegistration = () => {
-        if (!selectedEvent || selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending) return
-
-        registerMutation.mutate({
-            event: selectedEvent,
-            paymentMethod: eventPaymentMethod,
-        })
-    }
-
-    const registrationButtonLabel = selectedEvent?.isRegistered
-        ? "Already Registered"
-        : selectedEvent?.isFull
-            ? "Event Full"
-            : registerMutation.isPending && registerMutation.variables?.event.id === selectedEvent?.id
-                ? "Registering..."
-                : "Register"
+    const canRegister = (event: PortalEventCard) =>
+        !event.isRegistered && !event.isFull && !registerMutation.isPending
 
     return (
         <div>
@@ -862,13 +819,20 @@ export const DashboardEventsPage = () => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="shrink-0 flex items-center gap-[14px]">
-                                    <span className="hidden sm:inline" style={{ fontSize: 11.5, fontWeight: event.free ? 700 : 600, color: event.free ? "#1a6b3c" : "var(--iet-muted)" }}>
+                                <div className="shrink-0 flex items-center gap-2">
+                                    <span className="hidden sm:inline" style={{ fontSize: 11.5, fontWeight: event.free ? 700 : 600, color: event.free ? "#1a6b3c" : "var(--iet-muted)", marginRight: 6 }}>
                                         {event.free ? "Free" : `TZS ${event.price.toLocaleString()}`}
                                     </span>
-                                    <button onClick={() => openDrawer(event)} className="btn btn-outline btn-sm shrink-0">
+                                    <button onClick={() => openEventDetails(event)} className="btn btn-outline btn-sm shrink-0">
                                         <span className="hidden sm:inline">View Details</span>
                                         <span className="sm:hidden">View</span>
+                                    </button>
+                                    <button
+                                        onClick={() => registerForEvent(event)}
+                                        disabled={!canRegister(event)}
+                                        className="btn btn-red btn-sm shrink-0"
+                                    >
+                                        {registerButtonLabel(event)}
                                     </button>
                                 </div>
                             </div>
@@ -902,13 +866,22 @@ export const DashboardEventsPage = () => {
                                     <div style={{ fontSize: 11, color: "var(--iet-muted)", marginBottom: 10 }}>{event.mode === "Online" ? "💻 Online" : "📍 " + event.location}</div>
                                     <div className="ev-desc-clamp">{event.desc}</div>
                                 </div>
-                                <div style={{ padding: "11px 16px", borderTop: "1px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div style={{ padding: "11px 16px", borderTop: "1px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                                     {event.free ? (
                                         <span style={{ fontSize: 11.5, fontWeight: 700, color: "#1a6b3c" }}>Free</span>
                                     ) : (
                                         <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--iet-muted)" }}>TZS {event.price.toLocaleString()}</span>
                                     )}
-                                    <button onClick={() => openDrawer(event)} className="btn btn-outline btn-sm">View Details</button>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => openEventDetails(event)} className="btn btn-outline btn-sm">View</button>
+                                        <button
+                                            onClick={() => registerForEvent(event)}
+                                            disabled={!canRegister(event)}
+                                            className="btn btn-red btn-sm"
+                                        >
+                                            {registerButtonLabel(event)}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )
@@ -916,123 +889,51 @@ export const DashboardEventsPage = () => {
                 </div>
             )}
 
-            {drawerVisible && selectedEvent && (
-                <>
-                    <div onClick={closeDrawer} style={{ position: "fixed", inset: 0, background: "rgba(28,16,16,.35)", zIndex: 500, backdropFilter: "blur(2px)" }} />
-                    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "96vw", background: "var(--iet-white)", zIndex: 501, boxShadow: "-8px 0 40px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden", transition: "transform .28s cubic-bezier(.4,0,.2,1)", transform: drawerOpen ? "translateX(0)" : "translateX(100%)" }}>
-                        <div style={{ height: 54, display: "flex", alignItems: "center", gap: 12, padding: "0 20px", borderBottom: "1px solid var(--iet-border)", flexShrink: 0 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--iet-red-pale)", display: "flex", alignItems: "center", justifyContent: "center" }}><CalendarIcon width="15" height="15" stroke="var(--iet-red)" /></div>
-                            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--iet-text)" }}>{selectedEvent.type} Details</span>
-                            <button onClick={closeDrawer} style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--iet-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--iet-muted)", background: "var(--iet-white)", transition: "all .15s" }}><CloseIcon width="13" height="13" /></button>
+            <Dialog open={!!paymentEvent} onOpenChange={(open) => { if (!open) setPaymentEvent(null) }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Complete registration payment</DialogTitle>
+                        <DialogDescription>{paymentEvent?.title}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Registration fee</span>
+                            <span className="font-semibold">
+                                {paymentEvent
+                                    ? paymentEvent.free
+                                        ? "Free"
+                                        : `TZS ${paymentEvent.price.toLocaleString()}`
+                                    : ""}
+                            </span>
                         </div>
-                        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 24px" }}>
-                            <div style={{ width: "100%", height: 200, background: selectedEvent.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
-                                {selectedEvent.coverImage
-                                    ? <img src={selectedEvent.coverImage} alt={selectedEvent.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                    : <CalendarIcon width="64" height="64" stroke="rgba(255,255,255,.2)" strokeWidth="1.5" />
-                                }
-                            </div>
-                            <div style={{ padding: "22px 22px 0" }}>
-                                <div style={{ fontFamily: "'Source Serif 4',serif", fontSize: 18, fontWeight: 700, color: "var(--iet-text)", marginBottom: 18, lineHeight: 1.35 }}>{selectedEvent.title}</div>
-                                <div className="ev-dr"><span className="ev-dl">Event Type</span><span className="ev-dv">{selectedEvent.mode === "Online" ? "Online / Virtual" : "Physical"}</span></div>
-                                {selectedEvent.guest && <div className="ev-dr"><span className="ev-dl">Guest of Honour</span><span className="ev-dv">{selectedEvent.guest}</span></div>}
-                                {selectedEvent.speaker && <div className="ev-dr"><span className="ev-dl">Speaker</span><span className="ev-dv">{selectedEvent.speaker}</span></div>}
-                                <div className="ev-dr"><span className="ev-dl">Region</span><span className="ev-dv">{selectedEvent.region}</span></div>
-                                <div className="ev-dr"><span className="ev-dl">Venue</span><span className="ev-dv">{selectedEvent.venue}</span></div>
-                                <div className="ev-dr"><span className="ev-dl">Schedule</span><span className="ev-dv">{selectedEvent.start}</span></div>
-                                {selectedEvent.end && <div className="ev-dr"><span className="ev-dl">Ends</span><span className="ev-dv">{selectedEvent.end}</span></div>}
-                                <div className="ev-dr"><span className="ev-dl">Cost</span><span className="ev-dv">{selectedEvent.free ? "Free (Members)" : "TZS " + selectedEvent.price.toLocaleString()}</span></div>
-                                <div className="ev-dr"><span className="ev-dl">Capacity</span><span className="ev-dv">{selectedEvent.availableSlots ? `${selectedEvent.registeredCount ?? 0} / ${selectedEvent.availableSlots}` : "Unlimited"}</span></div>
-                                <div className="ev-dr" style={{ alignItems: "flex-start" }}><span className="ev-dl">Description</span><span className="ev-dv" style={{ lineHeight: 1.6 }}>{selectedEvent.desc}</span></div>
-                                {selectedEvent.highlights.length > 0 && (
-                                    <div className="ev-dr" style={{ alignItems: "flex-start" }}>
-                                        <span className="ev-dl">Key Highlights</span>
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                                            {selectedEvent.highlights.map((highlight) => (
-                                                <span key={highlight} style={{ background: "var(--iet-red-pale)", border: "1px solid var(--iet-border)", borderRadius: 20, padding: "4px 11px", fontSize: 11, color: "var(--iet-red-dark)", fontWeight: 500 }}>{highlight}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div style={{ padding: "14px 20px", borderTop: "1px solid var(--iet-border)", display: "flex", gap: 10, flexShrink: 0 }}>
-                            <button className="btn btn-outline" style={{ flex: 1, justifyContent: "center" }} onClick={closeDrawer}>Cancel</button>
-                            <button
-                                className="btn btn-red"
-                                style={{
-                                    flex: 1,
-                                    justifyContent: "center",
-                                    opacity: selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending ? 0.65 : 1,
-                                    cursor: selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending ? "not-allowed" : "pointer",
-                                }}
-                                disabled={selectedEvent.isRegistered || selectedEvent.isFull || registerMutation.isPending}
-                                onClick={registerForSelectedEvent}
-                            >
-                                {registrationButtonLabel}
-                            </button>
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            You will be redirected to Selcom to complete payment securely.
+                        </p>
                     </div>
-                </>
-            )}
-
-            {selectedEvent && !selectedEvent.free && (() => {
-                const originalPrice = selectedEvent.price
-                const discountAmount = hasMemberDiscount ? Math.round(originalPrice * 0.2) : 0
-                const finalPrice = originalPrice - discountAmount
-                return (
-                    <Dialog open={paymentDialogOpen} onOpenChange={(open) => { if (!open) closePaymentDialog() }}>
-                        <DialogContent className="sm:max-w-md">
-                            <DialogTitle>Event Registration</DialogTitle>
-                            <DialogDescription>{selectedEvent.title}</DialogDescription>
-
-                            {/* Fee row */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--iet-bg)", border: "1px solid var(--iet-border)", borderRadius: 8, padding: "12px 16px" }}>
-                                <span style={{ fontSize: 13, color: "var(--iet-muted)" }}>Registration fee</span>
-                                <div style={{ textAlign: "right" }}>
-                                    {hasMemberDiscount && (
-                                        <div style={{ fontSize: 11, color: "var(--iet-muted)", textDecoration: "line-through" }}>
-                                            TZS {originalPrice.toLocaleString()}
-                                        </div>
-                                    )}
-                                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--iet-red-dark)" }}>
-                                        TZS {finalPrice.toLocaleString()}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {hasMemberDiscount && (
-                                <div style={{ background: "#f0faf4", border: "1px solid #b7e4c7", borderRadius: 7, padding: "8px 12px", fontSize: 11.5, color: "#1a6b3c", fontWeight: 600 }}>
-                                    ✓ 20% member discount applied · {profile?.membershipClass?.replace(/_/g, " ")}
-                                </div>
-                            )}
-
-                            <div style={{ padding: "10px 14px", background: "var(--iet-bg)", border: "1.5px solid var(--iet-border)", borderRadius: 8, fontSize: 12, color: "var(--iet-muted)", lineHeight: 1.5 }}>
-                                You will be redirected to Selcom's secure checkout page to complete your payment.
-                            </div>
-
-                            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                                <button className="btn btn-outline" style={{ flex: 1, justifyContent: "center" }} onClick={closePaymentDialog}>
-                                    Cancel
-                                </button>
-                                <button
-                                    className="btn btn-red"
-                                    style={{
-                                        flex: 2,
-                                        justifyContent: "center",
-                                        opacity: registerMutation.isPending ? 0.65 : 1,
-                                        cursor: registerMutation.isPending ? "not-allowed" : "pointer",
-                                    }}
-                                    disabled={registerMutation.isPending}
-                                    onClick={completePaidEventRegistration}
-                                >
-                                    {registerMutation.isPending ? "Processing…" : `Pay TZS ${finalPrice.toLocaleString()}`}
-                                </button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                )
-            })()}
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setPaymentEvent(null)}
+                            disabled={registerMutation.isPending}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-[#9b1c1c] text-white hover:bg-[#7f1d1d]"
+                            disabled={!paymentEvent || registerMutation.isPending}
+                            onClick={() => {
+                                if (!paymentEvent) return
+                                registerMutation.mutate({
+                                    event: paymentEvent,
+                                    paymentMethod: "SELCOM",
+                                })
+                            }}
+                        >
+                            {registerMutation.isPending ? "Redirecting…" : "Pay & Register"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

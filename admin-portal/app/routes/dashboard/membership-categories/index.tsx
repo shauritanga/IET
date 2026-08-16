@@ -8,25 +8,34 @@ import type { ApiEnvelope } from "~/types";
 type MembershipCategory = {
   id: string;
   name: string;
+  code?: string | null;
+  level?: number;
   yearlyFee: number;
   minYearsExperience: number;
   description: string | null;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 type CategoryForm = {
   name: string;
+  code: string;
+  level: string;
   yearlyFee: string;
   minYearsExperience: string;
   description: string;
+  isActive: boolean;
 };
 
 const EMPTY_FORM: CategoryForm = {
   name: "",
+  code: "",
+  level: "0",
   yearlyFee: "",
   minYearsExperience: "",
   description: "",
+  isActive: true,
 };
 
 const PAGE_SIZE = 10;
@@ -310,6 +319,34 @@ function CategoryFormFields({
         />
       </FormField>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <FormField label="Code">
+          <input
+            type="text"
+            value={form.code}
+            placeholder="e.g. FIET"
+            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+            style={{ ...inputStyle, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", letterSpacing: "0.4px" }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+          />
+        </FormField>
+        <FormField label="Level">
+          <input
+            type="number"
+            value={form.level}
+            placeholder="e.g. 4"
+            min={0}
+            onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
+            style={inputStyle}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+          />
+        </FormField>
+      </div>
+      <p style={{ fontSize: 10.5, color: "var(--muted)", margin: "-6px 0 12px", lineHeight: 1.5 }}>
+        Level is used for upgrade ordering (higher = more senior). Code is a short unique identifier.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <FormField label="Annual Fee (TZS)" required>
           <input
             type="number"
@@ -344,6 +381,28 @@ function CategoryFormFields({
           onFocus={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
           onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
         />
+      </FormField>
+      <FormField label="Status">
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: "var(--text)",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+            style={{ width: 15, height: 15, accentColor: "var(--red)" }}
+          />
+          Active (available for applications and upgrades)
+        </label>
       </FormField>
     </>
   );
@@ -403,9 +462,12 @@ export default function MembershipCategoriesPage() {
     setEditTarget(cat);
     setEditForm({
       name: cat.name,
+      code: cat.code ?? "",
+      level: String(cat.level ?? 0),
       yearlyFee: String(cat.yearlyFee),
       minYearsExperience: String(cat.minYearsExperience),
       description: cat.description ?? "",
+      isActive: cat.isActive ?? true,
     });
     setEditError(null);
   }
@@ -415,14 +477,21 @@ export default function MembershipCategoriesPage() {
     if (!createForm.name.trim()) { setCreateError("Category name is required."); return; }
     if (createForm.yearlyFee === "") { setCreateError("Annual fee is required."); return; }
     if (createForm.minYearsExperience === "") { setCreateError("Minimum years of experience is required."); return; }
+    if (createForm.level === "" || Number.isNaN(Number(createForm.level)) || Number(createForm.level) < 0) {
+      setCreateError("Level must be 0 or greater.");
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
       await http.post("/admin/membership-categories", {
         name: createForm.name.trim(),
+        code: createForm.code.trim() || undefined,
+        level: Number(createForm.level),
         yearlyFee: Number(createForm.yearlyFee),
         minYearsExperience: Number(createForm.minYearsExperience),
         description: createForm.description.trim() || undefined,
+        isActive: createForm.isActive,
       });
       setCreateOpen(false);
       await fetchCategories();
@@ -441,14 +510,21 @@ export default function MembershipCategoriesPage() {
     if (!editForm.name.trim()) { setEditError("Category name is required."); return; }
     if (editForm.yearlyFee === "") { setEditError("Annual fee is required."); return; }
     if (editForm.minYearsExperience === "") { setEditError("Minimum years of experience is required."); return; }
+    if (editForm.level === "" || Number.isNaN(Number(editForm.level)) || Number(editForm.level) < 0) {
+      setEditError("Level must be 0 or greater.");
+      return;
+    }
     setEditing(true);
     setEditError(null);
     try {
       await http.patch(`/admin/membership-categories/${editTarget.id}`, {
         name: editForm.name.trim(),
+        code: editForm.code.trim() || null,
+        level: Number(editForm.level),
         yearlyFee: Number(editForm.yearlyFee),
         minYearsExperience: Number(editForm.minYearsExperience),
         description: editForm.description.trim() || undefined,
+        isActive: editForm.isActive,
       });
       setEditTarget(null);
       await fetchCategories();
@@ -583,7 +659,7 @@ export default function MembershipCategoriesPage() {
             <table className="table-proto min-w-full border-separate border-spacing-0">
               <thead>
                 <tr>
-                  {["Category", "Annual Fee", "Min. Experience", "Actions"].map((h) => (
+                  {["Category", "Code", "Level", "Annual Fee", "Min. Experience", "Status", "Actions"].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -597,7 +673,7 @@ export default function MembershipCategoriesPage() {
                     onMouseOut={(e) => (e.currentTarget.style.background = "var(--white)")}
                   >
                     {/* Category name + description */}
-                    <td style={{ maxWidth: 380 }}>
+                    <td style={{ maxWidth: 320 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                         <div style={{
                           width: 34, height: 34, borderRadius: 9, background: "var(--red-pale)",
@@ -615,6 +691,24 @@ export default function MembershipCategoriesPage() {
                           )}
                         </div>
                       </div>
+                    </td>
+
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span style={{
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        letterSpacing: "0.4px",
+                        color: cat.code ? "var(--red-dark)" : "var(--muted)",
+                      }}>
+                        {cat.code || "—"}
+                      </span>
+                    </td>
+
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                        {cat.level ?? 0}
+                      </span>
                     </td>
 
                     {/* Fee */}
@@ -642,6 +736,19 @@ export default function MembershipCategoriesPage() {
                           {cat.minYearsExperience} yr{cat.minYearsExperience !== 1 ? "s" : ""}
                         </span>
                       )}
+                    </td>
+
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        borderRadius: 20,
+                        padding: "3px 9px",
+                        background: cat.isActive === false ? "rgba(100,116,139,.12)" : "rgba(26,107,60,.1)",
+                        color: cat.isActive === false ? "#64748b" : "#1a6b3c",
+                      }}>
+                        {cat.isActive === false ? "Inactive" : "Active"}
+                      </span>
                     </td>
 
                     {/* Actions */}
@@ -681,7 +788,17 @@ export default function MembershipCategoriesPage() {
                 </div>
                 <RowMenu onEdit={() => openEdit(cat)} onDelete={() => setDeleteTarget(cat)} />
               </div>
-              <div style={{ marginTop: 12, display: "flex", gap: 24, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+              <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 18, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Code</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--red-dark)", marginTop: 2, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                    {cat.code || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Level</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginTop: 2 }}>{cat.level ?? 0}</div>
+                </div>
                 <div>
                   <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Annual Fee</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: feeColor(cat.yearlyFee), marginTop: 2 }}>{formatFee(cat.yearlyFee)}</div>
@@ -690,6 +807,21 @@ export default function MembershipCategoriesPage() {
                   <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Min. Experience</div>
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginTop: 2 }}>
                     {cat.minYearsExperience === 0 ? "No minimum" : `${cat.minYearsExperience} yr${cat.minYearsExperience !== 1 ? "s" : ""}`}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>Status</div>
+                  <div style={{
+                    display: "inline-block",
+                    marginTop: 3,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    borderRadius: 20,
+                    padding: "2px 8px",
+                    background: cat.isActive === false ? "rgba(100,116,139,.12)" : "rgba(26,107,60,.1)",
+                    color: cat.isActive === false ? "#64748b" : "#1a6b3c",
+                  }}>
+                    {cat.isActive === false ? "Inactive" : "Active"}
                   </div>
                 </div>
               </div>

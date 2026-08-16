@@ -152,6 +152,7 @@ export enum PaymentStatus {
 
 export enum PaymentType {
   APPLICATION_FEE = 'APPLICATION_FEE',
+  ENTRY_FEE = 'ENTRY_FEE',
   MEMBERSHIP_FEE = 'MEMBERSHIP_FEE',
   EVENT_REGISTRATION = 'EVENT_REGISTRATION',
   UPGRADE_FEE = 'UPGRADE_FEE',
@@ -193,6 +194,14 @@ export enum AttendeeType {
   GUEST = 'GUEST',
   SPEAKER = 'SPEAKER',
   ORGANIZER = 'ORGANIZER',
+}
+
+/** How event registration fees are priced */
+export enum EventFeePricingMode {
+  /** One fee for everyone */
+  FLAT = 'FLAT',
+  /** Separate fees for active members vs non-members / inactive */
+  DIFFERENT = 'DIFFERENT',
 }
 
 // ============================================

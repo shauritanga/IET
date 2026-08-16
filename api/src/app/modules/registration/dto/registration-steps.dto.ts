@@ -4,11 +4,13 @@ import {
   IsNotEmpty,
   IsString,
   MaxLength,
+  MinLength,
   IsOptional,
   IsEnum,
   IsDateString,
   IsBoolean,
   IsArray,
+  IsIn,
   ValidateNested,
   Matches,
 } from 'class-validator';
@@ -266,6 +268,27 @@ export class AddExperienceDto {
 // ============================================
 // STEP 4: REFERENCES
 // ============================================
+
+export class SearchReferenceCandidatesDto {
+  @ApiProperty({
+    example: 'Emmanuel',
+    description: 'Search by member name or membership number',
+  })
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  q: string;
+
+  @ApiProperty({
+    example: 'proposer',
+    description: 'Which reference slot is being filled',
+    enum: ['proposer', 'supporter'],
+  })
+  @IsNotEmpty()
+  @IsIn(['proposer', 'supporter'])
+  role: 'proposer' | 'supporter';
+}
 
 export class RefereeDto {
   @ApiProperty({ example: 'IET/ENG/0123' })

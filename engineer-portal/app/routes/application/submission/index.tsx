@@ -45,9 +45,11 @@ const Submission = () => {
     const paymentCompleted = Boolean(
         paymentState?.paymentCompleted || draft?.data?.registration?.paymentCompleted,
     );
-    const amount =
-        paymentState?.amount ??
-        (applicationType === "GRADUATE" ? 5000 : 10000);
+    const amount = paymentState?.amount ?? null;
+    const feeLabel =
+        applicationType === "GRADUATE"
+            ? "Graduate application fee"
+            : "Standard application fee";
 
     const submitDeclaration = (value: DeclarationFormType) => {
         declarationMutation.mutate(value);
@@ -95,7 +97,7 @@ const Submission = () => {
                         </div>
                         <h2 style={{ fontFamily: "'Source Serif 4', Georgia, serif" }} className="text-[26px] font-bold text-[var(--iet-red-dark)] leading-tight">Complete Payment to Continue</h2>
                         <p className="text-[13px] text-[var(--iet-muted)]">
-                            Complete payment to submit your application.
+                            Pay the one-time application fee to unlock final submission.
                         </p>
                     </div>
 
@@ -123,7 +125,6 @@ const Submission = () => {
 
                     <div className="bg-[var(--iet-white)] rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8">
                         <div className="space-y-6">
-                            {/* Application type — read-only from backend */}
                             <div className="space-y-3">
                                 <p className="text-sm font-semibold text-[var(--iet-red-dark)]">Application Type</p>
                                 <div className="inline-flex items-center gap-2 rounded-xl bg-[var(--iet-bg)] border border-[var(--iet-border)] px-4 py-2.5">
@@ -135,6 +136,28 @@ const Submission = () => {
                                 </div>
                             </div>
 
+                            <div className="rounded-2xl border border-[var(--iet-border)] bg-[var(--iet-bg)] p-5">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.8px] text-[var(--iet-muted)]">
+                                    Amount due
+                                </p>
+                                {paymentQuery.isLoading || amount == null ? (
+                                    <div className="mt-2 flex items-center gap-2 text-sm text-[var(--iet-muted)]">
+                                        <Spinner className="size-4" />
+                                        Loading fee…
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="mt-1 text-[28px] font-bold tracking-tight text-[var(--iet-red-dark)]">
+                                            {amount.toLocaleString()}{" "}
+                                            <span className="text-base font-semibold text-[var(--iet-muted)]">TZS</span>
+                                        </p>
+                                        <p className="mt-1 text-sm text-[var(--iet-muted)]">
+                                            {feeLabel} — this is the only charge at application. Membership yearly dues are billed after approval.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+
                             <div className="space-y-3">
                                 <p className="border-b border-[var(--iet-border)] pb-3 text-xs font-semibold tracking-[0.16em] text-[var(--iet-muted)]">
                                     PAYMENT METHOD
@@ -144,45 +167,43 @@ const Submission = () => {
                                         <span className="h-3.5 w-3.5 rounded-full border border-[var(--iet-red)] bg-[var(--iet-red)]" />
                                         <span className="font-medium text-[var(--iet-red-dark)]">Selcom Checkout</span>
                                     </div>
-                                    <span className="text-sm text-[var(--iet-muted)]">Powered by Selcom</span>
+                                    <span className="text-sm text-[var(--iet-muted)]">Secure redirect</span>
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl bg-[var(--iet-bg)] p-5">
-                                <p className="text-sm text-[var(--iet-muted)]">
-                                    You will be redirected to Selcom's secure checkout page to complete your payment.
-                                </p>
-
-                                <div className="mt-4 rounded-xl bg-[var(--iet-white)] border border-[var(--iet-border)] p-4">
-                                    <p className="text-sm font-semibold text-[var(--iet-red-dark)]">Payment Summary</p>
-                                    <div className="mt-3 space-y-3 text-sm">
-                                        <div className="flex items-center justify-between border-b border-[var(--iet-border)] pb-3">
-                                            <span>{applicationType === "GRADUATE" ? "Graduate Application Fee" : "Standard Application Fee"}</span>
-                                            <span>{amount.toLocaleString()} TZS</span>
-                                        </div>
-                                        <div className="flex items-center justify-between font-semibold text-[var(--iet-red-dark)]">
-                                            <span>Total Fee</span>
-                                            <span>{amount.toLocaleString()} TZS</span>
-                                        </div>
-                                    </div>
+                            {paymentState?.message && (
+                                <div className="rounded-xl bg-[var(--iet-red-pale)] px-4 py-3 text-sm text-[var(--iet-red-dark)]">
+                                    {paymentState.message}
                                 </div>
+                            )}
 
-                                {paymentState?.message && (
-                                    <div className="mt-4 rounded-xl bg-[var(--iet-red-pale)] px-4 py-3 text-sm text-[var(--iet-red-dark)]">
-                                        {paymentState.message}
-                                    </div>
-                                )}
-
-                                <div className="mt-5 flex justify-end">
+                            <div className="flex justify-between gap-3">
+                                <Link to="/application/review">
                                     <button
                                         type="button"
-                                        onClick={handlePayNow}
-                                        disabled={paymentMutation.isPending || paymentQuery.isFetching}
-                                        className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                        className="inline-flex items-center gap-2 border border-[var(--iet-border)] bg-[var(--iet-white)] text-[var(--iet-red-dark)] px-5 py-2.5 rounded-xl text-sm font-semibold hover:border-[var(--iet-red)] hover:text-[var(--iet-red)] transition-colors"
                                     >
-                                        {paymentMutation.isPending ? <Spinner className="size-4" /> : "Pay Now →"}
+                                        ← Back to review
                                     </button>
-                                </div>
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={handlePayNow}
+                                    disabled={
+                                        paymentMutation.isPending ||
+                                        paymentQuery.isFetching ||
+                                        amount == null
+                                    }
+                                    className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                >
+                                    {paymentMutation.isPending ? (
+                                        <Spinner className="size-4" />
+                                    ) : amount != null ? (
+                                        `Pay ${amount.toLocaleString()} TZS →`
+                                    ) : (
+                                        "Pay Now →"
+                                    )}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -250,9 +271,9 @@ const Submission = () => {
 
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-2">
-                        <Link to="/application/verify-email">
+                        <Link to="/application/review">
                             <button type="button" className="inline-flex items-center gap-2 border border-[var(--iet-border)] bg-[var(--iet-white)] text-[var(--iet-red-dark)] px-5 py-2.5 rounded-xl text-sm font-semibold hover:border-[var(--iet-red)] hover:text-[var(--iet-red)] transition-colors">
-                                ← Back
+                                ← Back to review
                             </button>
                         </Link>
                         <button type="submit" disabled={declarationMutation.isPending} className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">

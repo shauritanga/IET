@@ -85,22 +85,28 @@ describe('PaymentsService application payments', () => {
         ),
     };
 
+    const settingRepository = {
+      findOneBy: jest.fn().mockResolvedValue({
+        key: 'application_entry_fees',
+        value: JSON.stringify({
+          graduate: { applicationFee: 5000, entryFee: 0 },
+          others: { applicationFee: 10000, entryFee: 0 },
+        }),
+      }),
+    };
+
     const service = new PaymentsService(
       paymentRepository as any,
       userRepository as any,
       registrationRepository as any,
       {} as any, // eventRegistrationRepository
       {} as any, // guestRegistrationRepository
+      settingRepository as any,
       {
-        get: jest.fn((key: string) => {
-          if (key === 'APPLICATION_FEE_GRADUATE') return 5000;
-          if (key === 'APPLICATION_FEE_STANDARD') return 10000;
-          return undefined;
-        }),
+        get: jest.fn(),
       } as any, // configService
       paymentGateway as any,
-      {} as any, // smsService
-      {} as any, // emailService
+      {} as any, // messagingQueue
     );
 
     return {

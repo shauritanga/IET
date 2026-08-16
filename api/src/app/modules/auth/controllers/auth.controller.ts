@@ -19,6 +19,7 @@ import {
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { Enable2FADto } from '../dto/enable-2fa.dto';
 import { ValidateTokenDTO } from '../dto/validate-token.dto';
+import { ResendLoginOtpDto } from '../dto/resend-login-otp.dto';
 import { Public } from '../../../common/decorators/public.decorator';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
 import { UserEntity } from '../../user/entities/user.entity';
@@ -405,6 +406,29 @@ export class AuthController {
     return {
       success: true,
       data: result,
+    };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/resend')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Resend login OTP via SMS (default) or email',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Login OTP resent successfully',
+  })
+  async resendLoginOtp(@Body() dto: ResendLoginOtpDto) {
+    const result = await this.authService.resendLoginOtp(
+      dto.userId,
+      dto.channel,
+    );
+    return {
+      success: true,
+      data: result,
+      message: result.message,
     };
   }
 

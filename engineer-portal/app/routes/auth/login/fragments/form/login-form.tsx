@@ -67,6 +67,8 @@ const LoginForm = () => {
                     name: email.trim(),
                     userId: result.validate2FA,
                     smsDestination: result.smsDestination,
+                    emailDestination: result.emailDestination,
+                    channel: result.channel ?? "sms",
                 })
 
                 navigate("/auth/verify-otp", { replace: true })

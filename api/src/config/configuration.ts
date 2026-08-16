@@ -26,7 +26,7 @@ export default () => ({
 
   // Throttling settings
   THROTTLE_TTL: parseInt(process.env.THROTTLE_TTL, 10) || 60,
-  THROTTLE_LIMIT: parseInt(process.env.THROTTLE_LIMIT, 10) || 10,
+  THROTTLE_LIMIT: parseInt(process.env.THROTTLE_LIMIT, 10) || 200,
 
   // Swagger settings
   SWAGGER_ENABLED:
@@ -71,9 +71,9 @@ export default () => ({
   BEEM_SECRET_KEY: process.env.BEEM_SECRET_KEY || '',
   BEEM_SENDER_ID: process.env.BEEM_SOURCE_ADDR || 'IET',
 
-  // Application fee configuration
-  APPLICATION_FEE_GRADUATE:
-    parseInt(process.env.APPLICATION_FEE_GRADUATE, 10) || 5000,
-  APPLICATION_FEE_STANDARD:
-    parseInt(process.env.APPLICATION_FEE_STANDARD, 10) || 10000,
+  // BullMQ / Redis (background email & SMS)
+  MESSAGING_QUEUE_ENABLED: process.env.MESSAGING_QUEUE_ENABLED !== 'false',
+  REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+  REDIS_PORT: parseInt(process.env.REDIS_PORT, 10) || 6379,
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
 });

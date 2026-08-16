@@ -17,7 +17,7 @@ import {
 } from '../entities';
 import { UserEntity } from '../../user/entities/user.entity';
 import { NotificationsService } from '../../notifications/services/notifications.service';
-import { EmailService } from '../../shared/services/email.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import { StorageService } from '../../shared/services/storage.service';
 import { EngineeringInstitutionEntity } from '../../admin/entities/engineering-institution.entity';
 import { CreateRegistrationDto } from '../dto/create-registration.dto';
@@ -39,11 +39,43 @@ import {
   DocumentStatus,
   NotificationType,
   UserRole,
+  MembershipClass,
+  MembershipStatus,
 } from '../../../common/enums';
+
+type ReferenceRole = 'proposer' | 'supporter';
+
+type ReferenceCandidateSummary = {
+  membershipNumber: string;
+  fullName: string;
+  membershipCategory: string;
+};
+
+type ReferenceCandidateDetails = ReferenceCandidateSummary & {
+  organisation: string;
+  email: string;
+  phoneNumber: string;
+};
 
 @Injectable()
 export class RegistrationService {
   private readonly logger = new Logger(RegistrationService.name);
+
+  private readonly supporterMembershipClasses: MembershipClass[] = [
+    MembershipClass.CORPORATE,
+    MembershipClass.FELLOW,
+    MembershipClass.HONORARY,
+  ];
+
+  private readonly membershipClassLabels: Record<MembershipClass, string> = {
+    [MembershipClass.GRADUATE]: 'Graduate Member',
+    [MembershipClass.ASSOCIATE]: 'Associate Member',
+    [MembershipClass.MEMBER]: 'Member',
+    [MembershipClass.CORPORATE]: 'Corporate Member',
+    [MembershipClass.SENIOR]: 'Senior Member',
+    [MembershipClass.FELLOW]: 'Fellow',
+    [MembershipClass.HONORARY]: 'Honorary Fellow',
+  };
 
   constructor(
     @InjectRepository(RegistrationEntity)
@@ -62,7 +94,7 @@ export class RegistrationService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(EngineeringInstitutionEntity)
     private engineeringInstitutionRepository: Repository<EngineeringInstitutionEntity>,
-    private emailService: EmailService,
+    private messagingQueue: MessagingQueueService,
     private notificationsService: NotificationsService,
     private storageService: StorageService,
   ) {}
@@ -197,6 +229,47 @@ export class RegistrationService {
   }
 
   /**
+   * If the user already verified email at signup/login, mark the
+   * application email step complete so they are not asked again.
+   */
+  private async syncEmailVerificationFromUser(
+    registration: RegistrationEntity,
+  ): Promise<RegistrationEntity> {
+    const user =
+      registration.user ??
+      (await this.userRepository.findOneBy({ id: registration.userId }));
+
+    if (!user?.emailVerified) {
+      return registration;
+    }
+
+    let changed = false;
+
+    if (!registration.emailVerified) {
+      registration.emailVerified = true;
+      changed = true;
+    }
+
+    if (
+      !registration.completedSteps.includes(
+        RegistrationStep.EMAIL_VERIFICATION,
+      )
+    ) {
+      registration.completedSteps = [
+        ...registration.completedSteps,
+        RegistrationStep.EMAIL_VERIFICATION,
+      ];
+      changed = true;
+    }
+
+    if (!changed) {
+      return registration;
+    }
+
+    return this.registrationRepository.save(registration);
+  }
+
+  /**
    * Create a new registration application (Step 1: Personal Details)
    */
   async createRegistration(dto: CreateRegistrationDto, userId: string): Promise<{
@@ -241,6 +314,12 @@ export class RegistrationService {
       registration.completedSteps = [RegistrationStep.PERSONAL_DETAILS];
       registration.createdBy = userId;
 
+      // Signup already verified this email — don't ask again in the application
+      if (user.emailVerified) {
+        registration.emailVerified = true;
+        registration.completedSteps.push(RegistrationStep.EMAIL_VERIFICATION);
+      }
+
       const savedRegistration = await this.registrationRepository.save(registration);
 
       this.logger.log(`Registration created for user ${user.email}`);
@@ -249,7 +328,7 @@ export class RegistrationService {
         applicationId: savedRegistration.id,
         userId,
         currentStep: RegistrationStep.PERSONAL_DETAILS,
-        completedSteps: [RegistrationStep.PERSONAL_DETAILS],
+        completedSteps: savedRegistration.completedSteps,
         nextStep: RegistrationStep.REGISTRATION_DETAILS,
       };
     } catch (error: any) {
@@ -656,6 +735,76 @@ export class RegistrationService {
   }
 
   /**
+   * Search active IET members for use as application references.
+   * Search results return only limited identity fields.
+   */
+  async searchReferenceCandidates(
+    userId: string,
+    q: string,
+    role: ReferenceRole,
+  ): Promise<ReferenceCandidateSummary[]> {
+    const search = q.trim();
+    if (search.length < 2) {
+      return [];
+    }
+
+    const queryBuilder = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.membershipCategory', 'membershipCategory')
+      .where('user.membershipId IS NOT NULL')
+      .andWhere('user.membershipStatus = :status', {
+        status: MembershipStatus.ACTIVE,
+      })
+      .andWhere('user.id != :userId', { userId })
+      .andWhere(
+        `(
+          user.membershipId ILIKE :search
+          OR user.firstName ILIKE :search
+          OR user.middleName ILIKE :search
+          OR user.lastName ILIKE :search
+          OR CONCAT(
+            COALESCE(user.firstName, ''),
+            ' ',
+            COALESCE(user.middleName, ''),
+            ' ',
+            COALESCE(user.lastName, '')
+          ) ILIKE :search
+        )`,
+        { search: `%${search}%` },
+      );
+
+    if (role === 'supporter') {
+      queryBuilder.andWhere('user.membershipClass IN (:...classes)', {
+        classes: this.supporterMembershipClasses,
+      });
+    }
+
+    const users = await queryBuilder
+      .orderBy('user.firstName', 'ASC')
+      .addOrderBy('user.lastName', 'ASC')
+      .take(15)
+      .getMany();
+
+    return users.map((user) => this.toReferenceCandidateSummary(user));
+  }
+
+  /**
+   * Resolve full autofill details for a selected reference candidate.
+   */
+  async getReferenceCandidate(
+    userId: string,
+    membershipNumber: string,
+    role: ReferenceRole,
+  ): Promise<ReferenceCandidateDetails> {
+    const member = await this.resolveReferenceMember(
+      userId,
+      membershipNumber,
+      role,
+    );
+    return this.toReferenceCandidateDetails(member);
+  }
+
+  /**
    * Add both references at once (Step 4)
    */
   async addReferences(
@@ -667,31 +816,51 @@ export class RegistrationService {
     const registration = await this.getRegistrationForUser(applicationId, userId);
     this.validateCanUpdate(registration);
 
+    const proposerMember = await this.resolveReferenceMember(
+      userId,
+      proposer.membershipNumber,
+      'proposer',
+    );
+    const supporterMember = await this.resolveReferenceMember(
+      userId,
+      supporter.membershipNumber,
+      'supporter',
+    );
+
+    if (proposerMember.membershipId === supporterMember.membershipId) {
+      throw new BadRequestException(
+        'Proposer and supporter must be different members',
+      );
+    }
+
     // Delete existing references
     await this.referenceRepository.delete({ registrationId: registration.id });
 
-    // Create proposer
+    const proposerDetails = this.toReferenceCandidateDetails(proposerMember);
+    const supporterDetails = this.toReferenceCandidateDetails(supporterMember);
+
+    // Create proposer — identity fields come from the member record
     const proposerRef = new ReferenceEntity();
     proposerRef.registrationId = registration.id;
     proposerRef.referenceType = ReferenceType.PROPOSER;
-    proposerRef.fullName = proposer.fullName;
-    proposerRef.membershipCategory = proposer.membershipCategory as any;
-    proposerRef.membershipNumber = proposer.membershipNumber;
-    proposerRef.organisation = proposer.organisation;
-    proposerRef.email = proposer.email;
-    proposerRef.phoneNumber = proposer.phoneNumber;
+    proposerRef.fullName = proposerDetails.fullName;
+    proposerRef.membershipCategory = proposerDetails.membershipCategory as any;
+    proposerRef.membershipNumber = proposerDetails.membershipNumber;
+    proposerRef.organisation = proposerDetails.organisation || undefined;
+    proposerRef.email = proposerDetails.email || undefined;
+    proposerRef.phoneNumber = proposerDetails.phoneNumber || undefined;
     proposerRef.relationship = proposer.relationship;
 
-    // Create supporter
+    // Create supporter — identity fields come from the member record
     const supporterRef = new ReferenceEntity();
     supporterRef.registrationId = registration.id;
     supporterRef.referenceType = ReferenceType.SUPPORTER;
-    supporterRef.fullName = supporter.fullName;
-    supporterRef.membershipCategory = supporter.membershipCategory as any;
-    supporterRef.membershipNumber = supporter.membershipNumber;
-    supporterRef.organisation = supporter.organisation;
-    supporterRef.email = supporter.email;
-    supporterRef.phoneNumber = supporter.phoneNumber;
+    supporterRef.fullName = supporterDetails.fullName;
+    supporterRef.membershipCategory = supporterDetails.membershipCategory as any;
+    supporterRef.membershipNumber = supporterDetails.membershipNumber;
+    supporterRef.organisation = supporterDetails.organisation || undefined;
+    supporterRef.email = supporterDetails.email || undefined;
+    supporterRef.phoneNumber = supporterDetails.phoneNumber || undefined;
     supporterRef.relationship = supporter.relationship;
 
     const savedProposer = await this.referenceRepository.save(proposerRef);
@@ -699,9 +868,92 @@ export class RegistrationService {
 
     await this.updateStepProgress(registration, RegistrationStep.REFERENCES);
 
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (user) {
+      registration.user = user;
+      await this.syncEmailVerificationFromUser(registration);
+    }
+
     this.logger.log(`References saved for registration ${registration.id}`);
 
     return { proposer: savedProposer, supporter: savedSupporter };
+  }
+
+  private async resolveReferenceMember(
+    userId: string,
+    membershipNumber: string,
+    role: ReferenceRole,
+  ): Promise<UserEntity> {
+    const normalizedNumber = membershipNumber?.trim();
+    if (!normalizedNumber) {
+      throw new BadRequestException(
+        `${role === 'proposer' ? 'Proposer' : 'Supporter'} membership number is required`,
+      );
+    }
+
+    const member = await this.userRepository.findOne({
+      where: { membershipId: normalizedNumber },
+      relations: ['membershipCategory'],
+    });
+
+    if (!member || !member.membershipId) {
+      throw new NotFoundException(
+        `No IET member found with membership number ${normalizedNumber}`,
+      );
+    }
+
+    if (member.id === userId) {
+      throw new BadRequestException('You cannot use yourself as a reference');
+    }
+
+    if (member.membershipStatus !== MembershipStatus.ACTIVE) {
+      throw new BadRequestException(
+        `${normalizedNumber} is not an active IET member`,
+      );
+    }
+
+    if (
+      role === 'supporter' &&
+      (!member.membershipClass ||
+        !this.supporterMembershipClasses.includes(member.membershipClass))
+    ) {
+      throw new BadRequestException(
+        'Supporter must be a Corporate Member, Fellow, or Honorary Fellow',
+      );
+    }
+
+    return member;
+  }
+
+  private toReferenceCandidateSummary(
+    user: UserEntity,
+  ): ReferenceCandidateSummary {
+    return {
+      membershipNumber: user.membershipId!,
+      fullName: user.fullName,
+      membershipCategory: this.getMembershipCategoryLabel(user),
+    };
+  }
+
+  private toReferenceCandidateDetails(
+    user: UserEntity,
+  ): ReferenceCandidateDetails {
+    return {
+      ...this.toReferenceCandidateSummary(user),
+      organisation: user.employer ?? '',
+      email: user.email,
+      phoneNumber: user.phoneNumber ?? '',
+    };
+  }
+
+  private getMembershipCategoryLabel(user: UserEntity): string {
+    if (user.membershipCategory?.name) {
+      return user.membershipCategory.name;
+    }
+    if (user.membershipClass) {
+      return this.membershipClassLabels[user.membershipClass];
+    }
+    return 'Member';
   }
 
   /**
@@ -803,6 +1055,13 @@ export class RegistrationService {
       userId,
     );
 
+    // Signup email verification counts for the application (no separate wizard step)
+    const applicant = await this.userRepository.findOneBy({ id: userId });
+    if (applicant) {
+      registration.user = applicant;
+      await this.syncEmailVerificationFromUser(registration);
+    }
+
     // Validate all steps are completed
     const requiredSteps = [
       RegistrationStep.PERSONAL_DETAILS,
@@ -818,6 +1077,12 @@ export class RegistrationService {
     if (missingSteps.length > 0) {
       throw new BadRequestException(
         `Please complete the following steps before submitting: ${missingSteps.join(', ')}`,
+      );
+    }
+
+    if (!applicant?.emailVerified && !registration.emailVerified) {
+      throw new BadRequestException(
+        'Please verify your email address before submitting your application',
       );
     }
 
@@ -953,7 +1218,8 @@ export class RegistrationService {
       throw new NotFoundException('Registration not found');
     }
 
-    return this.toApplicationResponse(registration);
+    const synced = await this.syncEmailVerificationFromUser(registration);
+    return this.toApplicationResponse(synced);
   }
 
   /**
@@ -966,9 +1232,13 @@ export class RegistrationService {
       order: { createdAt: 'DESC' },
     });
 
-    return registrations.map((registration) =>
-      this.toApplicationResponse(registration),
+    const synced = await Promise.all(
+      registrations.map((registration) =>
+        this.syncEmailVerificationFromUser(registration),
+      ),
     );
+
+    return synced.map((registration) => this.toApplicationResponse(registration));
   }
 
   async getActiveEngineeringInstitutions(search?: string): Promise<EngineeringInstitutionEntity[]> {
@@ -1008,11 +1278,11 @@ export class RegistrationService {
     user.emailVerificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.userRepository.save(user);
 
-    this.emailService
-      .sendVerificationEmail(user.email, user.firstName, code)
+    void this.messagingQueue
+      .enqueueVerificationEmail(user.email, user.firstName, code)
       .catch((err) =>
         this.logger.error(
-          `Failed to resend verification email: ${err.message}`,
+          `Failed to queue verification email: ${err.message}`,
         ),
       );
 

@@ -1,15 +1,21 @@
 import {Field, FieldError, FieldGroup, FieldLabel} from "~/components/ui/field";
 import {Input} from "~/components/ui/input";
-import {BirthDatePicker} from "~/components/custom/birth-date-picker";
+import {BirthDatePicker, formatLocalDate} from "~/components/custom/birth-date-picker";
 import {Separator} from "~/components/ui/separator";
 import {Button} from "~/components/ui/button";
-import {PlusIcon, Trash2, GraduationCap, Briefcase} from "lucide-react";
+import {PlusIcon, Trash2, GraduationCap, Briefcase, CheckIcon, ChevronsUpDown} from "lucide-react";
 import {Controller, useFormContext} from "react-hook-form";
 import type {UseFieldArrayReturn} from "react-hook-form";
 import type {ExperienceDetailsFormType} from "./manage-experience-details-form";
 import {FilePickerCard} from '~/components/custom/file-pickers/file-picker-card';
 import {useQuery} from "@tanstack/react-query";
 import http from "~/utils/http";
+import { useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
+import { ScrollArea } from "~/components/ui/scroll-area";
+import { cn } from "~/lib/utils";
+import { Spinner } from "~/components/ui/spinner";
 
 type EngineeringInstitution = {
     id: string;
@@ -100,7 +106,11 @@ const ExperienceDetailsForm = ({
                                removeWorkExperience,
                            }: Props) => {
     const {register, control, setValue, watch, formState: {errors}} = useFormContext<ExperienceDetailsFormType>();
-    const {data: institutions = []} = useQuery({
+    const {
+        data: institutions = [],
+        isLoading: institutionsLoading,
+        isError: institutionsError,
+    } = useQuery({
         queryKey: ["engineering-institutions"],
         queryFn: getEngineeringInstitutions,
     });
@@ -111,6 +121,21 @@ const ExperienceDetailsForm = ({
     const selectedInstitutionName = watch(`education.${savedEducationCount}.institutionName`);
     const selectedInstitutionValue = selectedInstitutionId || (selectedInstitutionName ? "OTHER" : "");
     const isOtherInstitution = selectedInstitutionValue === "OTHER";
+    const currentYear = new Date().getFullYear();
+
+    const handleInstitutionSelect = (value: string) => {
+        if (value === "OTHER") {
+            setValue(`education.${savedEducationCount}.institutionId`, "OTHER", {shouldDirty: true});
+            setValue(`education.${savedEducationCount}.institutionName`, "", {shouldDirty: true});
+            setValue(`education.${savedEducationCount}.country`, "", {shouldDirty: true});
+            return;
+        }
+
+        const institution = institutions.find((item) => item.id === value);
+        setValue(`education.${savedEducationCount}.institutionId`, value, {shouldDirty: true});
+        setValue(`education.${savedEducationCount}.institutionName`, institution?.name ?? "", {shouldDirty: true});
+        setValue(`education.${savedEducationCount}.country`, institution?.country ?? "", {shouldDirty: true});
+    };
 
     return (
         <div className="flex flex-col gap-8">
@@ -135,32 +160,13 @@ const ExperienceDetailsForm = ({
                 <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <Field className={isOtherInstitution ? "" : "md:col-span-2"}>
                         <FieldLabel>Institution Name</FieldLabel>
-                        <select
-                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        <InstitutionCombobox
                             value={selectedInstitutionValue}
-                            onChange={(event) => {
-                                const value = event.target.value;
-                                if (value === "OTHER") {
-                                    setValue(`education.${savedEducationCount}.institutionId`, "OTHER", {shouldDirty: true});
-                                    setValue(`education.${savedEducationCount}.institutionName`, "", {shouldDirty: true});
-                                    setValue(`education.${savedEducationCount}.country`, "", {shouldDirty: true});
-                                    return;
-                                }
-
-                                const institution = institutions.find((item) => item.id === value);
-                                setValue(`education.${savedEducationCount}.institutionId`, value, {shouldDirty: true});
-                                setValue(`education.${savedEducationCount}.institutionName`, institution?.name ?? "", {shouldDirty: true});
-                                setValue(`education.${savedEducationCount}.country`, institution?.country ?? "", {shouldDirty: true});
-                            }}
-                        >
-                            <option value="">Select institution</option>
-                            {institutions.map((institution) => (
-                                <option key={institution.id} value={institution.id}>
-                                    {institution.name} ({institution.country})
-                                </option>
-                            ))}
-                            <option value="OTHER">Other institution</option>
-                        </select>
+                            onChange={handleInstitutionSelect}
+                            institutions={institutions}
+                            isLoading={institutionsLoading}
+                            isError={institutionsError}
+                        />
                         <input type="hidden" {...register(`education.${savedEducationCount}.institutionId`)} />
                         {!isOtherInstitution && (
                             <input type="hidden" {...register(`education.${savedEducationCount}.institutionName`)} />
@@ -180,7 +186,7 @@ const ExperienceDetailsForm = ({
                         <Input
                             placeholder="Enter country"
                             {...register(`education.${savedEducationCount}.country`)}
-                            readOnly={!isOtherInstitution && !!selectedInstitutionId}
+                            readOnly={!isOtherInstitution && !!selectedInstitutionId && selectedInstitutionId !== "OTHER"}
                         />
                     </Field>
                     <Field>
@@ -190,8 +196,14 @@ const ExperienceDetailsForm = ({
                             control={control}
                             render={({field}) => (
                                 <BirthDatePicker
+                                    placeholder="Select start date"
                                     value={field.value ? new Date(field.value) : undefined}
-                                    onChange={(date) => field.onChange(date?.toISOString())}
+                                    onChange={(date) =>
+                                        field.onChange(date ? formatLocalDate(date) : "")
+                                    }
+                                    fromYear={1960}
+                                    toYear={currentYear}
+                                    disabled={{ after: new Date() }}
                                 />
                             )}
                         />
@@ -206,8 +218,13 @@ const ExperienceDetailsForm = ({
                             control={control}
                             render={({field}) => (
                                 <BirthDatePicker
+                                    placeholder="Select end date"
                                     value={field.value ? new Date(field.value) : undefined}
-                                    onChange={(date) => field.onChange(date?.toISOString())}
+                                    onChange={(date) =>
+                                        field.onChange(date ? formatLocalDate(date) : "")
+                                    }
+                                    fromYear={1960}
+                                    toYear={currentYear + 6}
                                 />
                             )}
                         />
@@ -295,8 +312,14 @@ const ExperienceDetailsForm = ({
                             control={control}
                             render={({field}) => (
                                 <BirthDatePicker
+                                    placeholder="Select start date"
                                     value={field.value ? new Date(field.value) : undefined}
-                                    onChange={(date) => field.onChange(date?.toISOString())}
+                                    onChange={(date) =>
+                                        field.onChange(date ? formatLocalDate(date) : "")
+                                    }
+                                    fromYear={1960}
+                                    toYear={currentYear}
+                                    disabled={{ after: new Date() }}
                                 />
                             )}
                         />
@@ -311,8 +334,14 @@ const ExperienceDetailsForm = ({
                             control={control}
                             render={({field}) => (
                                 <BirthDatePicker
+                                    placeholder="Select end date"
                                     value={field.value ? new Date(field.value) : undefined}
-                                    onChange={(date) => field.onChange(date?.toISOString())}
+                                    onChange={(date) =>
+                                        field.onChange(date ? formatLocalDate(date) : "")
+                                    }
+                                    fromYear={1960}
+                                    toYear={currentYear}
+                                    disabled={{ after: new Date() }}
                                 />
                             )}
                         />
@@ -361,4 +390,114 @@ const ExperienceDetailsForm = ({
     );
 };
 
+type InstitutionComboboxProps = {
+    value?: string;
+    onChange: (value: string) => void;
+    institutions: EngineeringInstitution[];
+    isLoading: boolean;
+    isError: boolean;
+};
+
+function InstitutionCombobox({
+    value,
+    onChange,
+    institutions,
+    isLoading,
+    isError,
+}: InstitutionComboboxProps) {
+    const [open, setOpen] = useState(false);
+    const selectedInstitution =
+        value === "OTHER"
+            ? null
+            : institutions.find((institution) => institution.id === value);
+
+    const label = isLoading
+        ? "Loading institutions..."
+        : isError
+            ? "Unable to load institutions"
+            : value === "OTHER"
+                ? "Other institution"
+                : selectedInstitution
+                    ? `${selectedInstitution.name} (${selectedInstitution.country})`
+                    : "Search and select institution";
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    disabled={isLoading || isError}
+                    className="h-11 w-full justify-between rounded-xl border-[1.5px] border-[var(--iet-border)] bg-[var(--iet-bg)] px-3 shadow-none hover:bg-white hover:border-[var(--iet-red)]/40"
+                >
+                    <span className={cn("truncate text-left", !selectedInstitution && value !== "OTHER" && "text-[var(--iet-muted)]")}>
+                        {label}
+                    </span>
+                    {isLoading ? (
+                        <Spinner />
+                    ) : (
+                        <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+                    )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command>
+                    <CommandInput placeholder="Search institution..." />
+                    <CommandList>
+                        <ScrollArea className="h-72">
+                            <CommandEmpty>No institution found.</CommandEmpty>
+                            <CommandGroup>
+                                {institutions.map((institution) => (
+                                    <CommandItem
+                                        key={institution.id}
+                                        value={`${institution.name} ${institution.country}`}
+                                        onSelect={() => {
+                                            onChange(institution.id);
+                                            setOpen(false);
+                                        }}
+                                    >
+                                        <CheckIcon
+                                            className={cn(
+                                                "mr-2 size-4",
+                                                value === institution.id ? "opacity-100" : "opacity-0",
+                                            )}
+                                        />
+                                        <span className="flex min-w-0 flex-col">
+                                            <span className="truncate font-medium">{institution.name}</span>
+                                            <span className="text-xs text-[var(--iet-muted)]">
+                                                {institution.country}
+                                                {institution.institutionType
+                                                    ? ` · ${institution.institutionType.toLowerCase()}`
+                                                    : ""}
+                                            </span>
+                                        </span>
+                                    </CommandItem>
+                                ))}
+                                <CommandItem
+                                    value="Other institution"
+                                    onSelect={() => {
+                                        onChange("OTHER");
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <CheckIcon
+                                        className={cn(
+                                            "mr-2 size-4",
+                                            value === "OTHER" ? "opacity-100" : "opacity-0",
+                                        )}
+                                    />
+                                    Other institution (not listed)
+                                </CommandItem>
+                            </CommandGroup>
+                        </ScrollArea>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default ExperienceDetailsForm;
+

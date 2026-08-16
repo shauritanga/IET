@@ -126,6 +126,29 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
+   * Send login OTP email for 2FA
+   */
+  async sendLoginOtpEmail(
+    email: string,
+    firstName: string,
+    code: string,
+    portal: AuthPortal = AuthPortal.MEMBER_PORTAL,
+  ): Promise<EmailResult> {
+    const portalLabel =
+      portal === AuthPortal.ADMIN_PORTAL ? 'Admin Portal' : 'Member Portal';
+    const html = this.getTemplate('login-otp', {
+      firstName,
+      code,
+      portalLabel,
+    });
+    return this.send({
+      to: email,
+      subject: `Your IET ${portalLabel} login code`,
+      html,
+    });
+  }
+
+  /**
    * Send password reset email
    */
   async sendPasswordResetEmail(
@@ -148,6 +171,40 @@ export class EmailService implements OnModuleInit {
     return this.send({
       to: email,
       subject: `Reset Your IET ${portalLabel} Password`,
+      html,
+    });
+  }
+
+  /**
+   * Send welcome + login credentials after an admin creates a portal account
+   */
+  async sendPortalAccountWelcomeEmail(params: {
+    email: string;
+    firstName: string;
+    role: string;
+    temporaryPassword?: string;
+    portal: AuthPortal;
+  }): Promise<EmailResult> {
+    const isAdminPortal = params.portal === AuthPortal.ADMIN_PORTAL;
+    const portalUrl = isAdminPortal
+      ? this.configService.get('ADMIN_PORTAL_URL') ??
+        this.configService.get('APP_URL')
+      : this.configService.get('ENGINEER_PORTAL_URL') ??
+        this.configService.get('APP_URL');
+    const portalLabel = isAdminPortal ? 'Admin Portal' : 'Member Portal';
+    const loginUrl = `${portalUrl}/auth/login`;
+    const html = this.getTemplate('portal-account-welcome', {
+      firstName: params.firstName,
+      email: params.email,
+      role: params.role,
+      temporaryPassword: params.temporaryPassword,
+      portalLabel,
+      loginUrl,
+    });
+
+    return this.send({
+      to: params.email,
+      subject: `Welcome to the IET ${portalLabel}`,
       html,
     });
   }
@@ -386,6 +443,68 @@ export class EmailService implements OnModuleInit {
     context: Record<string, any>,
   ): string {
     const templates: Record<string, (ctx: any) => string> = {
+      'portal-account-welcome': (ctx) => `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Welcome to IET</title>
+                </head>
+                <body style="margin:0;padding:0;background:#f5f0f0;font-family:Arial,Helvetica,sans-serif;color:#1f1313;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f0f0;width:100%;">
+                        <tr>
+                            <td align="center" style="padding:28px 16px;">
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #eadfdf;">
+                                    <tr>
+                                        <td style="background:#E20C0A;color:#ffffff;padding:22px 28px;">
+                                            <div style="font-size:11px;letter-spacing:1.2px;text-transform:uppercase;opacity:.85;">Institution of Engineers Tanzania</div>
+                                            <div style="font-size:22px;font-weight:700;margin-top:6px;">Welcome to the ${ctx.portalLabel}</div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:28px;">
+                                            <p style="margin:0 0 14px;font-size:15px;">Hello ${ctx.firstName},</p>
+                                            <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#4a3a3a;">
+                                                An IET account has been created for you. You can now sign in to the ${ctx.portalLabel}.
+                                            </p>
+                                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#faf6f6;border:1px solid #eadfdf;border-radius:12px;margin:18px 0;">
+                                                <tr>
+                                                    <td style="padding:16px 18px;font-size:13px;line-height:1.7;">
+                                                        <div><strong>Role:</strong> ${ctx.role}</div>
+                                                        <div><strong>Login email:</strong> ${ctx.email}</div>
+                                                        ${
+                                                          ctx.temporaryPassword
+                                                            ? `<div><strong>Temporary password:</strong> ${ctx.temporaryPassword}</div>`
+                                                            : `<div>Use the initial password provided by your administrator.</div>`
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                            ${
+                                              ctx.temporaryPassword
+                                                ? `<p style="margin:0 0 18px;font-size:13px;color:#4a3a3a;">Please sign in and change your password immediately.</p>`
+                                                : ''
+                                            }
+                                            <p style="text-align:center;margin:24px 0 0;">
+                                                <a href="${ctx.loginUrl}" style="display:inline-block;background:#E20C0A;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:700;font-size:13px;">
+                                                    Sign in to ${ctx.portalLabel}
+                                                </a>
+                                            </p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:16px 28px 22px;color:#8a7474;font-size:11px;text-align:center;border-top:1px solid #eadfdf;">
+                                            Institution of Engineers Tanzania (IET) · Dar es Salaam
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            `,
       welcome: (ctx) => `
                 <!DOCTYPE html>
                 <html>
@@ -455,6 +574,61 @@ export class EmailService implements OnModuleInit {
                                         <td style="padding: 8px 28px 32px;">
                                             <p style="margin: 0 0 14px; color: #667085; font-size: 15px; line-height: 1.6;">This code will expire in <strong style="color: #344054;">10 minutes</strong>.</p>
                                             <p style="margin: 0; color: #344054; font-size: 15px; line-height: 1.6;">If you did not request this code, you can safely ignore this email.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="background: #f8fafc; padding: 18px 24px; text-align: center; border-top: 1px solid #e4edf4;">
+                                            <p style="margin: 0; color: #667085; font-size: 12px; line-height: 1.5;">Institution of Engineers Tanzania (IET)<br>Dar es Salaam, Tanzania</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            `,
+      'login-otp': (ctx) => `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Your Login Code</title>
+                </head>
+                <body style="margin: 0; padding: 0; background: #eef4f8; font-family: Arial, Helvetica, sans-serif; color: #172033;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #eef4f8; margin: 0; padding: 0; width: 100%;">
+                        <tr>
+                            <td align="center" style="padding: 24px 12px;">
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width: 100%; max-width: 600px; background: #ffffff; border-radius: 18px; overflow: hidden;">
+                                    <tr>
+                                        <td style="background: #163b66; padding: 32px 24px; text-align: center;">
+                                            <p style="margin: 0 0 8px; color: #b9d6ee; font-size: 13px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;">IET Tanzania</p>
+                                            <h1 style="margin: 0; color: #ffffff; font-size: 30px; line-height: 1.2; font-weight: 800;">Login verification code</h1>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 34px 28px 10px;">
+                                            <h2 style="margin: 0 0 14px; color: #111827; font-size: 24px; line-height: 1.3; font-weight: 800;">Hello ${ctx.firstName},</h2>
+                                            <p style="margin: 0; color: #344054; font-size: 16px; line-height: 1.6;">Use this code to finish signing in to the ${ctx.portalLabel}.</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td align="center" style="padding: 24px 18px 18px;">
+                                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; max-width: 420px; background: #f3f8fc; border: 1px solid #d7e7f2; border-radius: 16px;">
+                                                <tr>
+                                                    <td align="center" style="padding: 24px 14px 22px;">
+                                                        <p style="margin: 0 0 12px; color: #667085; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;">Login code</p>
+                                                        <p style="margin: 0; color: #0b1220; font-family: Arial, Helvetica, sans-serif; font-size: 34px; line-height: 1.25; font-weight: 800; letter-spacing: 3px; word-break: break-word;">${ctx.code}</p>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 28px 32px;">
+                                            <p style="margin: 0 0 14px; color: #667085; font-size: 15px; line-height: 1.6;">This code will expire in <strong style="color: #344054;">5 minutes</strong>.</p>
+                                            <p style="margin: 0; color: #344054; font-size: 15px; line-height: 1.6;">If you did not try to sign in, you can safely ignore this email.</p>
                                         </td>
                                     </tr>
                                     <tr>

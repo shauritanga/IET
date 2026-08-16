@@ -7,12 +7,13 @@ import {
   statusLabel,
   targetLabel,
   truncate,
+  SelectField,
   type CommunicationMessage,
   type CommunicationStatus,
   type CommunicationTarget,
   type CommunicationType,
   typeLabel,
-} from "../shared";
+} from "~/utils/communication";
 
 type HistoryFilter = {
   type: CommunicationType | "";
@@ -35,14 +36,6 @@ function SearchIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }
@@ -191,33 +184,39 @@ export default function CommunicationHistoryPage() {
           />
         </div>
 
-        <div style={{ position: "relative" }}>
-          <select value={filters.type} onChange={setFilter("type")} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
-            <option value="">All Types</option>
-            <option value="SMS">SMS</option>
-            <option value="EMAIL">Email</option>
-          </select>
-          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
-        </div>
+        <SelectField
+          value={filters.type}
+          onChange={setFilter("type")}
+          style={{ width: "auto" }}
+          aria-label="Filter by type"
+        >
+          <option value="">All Types</option>
+          <option value="SMS">SMS</option>
+          <option value="EMAIL">Email</option>
+        </SelectField>
 
-        <div style={{ position: "relative" }}>
-          <select value={filters.target} onChange={setFilter("target")} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
-            <option value="">All Targets</option>
-            <option value="ALL">All Members</option>
-            <option value="GROUP">Selected Group</option>
-          </select>
-          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
-        </div>
+        <SelectField
+          value={filters.target}
+          onChange={setFilter("target")}
+          style={{ width: "auto" }}
+          aria-label="Filter by target"
+        >
+          <option value="">All Targets</option>
+          <option value="ALL">All Members</option>
+          <option value="GROUP">Selected Group</option>
+        </SelectField>
 
-        <div style={{ position: "relative" }}>
-          <select value={filters.status} onChange={setFilter("status")} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
-            <option value="">All Statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="SENT">Sent</option>
-            <option value="FAILED">Failed</option>
-          </select>
-          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
-        </div>
+        <SelectField
+          value={filters.status}
+          onChange={setFilter("status")}
+          style={{ width: "auto" }}
+          aria-label="Filter by status"
+        >
+          <option value="">All Statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="SENT">Sent</option>
+          <option value="FAILED">Failed</option>
+        </SelectField>
 
         {(filters.search || filters.type || filters.target || filters.status) && (
           <button
@@ -341,17 +340,3 @@ export default function CommunicationHistoryPage() {
     </section>
   );
 }
-
-const selectStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  border: "1.5px solid var(--border)",
-  borderRadius: 8,
-  fontFamily: "inherit",
-  fontSize: 12.5,
-  color: "var(--text)",
-  background: "var(--bg)",
-  outline: "none",
-  appearance: "none",
-  boxSizing: "border-box",
-};

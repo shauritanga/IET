@@ -48,6 +48,7 @@ import {
   CreateAdminUserDto,
   UpdateAdminUserDto,
   FiscalYearSettingsDto,
+  ApplicationEntryFeesDto,
   MembershipCategoryQueryDto,
   CreateMembershipCategoryDto,
   UpdateMembershipCategoryDto,
@@ -153,6 +154,24 @@ export class AdminController {
       success: true,
       data: user,
       message: 'Admin user created successfully',
+    };
+  }
+
+  @Post('users/:userId/resend-credentials')
+  @ApiOperation({ summary: 'Reset temporary password and resend welcome email' })
+  @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
+  async resendAdminUserCredentials(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    const result = await this.adminService.resendAdminUserCredentials(
+      admin,
+      userId,
+    );
+    return {
+      success: true,
+      data: result,
+      message: 'Welcome email sent with a new temporary password',
     };
   }
 
@@ -522,6 +541,30 @@ export class AdminController {
   async updateFeeConfig(@Body() body: Record<string, number>) {
     const fees = await this.adminService.updateFeeConfig(body);
     return { success: true, data: fees, message: 'Fee configuration updated successfully' };
+  }
+
+  @Get('settings/application-entry-fees')
+  @ApiOperation({
+    summary: 'Get application and entry fee configuration (Graduate / Others)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Application/entry fee configuration retrieved' })
+  async getApplicationEntryFeesConfig() {
+    const fees = await this.adminService.getApplicationEntryFeesConfig();
+    return { success: true, data: fees };
+  }
+
+  @Put('settings/application-entry-fees')
+  @ApiOperation({
+    summary: 'Update application and entry fee configuration (Graduate / Others)',
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Application/entry fee configuration updated' })
+  async updateApplicationEntryFeesConfig(@Body() dto: ApplicationEntryFeesDto) {
+    const fees = await this.adminService.updateApplicationEntryFeesConfig(dto);
+    return {
+      success: true,
+      data: fees,
+      message: 'Application and entry fee configuration updated successfully',
+    };
   }
 
   @Get('settings/fiscal-year')

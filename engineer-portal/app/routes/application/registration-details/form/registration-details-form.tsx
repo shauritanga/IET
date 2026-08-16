@@ -2,7 +2,7 @@
 import {Field, FieldError, FieldGroup, FieldLabel} from "~/components/ui/field";
 import {NativeSelect, NativeSelectOption} from "~/components/ui/native-select";
 import {Input} from "~/components/ui/input";
-import {BirthDatePicker} from "~/components/custom/birth-date-picker";
+import {BirthDatePicker, formatLocalDate} from "~/components/custom/birth-date-picker";
 import {Building2, Pencil, PlusIcon, Trash2} from "lucide-react";
 import type {RegistrationDetailsFormType} from './manage-registration-details-form';
 import type {UseFieldArrayReturn} from "react-hook-form";
@@ -289,8 +289,14 @@ const RegistrationDetailsForm = ({institutionsFieldArray, savedInstitutionCount,
                                 control={control}
                                 render={({field}) => (
                                     <BirthDatePicker
+                                        placeholder="Select registration date"
                                         value={field.value ? new Date(field.value) : undefined}
-                                        onChange={(date) => field.onChange(date?.toISOString())}
+                                        onChange={(date) =>
+                                            field.onChange(date ? formatLocalDate(date) : "")
+                                        }
+                                        fromYear={1960}
+                                        toYear={new Date().getFullYear()}
+                                        disabled={{ after: new Date() }}
                                     />
                                 )}
                             />

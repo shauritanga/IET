@@ -14,6 +14,7 @@ import {
   Min,
   Max,
   IsUUID,
+  ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -80,10 +81,14 @@ export class ApplicationQueryDto {
   @IsNumber()
   limit?: number;
 
-  @ApiPropertyOptional({ example: 'PENDING_REVIEW', enum: ApplicationStatus })
+  @ApiPropertyOptional({
+    example: 'IN_REVIEW',
+    description:
+      'Application status filter. Accepts a single status or a comma-separated list (e.g. IN_REVIEW,APPROVED).',
+  })
   @IsOptional()
-  @IsEnum(ApplicationStatus)
-  status?: ApplicationStatus;
+  @IsString()
+  status?: string;
 
   @ApiPropertyOptional({
     example: 'SECRETARIAT_REVIEW',
@@ -464,6 +469,38 @@ export class FiscalYearSettingsDto {
   @Min(1)
   @Max(31)
   endDay: number;
+}
+
+export class FeeAmountPairDto {
+  @ApiProperty({ example: 5000, description: 'One-time application fee in TZS' })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  applicationFee: number;
+
+  @ApiProperty({
+    example: 50000,
+    description: 'One-time joining/entry fee charged after approval, in TZS',
+  })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  entryFee: number;
+}
+
+export class ApplicationEntryFeesDto {
+  @ApiProperty({ type: FeeAmountPairDto })
+  @ValidateNested()
+  @Type(() => FeeAmountPairDto)
+  graduate: FeeAmountPairDto;
+
+  @ApiProperty({
+    type: FeeAmountPairDto,
+    description: 'Fees for all non-graduate (Others) applications',
+  })
+  @ValidateNested()
+  @Type(() => FeeAmountPairDto)
+  others: FeeAmountPairDto;
 }
 
 export class MembershipCategoryQueryDto {

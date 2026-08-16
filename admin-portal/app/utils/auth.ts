@@ -109,6 +109,9 @@ export function clearSession() {
 export type PendingTwoFactorSession = {
   userId: string;
   email: string;
+  smsDestination?: string;
+  emailDestination?: string;
+  channel?: "sms" | "email";
 };
 
 export function setPendingTwoFactor(session: PendingTwoFactorSession) {

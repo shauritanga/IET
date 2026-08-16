@@ -14,7 +14,7 @@ type FormPageLayoutProps = {
 
 const FormPageLayout = ({
     stepNumber,
-    totalSteps = 5,
+    totalSteps = 6,
     title,
     subtitle,
     backHref,
@@ -24,7 +24,6 @@ const FormPageLayout = ({
 }: FormPageLayoutProps) => {
     return (
         <div className="flex flex-col gap-6 w-full">
-            {/* Page Header */}
             <div className="flex flex-col gap-2">
                 <div className="inline-flex items-center gap-1.5 self-start bg-[var(--iet-red-pale)] border border-[var(--iet-border)] text-[var(--iet-red-dark)] text-[10px] font-bold uppercase tracking-[0.8px] px-3 py-1 rounded-full">
                     Step {stepNumber} of {totalSteps}
@@ -38,12 +37,10 @@ const FormPageLayout = ({
                 <p className="text-[13px] text-[var(--iet-muted)]">{subtitle}</p>
             </div>
 
-            {/* White Card */}
             <div className="bg-[var(--iet-white)] rounded-2xl border border-[var(--iet-border)] shadow-[var(--shadow-md)] p-6 md:p-8">
                 {children}
             </div>
 
-            {/* Navigation Footer */}
             <div className="flex justify-between items-center pt-2">
                 {backHref ? (
                     <Link to={backHref}>
@@ -64,7 +61,8 @@ const FormPageLayout = ({
                     className="inline-flex items-center gap-2 bg-[var(--iet-red)] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--iet-red-mid)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
                     {isPending && <Spinner className="size-4" />}
-                    {submitLabel} →
+                    {submitLabel}
+                    {!submitLabel.toLowerCase().includes("save changes") ? " →" : ""}
                 </button>
             </div>
         </div>

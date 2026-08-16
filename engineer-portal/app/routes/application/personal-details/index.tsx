@@ -8,11 +8,18 @@ import {
 import {useSubmitPersonalDetails} from "~/routes/application/personal-details/repository/useSubmitPersonalDetails";
 import type {TErrorMessage} from "~/types/types";
 import FormPageLayout from "~/routes/application/components/form-page-layout";
+import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
+import {
+    getRouteAfterSavingStep,
+    getSubmitLabel,
+} from "~/routes/application/utils/application-steps";
 
 
 const PersonalDetails = () => {
     const navigate = useNavigate();
     const {form} = useManagePersonalDetailsForm();
+    const { data: draft } = useGetApplicationDraft();
+    const completedSteps = draft?.data?.completedSteps ?? [];
 
     const handleValidationError = (error: TErrorMessage) => {
         const fieldErrors = error.response?.data.errors ?? [];
@@ -46,7 +53,15 @@ const PersonalDetails = () => {
     };
 
     const {mutate: submitPersonalDetails, isPending} = useSubmitPersonalDetails({
-        onSuccess: () => navigate("/application/registration-details", {replace: true}),
+        onSuccess: () =>
+            navigate(
+                getRouteAfterSavingStep(
+                    completedSteps,
+                    "PERSONAL_DETAILS",
+                    "/application/registration-details",
+                ),
+                { replace: true },
+            ),
         onValidationError: handleValidationError,
     });
 
@@ -63,6 +78,7 @@ const PersonalDetails = () => {
                     title="Personal Details"
                     subtitle="Provide your personal identification and contact information."
                     isPending={isPending}
+                    submitLabel={getSubmitLabel(completedSteps, "PERSONAL_DETAILS")}
                 >
                     <PersonalDetailsForm />
                 </FormPageLayout>

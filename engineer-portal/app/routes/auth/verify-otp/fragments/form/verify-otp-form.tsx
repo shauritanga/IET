@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { resendOtp } from "~/routes/auth/verify-otp/requests/resend-otp"
+import { resendLoginOtp } from "~/routes/auth/verify-otp/requests/resend-login-otp"
 import { validateTwoFactor } from "~/routes/auth/verify-otp/requests/validate-2fa"
 import { verifyEmail } from "~/routes/auth/verify-otp/requests/verify-email"
 import type { TErrorMessage } from "~/types"
@@ -11,6 +12,8 @@ import {
     readOtpSession,
     REGISTRATION_STATUS_COOKIE_KEY,
     writeAuthSession,
+    writeOtpSession,
+    type LoginOtpChannel,
     type OtpSession,
 } from "~/utils/otp-session"
 import { TOKEN_KEY, USER_KEY } from "~/utils/http"
@@ -29,6 +32,7 @@ const VerifyOtpForm = () => {
     const [code, setCode] = useState("")
     const [timer, setTimer] = useState(30)
     const [error, setError] = useState("")
+    const [info, setInfo] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isResending, setIsResending] = useState(false)
 
@@ -50,15 +54,35 @@ const VerifyOtpForm = () => {
     }, [timer])
 
     const isEmailVerification = otpSession?.flow === "email-verification"
+    const isLogin2fa = otpSession?.flow === "login-2fa"
+    const channel: LoginOtpChannel = otpSession?.channel ?? "sms"
+
     const title = isEmailVerification ? "Verify your email" : "Complete sign in"
+    const destinationLabel = isEmailVerification
+        ? (otpSession ? maskEmail(otpSession.email) : "your email")
+        : channel === "email"
+            ? (otpSession?.emailDestination ?? (otpSession ? maskEmail(otpSession.email) : "your email"))
+            : (otpSession?.smsDestination ?? "your registered phone number")
+
     const description = isEmailVerification
-        ? `Enter the verification code sent to ${otpSession ? maskEmail(otpSession.email) : "your email"}.`
-        : `Enter the 6-digit SMS code sent to ${otpSession?.smsDestination ?? "your registered phone number"} to finish logging in.`
+        ? `Enter the verification code sent to ${destinationLabel}.`
+        : `Enter the 6-digit code sent by ${channel === "email" ? "email" : "SMS"} to ${destinationLabel} to finish logging in.`
+
     const codePlaceholder = isEmailVerification ? "IET-123456" : "123456"
+    const codeLabel = isEmailVerification
+        ? "Verification Code"
+        : channel === "email"
+            ? "Email Code"
+            : "SMS Code"
 
     const normalizedCode = useMemo(() => {
         return isEmailVerification ? code.trim().toUpperCase() : code.replace(/\D/g, "").slice(0, 6)
     }, [code, isEmailVerification])
+
+    const updateSession = (next: OtpSession) => {
+        writeOtpSession(next)
+        setOtpSession(next)
+    }
 
     const completeAuth = (payload: { accessToken: string; refreshToken: string; user: any }) => {
         setToCookie(TOKEN_KEY, payload.accessToken)
@@ -81,6 +105,7 @@ const VerifyOtpForm = () => {
         if (!otpSession) return
 
         setError("")
+        setInfo("")
         setIsSubmitting(true)
 
         try {
@@ -104,7 +129,7 @@ const VerifyOtpForm = () => {
             })
 
             if (!result.verified || !result.accessToken || !result.refreshToken || !result.user) {
-                setError("Invalid SMS code.")
+                setError(channel === "email" ? "Invalid email code." : "Invalid SMS code.")
                 return
             }
 
@@ -121,18 +146,54 @@ const VerifyOtpForm = () => {
         }
     }
 
-    const handleResend = async () => {
+    const handleResendEmailVerification = async () => {
         if (!otpSession || otpSession.flow !== "email-verification" || timer > 0) return
 
         setError("")
+        setInfo("")
         setIsResending(true)
 
         try {
             await resendOtp({ email: otpSession.email })
+            setInfo("Verification code resent.")
             setTimer(30)
         } catch (error) {
             const apiError = error as TErrorMessage
             setError(apiError.response?.data.message ?? "Failed to resend verification code.")
+        } finally {
+            setIsResending(false)
+        }
+    }
+
+    const handleSendLoginOtp = async (nextChannel: LoginOtpChannel) => {
+        if (!otpSession?.userId) return
+        // Same-channel resend respects cooldown; switching channel is always allowed.
+        if (nextChannel === channel && timer > 0) return
+
+        setError("")
+        setInfo("")
+        setIsResending(true)
+
+        try {
+            const result = await resendLoginOtp({
+                userId: otpSession.userId,
+                channel: nextChannel,
+            })
+
+            updateSession({
+                ...otpSession,
+                channel: result.channel,
+                smsDestination:
+                    result.channel === "sms" ? result.destination : otpSession.smsDestination,
+                emailDestination:
+                    result.channel === "email" ? result.destination : otpSession.emailDestination,
+            })
+            setCode("")
+            setInfo(result.message)
+            setTimer(30)
+        } catch (error) {
+            const apiError = error as TErrorMessage
+            setError(apiError.response?.data.message ?? "Failed to send login code.")
         } finally {
             setIsResending(false)
         }
@@ -158,7 +219,7 @@ const VerifyOtpForm = () => {
 
             <form onSubmit={handleSubmit}>
                 <div className="auth-group" style={{ textAlign: "left", marginTop: 24 }}>
-                    <label className="auth-lbl">{isEmailVerification ? "Verification Code" : "SMS Code"}</label>
+                    <label className="auth-lbl">{codeLabel}</label>
                     <input
                         className="auth-inp"
                         type="text"
@@ -168,6 +229,11 @@ const VerifyOtpForm = () => {
                         value={code}
                         onChange={(event) => setCode(event.target.value)}
                     />
+                    {info ? (
+                        <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: "#1a6b3c", fontWeight: 600 }}>
+                            {info}
+                        </div>
+                    ) : null}
                     <div className="auth-err" style={{ textAlign: "center", marginTop: 8 }}>{error}</div>
                 </div>
 
@@ -181,12 +247,56 @@ const VerifyOtpForm = () => {
                         <button
                             type="button"
                             disabled={timer > 0 || isResending}
-                            onClick={() => { void handleResend() }}
+                            onClick={() => { void handleResendEmailVerification() }}
                             style={{ color: timer > 0 ? "var(--iet-muted)" : "var(--iet-red)", fontWeight: 700, cursor: timer > 0 ? "not-allowed" : "pointer", background: "transparent", border: "none", padding: 0 }}
                         >
                             {isResending ? "Sending..." : "Resend code"}
                         </button>{" "}
                         <span style={{ color: "var(--iet-muted)", fontSize: 11 }}>{timer > 0 ? `(00:${String(timer).padStart(2, "0")})` : ""}</span>
+                    </div>
+                ) : null}
+
+                {isLogin2fa ? (
+                    <div style={{ fontSize: 12.5, color: "var(--iet-muted)", textAlign: "center", marginTop: 16, lineHeight: 1.7 }}>
+                        <div>
+                            Didn&apos;t receive it?{" "}
+                            <button
+                                type="button"
+                                disabled={timer > 0 || isResending}
+                                onClick={() => { void handleSendLoginOtp(channel) }}
+                                style={{ color: timer > 0 ? "var(--iet-muted)" : "var(--iet-red)", fontWeight: 700, cursor: timer > 0 ? "not-allowed" : "pointer", background: "transparent", border: "none", padding: 0 }}
+                            >
+                                {isResending ? "Sending..." : `Resend via ${channel === "email" ? "email" : "SMS"}`}
+                            </button>{" "}
+                            <span style={{ color: "var(--iet-muted)", fontSize: 11 }}>{timer > 0 ? `(00:${String(timer).padStart(2, "0")})` : ""}</span>
+                        </div>
+                        <div style={{ marginTop: 8 }}>
+                            {channel === "sms" ? (
+                                <>
+                                    Prefer email?{" "}
+                                    <button
+                                        type="button"
+                                        disabled={isResending}
+                                        onClick={() => { void handleSendLoginOtp("email") }}
+                                        style={{ color: "var(--iet-red)", fontWeight: 700, cursor: isResending ? "not-allowed" : "pointer", background: "transparent", border: "none", padding: 0 }}
+                                    >
+                                        Send code to email
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    Prefer SMS?{" "}
+                                    <button
+                                        type="button"
+                                        disabled={isResending}
+                                        onClick={() => { void handleSendLoginOtp("sms") }}
+                                        style={{ color: "var(--iet-red)", fontWeight: 700, cursor: isResending ? "not-allowed" : "pointer", background: "transparent", border: "none", padding: 0 }}
+                                    >
+                                        Send code by SMS
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
                 ) : null}
             </form>

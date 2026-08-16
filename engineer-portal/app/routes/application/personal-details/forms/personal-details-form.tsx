@@ -9,7 +9,7 @@ import {
 } from "~/components/ui/field";
 import {Input} from "~/components/ui/input";
 import {NativeSelect, NativeSelectOption} from "~/components/ui/native-select";
-import {BirthDatePicker} from "~/components/custom/birth-date-picker";
+import {BirthDatePicker, formatLocalDate} from "~/components/custom/birth-date-picker";
 import {PhoneInput} from "~/components/custom/phone-input";
 import type {PersonalDetailsFormType} from "./manage-personal-details-form";
 import {useGetAllCountries} from "~/routes/application/personal-details/repository/useGetCountries";
@@ -22,6 +22,7 @@ import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandL
 import {ScrollArea} from "~/components/ui/scroll-area";
 import {cn} from "~/lib/utils";
 import type {TCountries} from "~/routes/application/personal-details/requests/get-countries";
+import { getApplicationId } from "~/utils/appplication";
 
 const PersonalDetailsForm = () => {
     const {
@@ -31,7 +32,7 @@ const PersonalDetailsForm = () => {
     } = useFormContext<PersonalDetailsFormType>();
 
     const {isLoading, isError, countries} = useGetAllCountries();
-
+    const isExistingApplication = Boolean(getApplicationId());
 
     const genderOptions = [
         {label: "Male", value: "MALE"},
@@ -124,7 +125,18 @@ const PersonalDetailsForm = () => {
             </div>
             <Field>
                 <FieldLabel htmlFor="email">E-Mail</FieldLabel>
-                <Input id="email" type="email" placeholder="Enter your email address" {...register("email")} />
+                <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email address"
+                    disabled={isExistingApplication}
+                    {...register("email")}
+                />
+                {isExistingApplication ? (
+                    <p className="text-[11px] text-[var(--iet-muted)] mt-1.5">
+                        Email is tied to your account and can&apos;t be changed here.
+                    </p>
+                ) : null}
                 {errors.email && <FieldError>{errors.email.message}</FieldError>}
             </Field>
 
@@ -166,12 +178,23 @@ const PersonalDetailsForm = () => {
                 <Controller
                     name="dateOfBirth"
                     control={control}
-                    render={({field}) => (
-                        <BirthDatePicker
-                            value={field.value ? new Date(field.value) : undefined}
-                            onChange={(date) => field.onChange(date?.toISOString())}
-                        />
-                    )}
+                    render={({field}) => {
+                        const currentYear = new Date().getFullYear();
+                        const maxBirthDate = new Date();
+                        maxBirthDate.setFullYear(currentYear - 16);
+                        return (
+                            <BirthDatePicker
+                                placeholder="Select date of birth"
+                                value={field.value ? new Date(field.value) : undefined}
+                                onChange={(date) =>
+                                    field.onChange(date ? formatLocalDate(date) : "")
+                                }
+                                fromYear={1940}
+                                toYear={currentYear - 16}
+                                disabled={{ after: maxBirthDate }}
+                            />
+                        );
+                    }}
                 />
                 {errors.dateOfBirth && <FieldError>{errors.dateOfBirth.message}</FieldError>}
             </Field>

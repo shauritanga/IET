@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -23,6 +24,7 @@ import {
   ApiParam,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { GetUser } from '../../../common/decorators/get-user.decorator';
@@ -37,6 +39,7 @@ import {
   DeclarationDto,
   VerifyRegistrationEmailDto,
   ExperienceEducationDto,
+  SearchReferenceCandidatesDto,
 } from '../dto/registration-steps.dto';
 import { UpdatePersonalDetailsDto } from '../dto/update-registration.dto';
 import { PaymentsService } from '../../payments/services/payments.service';
@@ -382,6 +385,78 @@ export class RegistrationController {
   // ============================================
   // STEP 4: REFERENCES
   // ============================================
+
+  @Get('reference-candidates')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Search active members by name or membership number for use as references',
+  })
+  @ApiQuery({ name: 'q', required: true, type: String })
+  @ApiQuery({
+    name: 'role',
+    required: true,
+    enum: ['proposer', 'supporter'],
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Matching members retrieved successfully',
+  })
+  async searchReferenceCandidates(
+    @GetUser() user: UserEntity,
+    @Query() query: SearchReferenceCandidatesDto,
+  ) {
+    const result = await this.registrationService.searchReferenceCandidates(
+      user.id,
+      query.q,
+      query.role,
+    );
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  @Get('reference-candidates/details')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get autofill details for a selected reference member',
+  })
+  @ApiQuery({ name: 'membershipNumber', required: true, type: String })
+  @ApiQuery({
+    name: 'role',
+    required: true,
+    enum: ['proposer', 'supporter'],
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Reference member details retrieved successfully',
+  })
+  async getReferenceCandidate(
+    @GetUser() user: UserEntity,
+    @Query('membershipNumber') membershipNumber: string,
+    @Query('role') role: 'proposer' | 'supporter',
+  ) {
+    if (!membershipNumber?.trim()) {
+      throw new BadRequestException('membershipNumber is required');
+    }
+
+    if (role !== 'proposer' && role !== 'supporter') {
+      throw new BadRequestException('role must be proposer or supporter');
+    }
+
+    const result = await this.registrationService.getReferenceCandidate(
+      user.id,
+      membershipNumber,
+      role,
+    );
+    return {
+      success: true,
+      data: result,
+    };
+  }
 
   @Post(':applicationId/references')
   @UseGuards(JwtAuthGuard)

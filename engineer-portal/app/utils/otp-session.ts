@@ -4,6 +4,7 @@ export const MEMBERSHIP_STATUS_COOKIE_KEY = "global-ms";
 export const REGISTRATION_STATUS_COOKIE_KEY = "global-rs";
 
 export type OtpFlow = "email-verification" | "login-2fa";
+export type LoginOtpChannel = "sms" | "email";
 
 export type OtpSession = {
     flow: OtpFlow;
@@ -11,6 +12,8 @@ export type OtpSession = {
     name: string;
     userId?: string;
     smsDestination?: string;
+    emailDestination?: string;
+    channel?: LoginOtpChannel;
     createdAt: number;
 };
 
@@ -41,6 +44,8 @@ export function createOtpSession(payload: {
     name: string;
     userId?: string;
     smsDestination?: string;
+    emailDestination?: string;
+    channel?: LoginOtpChannel;
 }) {
     const session: OtpSession = {
         flow: payload.flow,
@@ -48,6 +53,8 @@ export function createOtpSession(payload: {
         name: payload.name.trim(),
         userId: payload.userId,
         smsDestination: payload.smsDestination,
+        emailDestination: payload.emailDestination,
+        channel: payload.channel ?? (payload.flow === "login-2fa" ? "sms" : undefined),
         createdAt: Date.now(),
     };
 

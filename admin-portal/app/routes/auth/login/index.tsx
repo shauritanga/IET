@@ -70,6 +70,9 @@ export default function AdminLoginPage() {
         setPendingTwoFactor({
           userId: result.validate2FA,
           email: email.trim(),
+          smsDestination: result.smsDestination,
+          emailDestination: result.emailDestination,
+          channel: result.channel ?? "sms",
         });
         navigate("/auth/otp", { replace: true });
         return;

@@ -45,6 +45,10 @@ export type LoginResponse = {
 
 export type TwoFactorChallengeResponse = {
   validate2FA: string;
+  smsDestination?: string;
+  emailDestination?: string;
+  channel?: "sms" | "email";
+  smsSent?: boolean;
   message: string;
 };
 
@@ -149,8 +153,11 @@ export type AdminEvent = {
     title: string;
     description?: string;
   }>;
+  agendaPdf?: string | null;
   registrationDeadline?: string | null;
   registrationFee: number;
+  feePricingMode?: "FLAT" | "DIFFERENT";
+  memberRegistrationFee?: number | null;
   cpdPoints: number;
   maxParticipants?: number | null;
   requirements?: string[];
@@ -212,8 +219,11 @@ export type AdminEventPayload = {
     title: string;
     description?: string;
   }>;
+  agendaPdf?: string;
   registrationDeadline?: string;
   registrationFee?: number;
+  feePricingMode?: "FLAT" | "DIFFERENT";
+  memberRegistrationFee?: number;
   cpdPoints?: number;
   maxParticipants?: number;
   requirements?: string[];

@@ -7,22 +7,33 @@ import {useGetApplicationDraft} from "~/routes/application/repository/useResumeA
 
 
 const RefereeSchema = z.object({
-    fullName: z.string().min(1, "Full name is required"),
-    membershipCategory: z.string().min(1, "Membership category is required"),
-    membershipNumber: z.string().min(1, "Membership number is required"),
-    organisation: z.string().min(1, "Organisation is required"),
-    email: z.string().email("Valid email is required"),
-    phoneNumber: z.string().min(1, "Phone number is required"),
+    fullName: z.string().min(1, "Please search and select a member"),
+    membershipCategory: z.string().min(1, "Please search and select a member"),
+    membershipNumber: z.string().min(1, "Please search and select a member"),
+    organisation: z.string().optional().default(""),
+    email: z.string().optional().default(""),
+    phoneNumber: z.string().optional().default(""),
     relationship: z.string().min(1, "Relationship is required"),
 });
 
 export const ProposerSchema = RefereeSchema;
 export const SupporterSchema = RefereeSchema;
 
-export const ReferenceDetailsFormSchema = z.object({
-    proposer: ProposerSchema,
-    supporter: SupporterSchema,
-});
+export const ReferenceDetailsFormSchema = z
+    .object({
+        proposer: ProposerSchema,
+        supporter: SupporterSchema,
+    })
+    .refine(
+        (data) =>
+            !data.proposer.membershipNumber ||
+            !data.supporter.membershipNumber ||
+            data.proposer.membershipNumber !== data.supporter.membershipNumber,
+        {
+            message: "Proposer and supporter must be different members",
+            path: ["supporter", "membershipNumber"],
+        },
+    );
 
 export type ReferenceDetailsFormType = z.infer<typeof ReferenceDetailsFormSchema>;
 

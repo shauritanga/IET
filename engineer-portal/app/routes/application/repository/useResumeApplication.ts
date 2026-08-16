@@ -3,56 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { getApplicationDraft } from "~/routes/application/requests/handle-resume";
-import type { ApplicationDraftData, ApplicationStep } from "~/routes/application/type";
+import type { ApplicationDraftData } from "~/routes/application/type";
 import type { APIResponse, TErrorMessage } from "~/types/types";
+import { getApplicationRoute } from "~/routes/application/utils/application-steps";
 
-const orderedApplicationSteps: ApplicationStep[] = [
-    "PERSONAL_DETAILS",
-    "REGISTRATION_DETAILS",
-    "EDUCATION_EXPERIENCE",
-    "REFERENCES",
-    "EMAIL_VERIFICATION",
-    "PAYMENT",
-    "DECLARATION",
-];
-
-export const getApplicationRoute = (
-    draft: ApplicationDraftData | null | undefined,
-) => {
-    if (!draft?.hasActiveRegistration) {
-        return "/application/personal-details";
-    }
-
-    if (
-        draft.status === "IN_REVIEW" ||
-        draft.status === "APPROVED" ||
-        draft.status === "REJECTED"
-    ) {
-        return "/application/welcome";
-    }
-
-    const nextIncompleteStep = orderedApplicationSteps.find(
-        (step) => !draft.completedSteps.includes(step),
-    );
-
-    switch (nextIncompleteStep ?? draft.currentStep) {
-        case "PERSONAL_DETAILS":
-            return "/application/personal-details";
-        case "REGISTRATION_DETAILS":
-            return "/application/registration-details";
-        case "EDUCATION_EXPERIENCE":
-            return "/application/experience";
-        case "REFERENCES":
-            return "/application/references";
-        case "EMAIL_VERIFICATION":
-            return "/application/verify-email";
-        case "DECLARATION":
-        case "PAYMENT":
-            return "/application/submission";
-        default:
-            return "/application/personal-details";
-    }
-};
+export { getApplicationRoute } from "~/routes/application/utils/application-steps";
 
 // ── Separate hook just for the initial redirect ──────────────────────────────
 export const useResumeApplication = () => {

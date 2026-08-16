@@ -8,8 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from '../../user/entities/user.entity';
 import { MembershipCategoryEntity } from '../../admin/entities/membership-category.entity';
-import { EmailService } from '../../shared/services/email.service';
-import { SmsService } from '../../shared/services/sms.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import {
   CommunicationMessageEntity,
   CommunicationTemplateEntity,
@@ -74,8 +73,7 @@ export class CommunicationService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(MembershipCategoryEntity)
     private categoryRepository: Repository<MembershipCategoryEntity>,
-    private emailService: EmailService,
-    private smsService: SmsService,
+    private messagingQueue: MessagingQueueService,
   ) {}
 
   async sendMessage(
@@ -371,7 +369,7 @@ export class CommunicationService {
         }
 
       try {
-        const result = await this.emailService.send({
+        const result = await this.messagingQueue.enqueueEmail({
           to: recipient.email,
           subject: dto.subject!.trim(),
           html: this.renderEmailBody(dto.message),
@@ -400,7 +398,7 @@ export class CommunicationService {
     }
 
     try {
-      const result = await this.smsService.send({
+      const result = await this.messagingQueue.enqueueSms({
         to: recipient.phoneNumber,
         message: dto.message,
       });

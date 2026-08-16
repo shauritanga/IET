@@ -1,7 +1,7 @@
 import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { AuditableEntity } from '../../../common/entities/base.entity';
-import { EventCategory } from '../../../common/enums';
+import { EventCategory, EventFeePricingMode } from '../../../common/enums';
 import { EventRegistrationEntity } from './event-registration.entity';
 
 @Entity('events')
@@ -127,6 +127,13 @@ export class EventEntity extends AuditableEntity {
   }>;
 
   @ApiProperty({
+    example: 'https://cdn.iet.or.tz/events/agenda-uuid.pdf',
+    description: 'Optional full agenda PDF URL',
+  })
+  @Column({ type: 'varchar', nullable: true })
+  agendaPdf?: string | null;
+
+  @ApiProperty({
     example: 'https://cdn.iet.or.tz/events/uuid.jpg',
     description: 'Cover image URL',
   })
@@ -148,10 +155,31 @@ export class EventEntity extends AuditableEntity {
 
   @ApiProperty({
     example: 50000,
-    description: 'Registration fee in TZS (0 for free events)',
+    description:
+      'Registration fee in TZS. When feePricingMode is FLAT this is charged to everyone; when DIFFERENT this is the non-member / inactive fee.',
   })
   @Column({ type: 'integer', default: 0 })
   registrationFee: number;
+
+  @ApiProperty({
+    example: 'FLAT',
+    description: 'FLAT = one fee for all; DIFFERENT = member vs non-member fees',
+    enum: EventFeePricingMode,
+  })
+  @Column({
+    type: 'enum',
+    enum: EventFeePricingMode,
+    default: EventFeePricingMode.FLAT,
+  })
+  feePricingMode: EventFeePricingMode;
+
+  @ApiProperty({
+    example: 30000,
+    description:
+      'Fee for users with ACTIVE membership when feePricingMode is DIFFERENT (TZS)',
+  })
+  @Column({ type: 'integer', nullable: true })
+  memberRegistrationFee?: number | null;
 
   @ApiProperty({
     example: 8,

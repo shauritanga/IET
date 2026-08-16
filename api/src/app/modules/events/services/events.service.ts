@@ -27,6 +27,8 @@ import {
   PaymentMethod,
   PaymentStatus,
   UserRole,
+  EventFeePricingMode,
+  MembershipStatus,
 } from '../../../common/enums';
 
 @Injectable()
@@ -44,6 +46,56 @@ export class EventsService {
     private smsService: SmsService,
     private paymentsService: PaymentsService,
   ) {}
+
+  /**
+   * Resolve the registration fee for a user.
+   * Active membership (MembershipStatus.ACTIVE) gets the member rate when pricing is DIFFERENT.
+   * Everyone else (inactive, pending, guests, anonymous) gets the standard / non-member rate.
+   */
+  resolveRegistrationFee(
+    event: Pick<
+      EventEntity,
+      'registrationFee' | 'feePricingMode' | 'memberRegistrationFee'
+    >,
+    user?: Pick<UserEntity, 'membershipStatus'> | null,
+  ): number {
+    const mode = event.feePricingMode ?? EventFeePricingMode.FLAT;
+    if (mode === EventFeePricingMode.FLAT) {
+      return event.registrationFee ?? 0;
+    }
+
+    const isActiveMember =
+      user?.membershipStatus === MembershipStatus.ACTIVE;
+
+    if (isActiveMember) {
+      return event.memberRegistrationFee ?? event.registrationFee ?? 0;
+    }
+
+    return event.registrationFee ?? 0;
+  }
+
+  private normalizeFeePricing(
+    event: EventEntity,
+    dto: Partial<CreateEventDto | UpdateEventDto>,
+  ): void {
+    if (dto.feePricingMode !== undefined) {
+      event.feePricingMode = dto.feePricingMode;
+    }
+    if (!event.feePricingMode) {
+      event.feePricingMode = EventFeePricingMode.FLAT;
+    }
+
+    if (event.feePricingMode === EventFeePricingMode.FLAT) {
+      event.memberRegistrationFee = null;
+    } else if (dto.memberRegistrationFee !== undefined) {
+      event.memberRegistrationFee = dto.memberRegistrationFee;
+    } else if (
+      event.memberRegistrationFee == null &&
+      event.registrationFee != null
+    ) {
+      event.memberRegistrationFee = event.registrationFee;
+    }
+  }
 
   /**
    * List events with filtering and pagination
@@ -134,22 +186,31 @@ export class EventsService {
 
     // Check if user is registered for each event
     let userRegistrations: Set<string> = new Set();
-    if (userId && eventIds.length > 0) {
-      const regs = await this.registrationRepository.find({
-        where: {
-          userId,
-          eventId: In(eventIds),
-          status: In([
-            EventRegistrationStatus.PENDING_PAYMENT,
-            EventRegistrationStatus.CONFIRMED,
-          ]),
-        },
-        select: ['eventId'],
+    let viewer: UserEntity | null = null;
+    if (userId) {
+      viewer = await this.userRepository.findOne({
+        where: { id: userId },
+        select: ['id', 'membershipStatus'],
       });
-      userRegistrations = new Set(regs.map((r) => r.eventId));
+      if (eventIds.length > 0) {
+        const regs = await this.registrationRepository.find({
+          where: {
+            userId,
+            eventId: In(eventIds),
+            status: In([
+              EventRegistrationStatus.PENDING_PAYMENT,
+              EventRegistrationStatus.CONFIRMED,
+            ]),
+          },
+          select: ['eventId'],
+        });
+        userRegistrations = new Set(regs.map((r) => r.eventId));
+      }
     }
 
-    const items = events.map((event) => ({
+    const items = events.map((event) => {
+      const applicableFee = this.resolveRegistrationFee(event, viewer);
+      return {
       id: event.id,
       title: event.title,
       category: event.category,
@@ -164,7 +225,10 @@ export class EventsService {
       speaker: event.speakers?.[0]?.name,
       coverImage: event.coverImage,
       registrationDeadline: event.registrationDeadline,
-      registrationFee: event.registrationFee,
+      registrationFee: applicableFee,
+      feePricingMode: event.feePricingMode ?? EventFeePricingMode.FLAT,
+      memberRegistrationFee: event.memberRegistrationFee ?? null,
+      nonMemberRegistrationFee: event.registrationFee ?? 0,
       cpdPoints: event.cpdPoints,
       availableSlots: event.maxParticipants,
       registeredCount: countMap.get(event.id) || 0,
@@ -172,7 +236,8 @@ export class EventsService {
         ? (countMap.get(event.id) || 0) >= event.maxParticipants
         : false,
       isRegistered: userRegistrations.has(event.id),
-    }));
+    };
+    });
 
     return {
       items,
@@ -213,7 +278,12 @@ export class EventsService {
 
     // Check if user is registered
     let isRegistered = false;
+    let viewer: UserEntity | null = null;
     if (userId) {
+      viewer = await this.userRepository.findOne({
+        where: { id: userId },
+        select: ['id', 'membershipStatus'],
+      });
       const userReg = await this.registrationRepository.findOne({
         where: {
           userId,
@@ -227,8 +297,14 @@ export class EventsService {
       isRegistered = !!userReg;
     }
 
+    const applicableFee = this.resolveRegistrationFee(event, viewer);
+
     return {
       ...event,
+      registrationFee: applicableFee,
+      feePricingMode: event.feePricingMode ?? EventFeePricingMode.FLAT,
+      memberRegistrationFee: event.memberRegistrationFee ?? null,
+      nonMemberRegistrationFee: event.registrationFee ?? 0,
       registeredCount,
       isFull: event.maxParticipants
         ? registeredCount >= event.maxParticipants
@@ -307,11 +383,21 @@ export class EventsService {
       }
     }
 
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'membershipStatus'],
+    });
+    const feeAmount = this.resolveRegistrationFee(event, user);
+    const isActiveMember =
+      user?.membershipStatus === MembershipStatus.ACTIVE;
+
     // Create or restore registration
     const registration = existingReg || new EventRegistrationEntity();
     registration.eventId = eventId;
     registration.userId = userId;
-    registration.attendeeType = dto.attendeeType || AttendeeType.MEMBER;
+    registration.attendeeType =
+      dto.attendeeType ||
+      (isActiveMember ? AttendeeType.MEMBER : AttendeeType.NON_MEMBER);
     registration.specialRequirements = dto.specialRequirements;
     registration.cancelledAt = undefined;
     registration.cancellationReason = undefined;
@@ -319,7 +405,7 @@ export class EventsService {
     registration.refundStatus = undefined;
 
     const eventYear = new Date(event.startDate).getFullYear();
-    if (event.registrationFee > 0) {
+    if (feeAmount > 0) {
       registration.status = EventRegistrationStatus.PENDING_PAYMENT;
       registration.paymentMethod = PaymentMethod.SELCOM;
       registration.paymentExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -335,16 +421,21 @@ export class EventsService {
     let paymentId: string | null = null;
     let paymentUrl: string | undefined;
 
-    if (event.registrationFee > 0) {
+    if (feeAmount > 0) {
       try {
         const paymentResult = await this.paymentsService.initiatePayment(userId, {
           paymentType: PaymentType.EVENT_REGISTRATION,
-          amount: event.registrationFee,
+          amount: feeAmount,
           paymentMethod: PaymentMethod.SELCOM,
           description: `Event Registration: ${event.title}`,
           referenceId: savedReg.id,
           referenceType: 'event_registration',
-          metadata: { eventId: event.id, registrationId: savedReg.id },
+          metadata: {
+            eventId: event.id,
+            registrationId: savedReg.id,
+            feePricingMode: event.feePricingMode,
+            membershipStatus: user?.membershipStatus,
+          },
         });
 
         paymentId = paymentResult.paymentId;
@@ -374,7 +465,7 @@ export class EventsService {
       status: savedReg.status,
       paymentId,
       paymentUrl,
-      amount: event.registrationFee,
+      amount: feeAmount,
       currency: 'TZS',
     };
   }
@@ -614,6 +705,10 @@ export class EventsService {
     event.registrationDeadline = dto.registrationDeadline
       ? new Date(dto.registrationDeadline)
       : undefined;
+    if (!event.agendaPdf?.trim()) {
+      event.agendaPdf = null;
+    }
+    this.normalizeFeePricing(event, dto);
     event.createdBy = adminId;
 
     const savedEvent = await this.eventRepository.save(event);
@@ -695,6 +790,10 @@ export class EventsService {
     if (dto.endDate) event.endDate = new Date(dto.endDate);
     if (dto.registrationDeadline)
       event.registrationDeadline = new Date(dto.registrationDeadline);
+    if (dto.agendaPdf !== undefined && !dto.agendaPdf?.trim()) {
+      event.agendaPdf = null;
+    }
+    this.normalizeFeePricing(event, dto);
     event.updatedBy = adminId;
 
     const savedEvent = await this.eventRepository.save(event);
@@ -727,8 +826,11 @@ export class EventsService {
         title: string;
         description?: string;
       }>;
+      agendaPdf?: string | null;
       registrationDeadline?: Date | null;
       registrationFee: number;
+      feePricingMode: EventFeePricingMode;
+      memberRegistrationFee?: number | null;
       cpdPoints: number;
       maxParticipants?: number | null;
       requirements: string[];
@@ -788,8 +890,11 @@ export class EventsService {
       guestOfHonor: event.guestOfHonor,
       speakers: event.speakers ?? [],
       agenda: event.agenda ?? [],
+      agendaPdf: event.agendaPdf ?? null,
       registrationDeadline: event.registrationDeadline ?? null,
       registrationFee: event.registrationFee,
+      feePricingMode: event.feePricingMode ?? EventFeePricingMode.FLAT,
+      memberRegistrationFee: event.memberRegistrationFee ?? null,
       cpdPoints: event.cpdPoints,
       maxParticipants: event.maxParticipants ?? null,
       requirements: event.requirements ?? [],
@@ -1022,6 +1127,12 @@ export class EventsService {
     // registration against the gateway first. If it already settled, don't
     // create a second order; if it's still an open, resumable checkout session,
     // reuse that URL instead of minting a new one.
+    const payer = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'membershipStatus'],
+    });
+    const feeAmount = this.resolveRegistrationFee(event, payer);
+
     const existingPayment = await this.paymentsService.syncEventRegistrationPayment(
       userId,
       registrationId,
@@ -1047,7 +1158,7 @@ export class EventsService {
         status: registration.status,
         paymentId: existingPayment.id,
         paymentUrl: existingPayment.paymentUrl,
-        amount: event.registrationFee,
+        amount: existingPayment.amount ?? feeAmount,
         currency: 'TZS',
         paymentExpiresAt: registration.paymentExpiresAt,
       };
@@ -1057,12 +1168,17 @@ export class EventsService {
 
     const paymentResult = await this.paymentsService.initiatePayment(userId, {
       paymentType: PaymentType.EVENT_REGISTRATION,
-      amount: event.registrationFee,
+      amount: feeAmount,
       paymentMethod: PaymentMethod.SELCOM,
       description: `Event Registration: ${event.title}`,
       referenceId: registration.id,
       referenceType: 'event_registration',
-      metadata: { eventId: event.id, registrationId: registration.id },
+      metadata: {
+        eventId: event.id,
+        registrationId: registration.id,
+        feePricingMode: event.feePricingMode,
+        membershipStatus: payer?.membershipStatus,
+      },
     });
 
     if (!paymentResult.paymentUrl) {
@@ -1085,7 +1201,7 @@ export class EventsService {
       status: registration.status,
       paymentId: paymentResult.paymentId,
       paymentUrl: paymentResult.paymentUrl,
-      amount: event.registrationFee,
+      amount: feeAmount,
       currency: 'TZS',
       paymentExpiresAt: expiresAt,
     };

@@ -9,18 +9,32 @@ import {
 import { useSubmitReferenceDetails } from "./repository/useSubmitReferenceDetails";
 import FormPageLayout from "~/routes/application/components/form-page-layout";
 import { mapServerErrors } from "~/utils/map-server-errors";
+import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
+import {
+    getRouteAfterSavingStep,
+    getSubmitLabel,
+} from "~/routes/application/utils/application-steps";
 
 const References = () => {
     const navigate = useNavigate();
     const form = useManageReferenceDetailsForm();
+    const { data: draft } = useGetApplicationDraft();
+    const completedSteps = draft?.data?.completedSteps ?? [];
 
     const mutation = useSubmitReferenceDetails(
-        () => navigate("/application/verify-email", { replace: true }),
+        () =>
+            navigate(
+                getRouteAfterSavingStep(
+                    completedSteps,
+                    "REFERENCES",
+                    "/application/review",
+                ),
+                { replace: true },
+            ),
         (error) => mapServerErrors(error, form),
     );
 
     const submit = (value: ReferenceDetailsFormType) => {
-        console.log(value);
         mutation.mutate(value);
     };
 
@@ -33,9 +47,10 @@ const References = () => {
                 <FormPageLayout
                     stepNumber={4}
                     title="References"
-                    subtitle="Enter your proposer and supporter details."
+                    subtitle="Search and select your proposer and supporter."
                     backHref="/application/experience"
                     isPending={mutation.isPending}
+                    submitLabel={getSubmitLabel(completedSteps, "REFERENCES")}
                 >
                     <ReferenceForm/>
                 </FormPageLayout>

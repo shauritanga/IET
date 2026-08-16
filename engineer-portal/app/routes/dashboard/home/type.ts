@@ -12,6 +12,9 @@ export type DashboardEvent = {
     guestOfHonor?: string | null;
     speaker?: string | null;
     registrationFee?: number;
+    feePricingMode?: "FLAT" | "DIFFERENT";
+    memberRegistrationFee?: number | null;
+    nonMemberRegistrationFee?: number;
     cpdPoints?: number;
     availableSlots?: number | null;
     registeredCount?: number;

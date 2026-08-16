@@ -101,6 +101,8 @@ async function bootstrap() {
         'http://127.0.0.1:5173',
         'http://localhost:4000',
         'http://127.0.0.1:4000',
+        'http://localhost:4001',
+        'http://127.0.0.1:4001',
         'http://localhost:4100',
         'http://127.0.0.1:4100',
       ].join(','),
@@ -109,7 +111,7 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter(Boolean);
   const privateNetworkDevOriginPattern =
-    /^http:\/\/(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::(?:4000|4100|5173))$/;
+    /^http:\/\/(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::(?:4000|4001|4100|5173))$/;
 
   // Global Exception Filter
   app.useGlobalFilters(new HttpExceptionFilter());

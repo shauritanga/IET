@@ -17,14 +17,31 @@ type FiscalYearSettings = {
   endDay: number;
 };
 
+type FeeAmountPair = {
+  applicationFee: number;
+  entryFee: number;
+};
+
+type ApplicationEntryFees = {
+  graduate: FeeAmountPair;
+  others: FeeAmountPair;
+};
+
+const DEFAULT_APPLICATION_ENTRY_FEES: ApplicationEntryFees = {
+  graduate: { applicationFee: 500, entryFee: 0 },
+  others: { applicationFee: 1000, entryFee: 0 },
+};
+
 function NumberInput({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
+  hint?: string;
 }) {
   return (
     <div>
@@ -40,6 +57,9 @@ function NumberInput({
           className="w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 py-[9px] text-[12.5px] text-[var(--text)] outline-none transition-[border-color,background] duration-150 focus:border-[var(--red-dark)] focus:bg-white"
         />
       </div>
+      {hint ? (
+        <p className="mt-1 text-[10.5px] leading-4 text-[var(--muted)]">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -57,8 +77,15 @@ export default function SettingsPage() {
   const [fiscalError, setFiscalError] = useState<string | null>(null);
   const [fiscalSavedMsg, setFiscalSavedMsg] = useState<string | null>(null);
 
+  const [feeConfig, setFeeConfig] = useState<ApplicationEntryFees>(DEFAULT_APPLICATION_ENTRY_FEES);
+  const [feesLoading, setFeesLoading] = useState(true);
+  const [feesSaving, setFeesSaving] = useState(false);
+  const [feesError, setFeesError] = useState<string | null>(null);
+  const [feesSavedMsg, setFeesSavedMsg] = useState<string | null>(null);
+
   useEffect(() => {
     void loadFiscalYear();
+    void loadApplicationEntryFees();
   }, []);
 
   async function loadFiscalYear() {
@@ -95,6 +122,48 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadApplicationEntryFees() {
+    setFeesLoading(true);
+    setFeesError(null);
+    try {
+      const { data } = await http.get<ApiEnvelope<ApplicationEntryFees>>(
+        "/admin/settings/application-entry-fees",
+      );
+      if (data.data) {
+        setFeeConfig(data.data);
+      }
+    } catch {
+      setFeesError("Failed to load application and entry fee configuration.");
+    } finally {
+      setFeesLoading(false);
+    }
+  }
+
+  async function saveApplicationEntryFees() {
+    setFeesSaving(true);
+    setFeesError(null);
+    setFeesSavedMsg(null);
+    try {
+      const { data } = await http.put<ApiEnvelope<ApplicationEntryFees>>(
+        "/admin/settings/application-entry-fees",
+        feeConfig,
+      );
+      if (data.data) {
+        setFeeConfig(data.data);
+      }
+      setFeesSavedMsg("Application and entry fees saved successfully.");
+      setTimeout(() => setFeesSavedMsg(null), 3000);
+    } catch (error) {
+      const apiError = error as AxiosError<{ message?: string }>;
+      setFeesError(
+        apiError.response?.data?.message ??
+          "Failed to save application and entry fee configuration.",
+      );
+    } finally {
+      setFeesSaving(false);
+    }
+  }
+
   return (
     <section>
       <PageHeader
@@ -119,6 +188,91 @@ export default function SettingsPage() {
             ))}
             <Button tone="dark">Save Changes</Button>
           </div>
+        </Card>
+
+        <Card title="Application & Entry Fees">
+          {feesLoading ? (
+            <div className="py-6 text-center text-[12px] text-[var(--muted)]">
+              Loading fee configuration…
+            </div>
+          ) : (
+            <div className="space-y-[14px]">
+              {feesError && (
+                <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
+                  {feesError}
+                </div>
+              )}
+              {feesSavedMsg && (
+                <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f5e9] px-3 py-2 text-[11.5px] font-semibold text-[#1a6b3c]">
+                  {feesSavedMsg}
+                </div>
+              )}
+              <p className="text-[12px] leading-5 text-[var(--muted)]">
+                Application fee is paid when submitting. Entry fee is the one-time joining fee created after approval.
+                Set entry fee to 0 to skip charging it.
+              </p>
+
+              <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-3">
+                <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.5px] text-[var(--text)]">
+                  Graduate
+                </div>
+                <div className="grid gap-[12px] md:grid-cols-2">
+                  <NumberInput
+                    label="Application Fee (TZS)"
+                    value={feeConfig.graduate.applicationFee}
+                    onChange={(v) =>
+                      setFeeConfig((prev) => ({
+                        ...prev,
+                        graduate: { ...prev.graduate, applicationFee: v },
+                      }))
+                    }
+                  />
+                  <NumberInput
+                    label="Entry Fee (TZS)"
+                    value={feeConfig.graduate.entryFee}
+                    onChange={(v) =>
+                      setFeeConfig((prev) => ({
+                        ...prev,
+                        graduate: { ...prev.graduate, entryFee: v },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-3">
+                <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.5px] text-[var(--text)]">
+                  Others
+                </div>
+                <div className="grid gap-[12px] md:grid-cols-2">
+                  <NumberInput
+                    label="Application Fee (TZS)"
+                    value={feeConfig.others.applicationFee}
+                    onChange={(v) =>
+                      setFeeConfig((prev) => ({
+                        ...prev,
+                        others: { ...prev.others, applicationFee: v },
+                      }))
+                    }
+                  />
+                  <NumberInput
+                    label="Entry Fee (TZS)"
+                    value={feeConfig.others.entryFee}
+                    onChange={(v) =>
+                      setFeeConfig((prev) => ({
+                        ...prev,
+                        others: { ...prev.others, entryFee: v },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <Button tone="dark" onClick={() => void saveApplicationEntryFees()} disabled={feesSaving}>
+                {feesSaving ? "Saving…" : "Save Fee Configuration"}
+              </Button>
+            </div>
+          )}
         </Card>
 
         <Card title="Membership Fiscal Year">

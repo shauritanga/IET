@@ -6,9 +6,10 @@ import {
   type CommunicationTemplate,
   type CommunicationType,
   MESSAGE_TYPES,
+  SelectField,
   formatDateTime,
   typeLabel,
-} from "../shared";
+} from "~/utils/communication";
 
 type TemplateForm = {
   name: string;
@@ -260,12 +261,6 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: "none",
-  paddingRight: 28,
-};
-
 const textareaStyle: React.CSSProperties = {
   ...inputStyle,
   minHeight: 160,
@@ -470,15 +465,17 @@ export default function CommunicationTemplatesPage() {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ position: "relative" }}>
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as CommunicationType | "")} style={{ ...selectStyle, width: "auto", paddingRight: 28 }}>
-            <option value="">All Types</option>
-            {MESSAGE_TYPES.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}>▾</span>
-        </div>
+        <SelectField
+          value={typeFilter}
+          onChange={(event) => setTypeFilter(event.target.value as CommunicationType | "")}
+          style={{ width: "auto" }}
+          aria-label="Filter by type"
+        >
+          <option value="">All Types</option>
+          {MESSAGE_TYPES.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </SelectField>
 
         {typeFilter && (
           <button type="button" onClick={() => setTypeFilter("")} style={{ fontSize: 11.5, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px", fontWeight: 600 }}>
@@ -551,11 +548,11 @@ export default function CommunicationTemplatesPage() {
               <input style={inputStyle} value={form.name} onChange={setField("name")} placeholder="Renewal reminder" />
             </FormField>
             <FormField label="Template Type" required>
-              <select style={selectStyle} value={form.type} onChange={setField("type")}>
+              <SelectField value={form.type} onChange={setField("type")}>
                 {MESSAGE_TYPES.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
-              </select>
+              </SelectField>
             </FormField>
           </div>
 

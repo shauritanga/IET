@@ -142,21 +142,10 @@ export default function ApplicationsPage() {
     setLoading(true);
     setPageError(null);
     try {
-      const statuses: AppStatus[] = ["IN_REVIEW", "APPROVED", "REJECTED", "CHANGES_REQUESTED"];
-      const responses = await Promise.all(
-        statuses.map((status) =>
-          http.get<ApiEnvelope<ApplicationRow[]>>(`/admin/applications?status=${status}&limit=200`),
-        ),
+      const { data } = await http.get<ApiEnvelope<ApplicationRow[]>>(
+        "/admin/applications?status=IN_REVIEW,APPROVED,REJECTED,CHANGES_REQUESTED&limit=200",
       );
-      const seen = new Set<string>();
-      const combined = responses
-        .flatMap((response) => response.data.data ?? [])
-        .filter((row) => {
-          if (seen.has(row.id)) return false;
-          seen.add(row.id);
-          return true;
-        });
-      setRows(combined);
+      setRows(data.data ?? []);
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
       setPageError(apiErr.response?.data?.message ?? "Failed to load applications.");

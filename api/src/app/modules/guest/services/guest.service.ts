@@ -26,8 +26,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
 import { PaymentEntity } from '../../payments/entities/payment.entity';
-import { SmsService } from '../../shared/services/sms.service';
-import { EmailService } from '../../shared/services/email.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 import { v4 as uuid4 } from 'uuid';
 
 @Injectable()
@@ -45,8 +44,7 @@ export class GuestService {
     private paymentRepository: Repository<PaymentEntity>,
     private paymentGateway: PaymentGatewayService,
     private configService: ConfigService,
-    private smsService: SmsService,
-    private emailService: EmailService,
+    private messagingQueue: MessagingQueueService,
   ) {}
 
   // ============================================
@@ -740,13 +738,13 @@ export class GuestService {
     event: EventEntity,
   ): Promise<void> {
     // Send SMS
-    await this.smsService.send({
+    await this.messagingQueue.enqueueSms({
       to: registration.phoneNumber,
       message: `IET Event Registration: ${event.title} on ${event.startDate.toLocaleDateString()}. Ticket: ${registration.ticketNumber}. Control No: ${registration.controlNumber}`,
     });
 
     // Send Email
-    await this.emailService.sendEventRegistrationEmail(
+    await this.messagingQueue.enqueueEventRegistrationEmail(
       registration.email,
       registration.firstName,
       {
@@ -761,14 +759,14 @@ export class GuestService {
   private async sendPaymentConfirmation(
     registration: GuestRegistrationEntity,
   ): Promise<void> {
-    await this.smsService.sendPaymentConfirmation(
+    await this.messagingQueue.enqueuePaymentConfirmationSms(
       registration.phoneNumber,
       registration.amountPaid,
       'TZS',
       registration.receiptNumber,
     );
 
-    await this.emailService.sendPaymentReceipt(
+    await this.messagingQueue.enqueuePaymentReceipt(
       registration.email,
       registration.firstName,
       {
@@ -784,14 +782,14 @@ export class GuestService {
   private async sendDevelopmentFeeReceipt(
     fee: DevelopmentFeeEntity,
   ): Promise<void> {
-    await this.smsService.sendPaymentConfirmation(
+    await this.messagingQueue.enqueuePaymentConfirmationSms(
       fee.phoneNumber,
       fee.amount,
       fee.currency,
       fee.receiptNumber,
     );
 
-    await this.emailService.sendPaymentReceipt(fee.email, fee.firstName, {
+    await this.messagingQueue.enqueuePaymentReceipt(fee.email, fee.firstName, {
       receiptNumber: fee.receiptNumber,
       amount: fee.amount,
       currency: fee.currency,

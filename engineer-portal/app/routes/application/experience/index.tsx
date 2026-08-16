@@ -5,9 +5,16 @@ import {useManageExperienceForm, type ExperienceDetailsFormType} from "./form/ma
 import { useSubmitExperienceDetails } from './repository/useSubmitExperienceDetails';
 import FormPageLayout from "~/routes/application/components/form-page-layout";
 import { mapServerErrors } from "~/utils/map-server-errors";
+import { useGetApplicationDraft } from "~/routes/application/repository/useResumeApplication";
+import {
+    getRouteAfterSavingStep,
+    getSubmitLabel,
+} from "~/routes/application/utils/application-steps";
 
 const Experience = () => {
     const navigate = useNavigate();
+    const { data: draft } = useGetApplicationDraft();
+    const completedSteps = draft?.data?.completedSteps ?? [];
     const {
         form,
         educationFieldArray,
@@ -21,7 +28,15 @@ const Experience = () => {
     } = useManageExperienceForm();
 
     const mutation = useSubmitExperienceDetails(
-        () => navigate("/application/references", { replace: true }),
+        () =>
+            navigate(
+                getRouteAfterSavingStep(
+                    completedSteps,
+                    "EDUCATION_EXPERIENCE",
+                    "/application/references",
+                ),
+                { replace: true },
+            ),
         (error) => mapServerErrors(error, form),
     );
 
@@ -49,6 +64,7 @@ const Experience = () => {
                     subtitle="Complete your educational and professional background."
                     backHref="/application/registration-details"
                     isPending={mutation.isPending}
+                    submitLabel={getSubmitLabel(completedSteps, "EDUCATION_EXPERIENCE")}
                 >
                     <ExperienceDetailsForm
                         educationFieldArray={educationFieldArray}

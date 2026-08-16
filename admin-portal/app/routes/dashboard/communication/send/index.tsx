@@ -5,13 +5,14 @@ import type { ApiEnvelope } from "~/types";
 import {
   MESSAGE_TYPES,
   RECIPIENT_OPTIONS,
+  SelectField,
   type CommunicationTemplate,
   type MembershipCategory,
   type CommunicationType,
   type CommunicationTarget,
   formatDateTime,
   typeLabel,
-} from "../shared";
+} from "~/utils/communication";
 
 type SendFormState = {
   templateId: string;
@@ -92,12 +93,6 @@ const baseInputStyle: React.CSSProperties = {
   background: "var(--bg)",
   outline: "none",
   boxSizing: "border-box",
-};
-
-const baseSelectStyle: React.CSSProperties = {
-  ...baseInputStyle,
-  appearance: "none",
-  paddingRight: 30,
 };
 
 const baseTextareaStyle: React.CSSProperties = {
@@ -265,8 +260,7 @@ export default function CommunicationSendPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
             <div>
               <SectionLabel>Template</SectionLabel>
-              <select
-                style={baseSelectStyle}
+              <SelectField
                 value={form.templateId}
                 onChange={setField("templateId")}
                 disabled={loadingOptions}
@@ -277,13 +271,12 @@ export default function CommunicationSendPage() {
                     {template.name} ({typeLabel(template.type)})
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </div>
 
             <div>
               <SectionLabel>Message Type</SectionLabel>
-              <select
-                style={baseSelectStyle}
+              <SelectField
                 value={form.type}
                 onChange={setField("type")}
                 disabled={loadingOptions}
@@ -293,15 +286,14 @@ export default function CommunicationSendPage() {
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
             <div>
               <SectionLabel>Recipients</SectionLabel>
-              <select
-                style={baseSelectStyle}
+              <SelectField
                 value={form.recipients}
                 onChange={setField("recipients")}
                 disabled={loadingOptions}
@@ -311,14 +303,13 @@ export default function CommunicationSendPage() {
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </div>
 
             {form.recipients === "GROUP" ? (
               <div>
                 <SectionLabel>Recipient Group</SectionLabel>
-                <select
-                  style={baseSelectStyle}
+                <SelectField
                   value={form.groupId}
                   onChange={setField("groupId")}
                   disabled={loadingOptions || categories.length === 0}
@@ -331,7 +322,7 @@ export default function CommunicationSendPage() {
                       {category.name}
                     </option>
                   ))}
-                </select>
+                </SelectField>
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "end", paddingBottom: 14, fontSize: 11.5, color: "var(--muted)" }}>

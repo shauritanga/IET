@@ -7,10 +7,18 @@ import { UserEntity } from '../user/entities/user.entity';
 import { RegistrationEntity } from '../registration/entities';
 import { EventRegistrationEntity } from '../events/entities';
 import { GuestRegistrationEntity } from '../guest/entities/guest-registration.entity';
+import { SystemSettingEntity } from '../admin/entities/system-setting.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PaymentEntity, UserEntity, RegistrationEntity, EventRegistrationEntity, GuestRegistrationEntity]),
+    TypeOrmModule.forFeature([
+      PaymentEntity,
+      UserEntity,
+      RegistrationEntity,
+      EventRegistrationEntity,
+      GuestRegistrationEntity,
+      SystemSettingEntity,
+    ]),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],

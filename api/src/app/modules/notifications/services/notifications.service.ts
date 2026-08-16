@@ -19,8 +19,7 @@ import {
   UserRole,
   ApplicationStatus,
 } from '../../../common/enums';
-import { SmsService } from '../../shared/services/sms.service';
-import { EmailService } from '../../shared/services/email.service';
+import { MessagingQueueService } from '../../queues/messaging-queue.service';
 
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
@@ -34,8 +33,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(RegistrationEntity)
     private registrationRepository: Repository<RegistrationEntity>,
-    private smsService: SmsService,
-    private emailService: EmailService,
+    private messagingQueue: MessagingQueueService,
     private configService: ConfigService,
   ) {}
 
@@ -435,7 +433,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     notification: NotificationEntity,
   ): Promise<void> {
     try {
-      const result = await this.emailService.send({
+      const result = await this.messagingQueue.enqueueEmail({
         to: user.email,
         subject: notification.title,
         html: this.formatNotificationHtml(notification),
@@ -445,7 +443,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notification.sentVia.push(NotificationChannel.EMAIL);
         notification.emailSentAt = new Date();
         await this.notificationRepository.save(notification);
-        this.logger.log(`Email sent to ${user.email}: ${notification.title}`);
+        this.logger.log(`Email queued to ${user.email}: ${notification.title}`);
       }
     } catch (error) {
       this.logger.error(
@@ -461,7 +459,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     if (!user.phoneNumber) return;
 
     try {
-      const result = await this.smsService.send({
+      const result = await this.messagingQueue.enqueueSms({
         to: user.phoneNumber,
         message: `${notification.title}: ${notification.message}`,
       });
@@ -471,7 +469,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notification.smsSentAt = new Date();
         await this.notificationRepository.save(notification);
         this.logger.log(
-          `SMS sent to ${user.phoneNumber}: ${notification.title}`,
+          `SMS queued to ${user.phoneNumber}: ${notification.title}`,
         );
       }
     } catch (error) {
@@ -493,7 +491,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notification.actionUrl,
         portal,
       );
-      const result = await this.emailService.send({
+      const result = await this.messagingQueue.enqueueEmail({
         to: user.email,
         subject: notification.title,
         html: this.formatNotificationHtml(notification, absoluteActionUrl),
@@ -503,7 +501,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notification.sentVia.push(NotificationChannel.EMAIL);
         notification.emailSentAt = new Date();
         await this.notificationRepository.save(notification);
-        this.logger.log(`Workflow email sent to ${user.email}: ${notification.title}`);
+        this.logger.log(`Workflow email queued to ${user.email}: ${notification.title}`);
       }
     } catch (error) {
       this.logger.error(
@@ -519,7 +517,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     if (!user.phoneNumber) return;
 
     try {
-      const result = await this.smsService.send({
+      const result = await this.messagingQueue.enqueueSms({
         to: user.phoneNumber,
         message: `${notification.title}: ${notification.message}`,
       });
@@ -529,7 +527,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notification.smsSentAt = new Date();
         await this.notificationRepository.save(notification);
         this.logger.log(
-          `Workflow SMS sent to ${user.phoneNumber}: ${notification.title}`,
+          `Workflow SMS queued to ${user.phoneNumber}: ${notification.title}`,
         );
       }
     } catch (error) {
@@ -659,7 +657,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
       // Also send direct SMS reminder
       if (user.phoneNumber) {
-        await this.smsService.sendExpiryReminder(
+        await this.messagingQueue.enqueueExpiryReminderSms(
           user.phoneNumber,
           user.firstName || 'Member',
           user.membershipExpiryDate,
@@ -668,7 +666,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Send email reminder
-      await this.emailService.sendExpiryReminder(
+      await this.messagingQueue.enqueueExpiryReminderEmail(
         user.email,
         user.firstName || 'Member',
         user.membershipExpiryDate,

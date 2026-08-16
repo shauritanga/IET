@@ -1,5 +1,5 @@
 import type { AxiosError } from "axios";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import http from "~/utils/http";
 import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventAttendeesResponse, EventCategory } from "~/types";
@@ -17,6 +17,8 @@ type EventFormState = {
   registrationDeadline: string;
   capacity: string;
   fee: string;
+  memberFee: string;
+  flatPricing: boolean;
   cpdHours: string;
   registrationOpen: boolean;
   description: string;
@@ -33,6 +35,7 @@ type EventFormState = {
     title: string;
     description: string;
   }>;
+  agendaPdf: string;
   requirements: string[];
   organizer: {
     name: string;
@@ -53,6 +56,50 @@ type AttendeesView = {
 
 const MODE_OPTIONS = ["In-person", "Online", "Hybrid"] as const;
 const EVENT_FORM_STEPS = ["Basics", "Schedule & Access", "Registration", "Program & Contacts"] as const;
+const CREATE_DRAFT_STORAGE_KEY = "iet_admin_event_create_draft_v1";
+const EDIT_DRAFT_STORAGE_PREFIX = "iet_admin_event_edit_draft_v1:";
+
+type EventFormDraft = {
+  formState: EventFormState;
+  formStep: number;
+  savedAt: string;
+};
+
+function isSameFormState(a: EventFormState, b: EventFormState) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function isFormDirty(formState: EventFormState, baseline: EventFormState, formStep: number) {
+  return formStep > 0 || !isSameFormState(formState, baseline);
+}
+
+function readDraft(key: string): EventFormDraft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as EventFormDraft;
+    if (!parsed?.formState || typeof parsed.formStep !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string, draft: EventFormDraft) {
+  try {
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    // Ignore quota / private mode failures.
+  }
+}
+
+function clearDraft(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 const CATEGORY_OPTIONS: Array<{ value: EventCategory; label: string }> = [
   { value: "CONFERENCE", label: "Conference" },
@@ -134,6 +181,8 @@ function emptyFormState(): EventFormState {
     registrationDeadline: "",
     capacity: "",
     fee: "",
+    memberFee: "",
+    flatPricing: true,
     cpdHours: "",
     registrationOpen: true,
     description: "",
@@ -141,6 +190,7 @@ function emptyFormState(): EventFormState {
     guestOfHonor: "",
     speakers: [],
     agenda: [],
+    agendaPdf: "",
     requirements: [],
     organizer: { name: "", contact: "", phone: "" },
     images: [],
@@ -174,6 +224,14 @@ function formatMoney(value: number) {
   return `TZS ${new Intl.NumberFormat("en-US").format(value)}`;
 }
 
+function formatEventFee(event: AdminEvent) {
+  if ((event.feePricingMode ?? "FLAT") === "DIFFERENT") {
+    const member = event.memberRegistrationFee ?? event.registrationFee;
+    return `Members ${formatMoney(member)} · Others ${formatMoney(event.registrationFee)}`;
+  }
+  return formatMoney(event.registrationFee);
+}
+
 function modeForEvent(event: AdminEvent): EventFormState["mode"] {
   if (!event.isOnline) return "In-person";
   return event.location ? "Hybrid" : "Online";
@@ -186,7 +244,10 @@ function toFormState(event: AdminEvent): EventFormState {
     endDateTime: combineDateTimeLocal(event.endDate ?? event.startDate, event.endTime),
     location: event.location ?? "", onlineUrl: event.onlineUrl ?? "",
     registrationDeadline: dateOnly(event.registrationDeadline), capacity: event.maxParticipants?.toString() ?? "",
-    fee: event.registrationFee.toString(), cpdHours: event.cpdPoints.toString(),
+    fee: event.registrationFee.toString(),
+    memberFee: (event.memberRegistrationFee ?? event.registrationFee).toString(),
+    flatPricing: (event.feePricingMode ?? "FLAT") === "FLAT",
+    cpdHours: event.cpdPoints.toString(),
     registrationOpen: event.registrationOpen,
     description: event.description ?? "", coverImage: event.coverImage ?? "",
     guestOfHonor: event.guestOfHonor ?? "",
@@ -201,6 +262,7 @@ function toFormState(event: AdminEvent): EventFormState {
       title: item.title ?? "",
       description: item.description ?? "",
     })),
+    agendaPdf: event.agendaPdf ?? "",
     requirements: event.requirements ?? [],
     organizer: {
       name: event.organizer?.name ?? "",
@@ -219,9 +281,17 @@ function validateForm(formState: EventFormState) {
   if (!formState.capacity.trim()) return "Capacity is required.";
   const capacity = Number(formState.capacity);
   const fee = formState.fee.trim() ? Number(formState.fee) : 0;
+  const memberFee = formState.memberFee.trim() ? Number(formState.memberFee) : 0;
   const cpdHours = formState.cpdHours.trim() ? Number(formState.cpdHours) : 0;
   if (Number.isNaN(capacity) || capacity < 1) return "Capacity must be a valid number.";
-  if (Number.isNaN(fee) || fee < 0) return "Fee must be zero or a valid positive number.";
+  if (Number.isNaN(fee) || fee < 0) {
+    return formState.flatPricing
+      ? "Fee must be zero or a valid positive number."
+      : "Non-member fee must be zero or a valid positive number.";
+  }
+  if (!formState.flatPricing && (Number.isNaN(memberFee) || memberFee < 0)) {
+    return "Member fee must be zero or a valid positive number.";
+  }
   if (Number.isNaN(cpdHours) || cpdHours < 0) return "CPD hours must be zero or a valid positive number.";
   return null;
 }
@@ -239,9 +309,17 @@ function validateStep(formState: EventFormState, step: number) {
     if (!formState.capacity.trim()) return "Capacity is required.";
     const capacity = Number(formState.capacity);
     const fee = formState.fee.trim() ? Number(formState.fee) : 0;
+    const memberFee = formState.memberFee.trim() ? Number(formState.memberFee) : 0;
     const cpdHours = formState.cpdHours.trim() ? Number(formState.cpdHours) : 0;
     if (Number.isNaN(capacity) || capacity < 1) return "Capacity must be a valid number.";
-    if (Number.isNaN(fee) || fee < 0) return "Fee must be zero or a valid positive number.";
+    if (Number.isNaN(fee) || fee < 0) {
+      return formState.flatPricing
+        ? "Fee must be zero or a valid positive number."
+        : "Non-member fee must be zero or a valid positive number.";
+    }
+    if (!formState.flatPricing && (Number.isNaN(memberFee) || memberFee < 0)) {
+      return "Member fee must be zero or a valid positive number.";
+    }
     if (Number.isNaN(cpdHours) || cpdHours < 0) return "CPD hours must be zero or a valid positive number.";
   }
   return null;
@@ -280,12 +358,19 @@ function toPayload(formState: EventFormState, publish: boolean): AdminEventPaylo
     onlineUrl: formState.mode !== "In-person" ? formState.onlineUrl.trim() || undefined : undefined,
     registrationDeadline: formState.registrationDeadline || undefined,
     registrationFee: formState.fee.trim() ? Number(formState.fee) : 0,
+    feePricingMode: formState.flatPricing ? "FLAT" : "DIFFERENT",
+    memberRegistrationFee: formState.flatPricing
+      ? undefined
+      : formState.memberFee.trim()
+        ? Number(formState.memberFee)
+        : 0,
     cpdPoints: formState.cpdHours.trim() ? Number(formState.cpdHours) : 0,
     maxParticipants: Number(formState.capacity), isPublished: publish,
     registrationOpen: formState.registrationOpen,
     guestOfHonor: formState.guestOfHonor.trim() || undefined,
     speakers,
     agenda,
+    agendaPdf: formState.agendaPdf.trim() || "",
     requirements,
     organizer,
     coverImage: formState.coverImage || undefined,
@@ -518,11 +603,24 @@ export default function EventsAndTrainingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadingSpeakerIndex, setUploadingSpeakerIndex] = useState<number | null>(null);
+  const [isUploadingAgendaPdf, setIsUploadingAgendaPdf] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const baselineFormRef = useRef<EventFormState>(emptyFormState());
 
   const [attendeesView, setAttendeesView] = useState<AttendeesView | null>(null);
 
   const isEditing = editingEventId !== null;
   const editingEvent = eventRows.find((event) => event.id === editingEventId) ?? null;
+  const draftStorageKey = isEditing && editingEventId
+    ? `${EDIT_DRAFT_STORAGE_PREFIX}${editingEventId}`
+    : CREATE_DRAFT_STORAGE_KEY;
+
+  const formIsDirty = useMemo(
+    () => isFormDirty(formState, baselineFormRef.current, formStep),
+    [formState, formStep, isEventModalOpen],
+  );
 
   async function loadEvents() {
     setLoading(true);
@@ -540,6 +638,18 @@ export default function EventsAndTrainingPage() {
   }
 
   useEffect(() => { void loadEvents(); }, []);
+
+  // Persist draft while creating/editing (survives refresh / accidental navigation).
+  useEffect(() => {
+    if (!isEventModalOpen || isSubmitting) return;
+    if (!formIsDirty) return;
+
+    writeDraft(draftStorageKey, {
+      formState,
+      formStep,
+      savedAt: new Date().toISOString(),
+    });
+  }, [draftStorageKey, formIsDirty, formState, formStep, isEventModalOpen, isSubmitting]);
 
   async function openAttendeesPage(event: AdminEvent) {
     const view: AttendeesView = { event, data: null, loading: true, error: null };
@@ -598,19 +708,56 @@ export default function EventsAndTrainingPage() {
     }));
   }
 
-  function openCreateModal() {
-    setEditingEventId(null);
-    setFormState(emptyFormState());
+  function resetFormToEmpty() {
+    const empty = emptyFormState();
+    baselineFormRef.current = empty;
+    setFormState(empty);
     setFormStep(0);
     setFormError(null);
+    setDraftNotice(null);
+  }
+
+  function openCreateModal() {
+    setEditingEventId(null);
+    setDiscardConfirmOpen(false);
+    setFormError(null);
+
+    const draft = readDraft(CREATE_DRAFT_STORAGE_KEY);
+    const empty = emptyFormState();
+    baselineFormRef.current = empty;
+
+    if (draft && isFormDirty(draft.formState, empty, draft.formStep)) {
+      setFormState(draft.formState);
+      setFormStep(Math.min(EVENT_FORM_STEPS.length - 1, Math.max(0, draft.formStep)));
+      setDraftNotice("Draft restored from your previous session.");
+    } else {
+      setFormState(empty);
+      setFormStep(0);
+      setDraftNotice(null);
+    }
+
     setIsEventModalOpen(true);
   }
 
   function openEditModal(event: AdminEvent) {
     setEditingEventId(event.id);
-    setFormState(toFormState(event));
-    setFormStep(0);
+    setDiscardConfirmOpen(false);
     setFormError(null);
+
+    const baseline = toFormState(event);
+    baselineFormRef.current = baseline;
+
+    const draft = readDraft(`${EDIT_DRAFT_STORAGE_PREFIX}${event.id}`);
+    if (draft && isFormDirty(draft.formState, baseline, draft.formStep)) {
+      setFormState(draft.formState);
+      setFormStep(Math.min(EVENT_FORM_STEPS.length - 1, Math.max(0, draft.formStep)));
+      setDraftNotice("Unsaved edits restored from your previous session.");
+    } else {
+      setFormState(baseline);
+      setFormStep(0);
+      setDraftNotice(null);
+    }
+
     setIsEventModalOpen(true);
   }
 
@@ -622,6 +769,7 @@ export default function EventsAndTrainingPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("folder", "events");
       const { data } = await http.post<ApiEnvelope<{ url: string }>>("/uploads", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -630,14 +778,73 @@ export default function EventsAndTrainingPage() {
       setFormError("Failed to upload image. Please try again.");
     } finally {
       setIsUploadingImage(false);
+      event.target.value = "";
     }
   }
 
-  function closeModal() {
-    if (isSubmitting) return;
-    setIsEventModalOpen(false);
+  async function handleSpeakerPhotoChange(index: number, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingSpeakerIndex(index);
     setFormError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "speakers");
+      const { data } = await http.post<ApiEnvelope<{ url: string }>>("/uploads", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      updateSpeaker(index, "photo", data.data.url);
+    } catch {
+      setFormError("Failed to upload speaker photo. Please try again.");
+    } finally {
+      setUploadingSpeakerIndex(null);
+      event.target.value = "";
+    }
   }
+
+  async function handleAgendaPdfChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setFormError("Agenda file must be a PDF.");
+      event.target.value = "";
+      return;
+    }
+    setIsUploadingAgendaPdf(true);
+    setFormError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "event-agendas");
+      const { data } = await http.post<ApiEnvelope<{ url: string }>>("/uploads", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      updateField("agendaPdf", data.data.url);
+    } catch {
+      setFormError("Failed to upload agenda PDF. Please try again.");
+    } finally {
+      setIsUploadingAgendaPdf(false);
+      event.target.value = "";
+    }
+  }
+
+  const discardAndClose = useCallback(() => {
+    clearDraft(draftStorageKey);
+    setDiscardConfirmOpen(false);
+    setIsEventModalOpen(false);
+    setEditingEventId(null);
+    resetFormToEmpty();
+  }, [draftStorageKey]);
+
+  const requestCloseModal = useCallback(() => {
+    if (isSubmitting) return;
+    if (formIsDirty) {
+      setDiscardConfirmOpen(true);
+      return;
+    }
+    discardAndClose();
+  }, [discardAndClose, formIsDirty, isSubmitting]);
 
   function goToNextStep() {
     const validationError = validateStep(formState, formStep);
@@ -660,13 +867,16 @@ export default function EventsAndTrainingPage() {
     try {
       if (isEditing && editingEvent) {
         await http.patch<ApiEnvelope<AdminEvent>>(`/admin/events/${editingEvent.id}`, payload);
+        clearDraft(`${EDIT_DRAFT_STORAGE_PREFIX}${editingEvent.id}`);
       } else {
         await http.post<ApiEnvelope<AdminEvent>>("/admin/events", payload);
+        clearDraft(CREATE_DRAFT_STORAGE_KEY);
       }
       await loadEvents();
       setIsEventModalOpen(false);
+      setDiscardConfirmOpen(false);
       setEditingEventId(null);
-      setFormState(emptyFormState());
+      resetFormToEmpty();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
       setFormError(apiError.response?.data?.message ?? "Failed to save event.");
@@ -732,7 +942,7 @@ export default function EventsAndTrainingPage() {
                     </td>
                     <td className="text-[11.5px]">{eventLocationLabel(event)}</td>
                     <td className="text-[11.5px]">{eventRegistrationsLabel(event)}</td>
-                    <td className="text-[11.5px]">{formatMoney(event.registrationFee)}</td>
+                    <td className="text-[11.5px]">{formatEventFee(event)}</td>
                     <td>
                       <StatusBadge tone={event.isPublished ? "approved" : "pending"}>
                         {event.isPublished ? "Published" : "Draft"}
@@ -762,11 +972,13 @@ export default function EventsAndTrainingPage() {
       <Modal
         title={isEditing ? "Edit Event" : "Create New Event"}
         open={isEventModalOpen}
-        onClose={closeModal}
+        onClose={requestCloseModal}
+        closeOnOverlay={false}
+        closeOnEscape={!discardConfirmOpen}
         bodyClassName="space-y-[14px]"
         footer={
           <div className="flex flex-wrap items-center justify-between gap-[9px]">
-            <Button tone="outline" onClick={formStep === 0 ? closeModal : goToPreviousStep} disabled={isSubmitting}>
+            <Button tone="outline" onClick={formStep === 0 ? requestCloseModal : goToPreviousStep} disabled={isSubmitting}>
               {formStep === 0 ? "Cancel" : "Back"}
             </Button>
             {isFinalStep ? (
@@ -784,6 +996,19 @@ export default function EventsAndTrainingPage() {
           </div>
         }
       >
+        {draftNotice ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#c5d4f7] bg-[#E7EFFD] px-3 py-2 text-[11.5px] text-[#1565C0]">
+            <span className="font-semibold">{draftNotice}</span>
+            <button
+              type="button"
+              className="text-[11px] font-bold underline"
+              onClick={() => setDraftNotice(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {EVENT_FORM_STEPS.map((step, index) => (
             <button
@@ -890,20 +1115,53 @@ export default function EventsAndTrainingPage() {
 
         {formStep === 2 ? (
           <div className="space-y-[14px]">
-            <div className="grid gap-[14px] md:grid-cols-3">
+            <div className="grid gap-[14px] md:grid-cols-2">
               <div>
                 <FormLabel>Capacity *</FormLabel>
                 <FormInput type="number" placeholder="e.g. 200" value={formState.capacity} onChange={(value) => updateField("capacity", value)} />
-              </div>
-              <div>
-                <FormLabel>Fee (TZS)</FormLabel>
-                <FormInput type="number" placeholder="0 for free" value={formState.fee} onChange={(value) => updateField("fee", value)} />
               </div>
               <div>
                 <FormLabel>CPD Hours</FormLabel>
                 <FormInput type="number" placeholder="e.g. 6" value={formState.cpdHours} onChange={(value) => updateField("cpdHours", value)} />
               </div>
             </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-4 py-3">
+              <span>
+                <span className="block text-[12px] font-bold text-[var(--red-dark)]">Flat pricing (same fee for everyone)</span>
+                <span className="block text-[10.5px] text-[var(--muted)]">
+                  Uncheck to set different fees for active members and non-members.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={formState.flatPricing}
+                onChange={(event) => updateField("flatPricing", event.target.checked)}
+                className="h-4 w-4 accent-[var(--red)]"
+              />
+            </label>
+
+            {formState.flatPricing ? (
+              <div>
+                <FormLabel>Fee (TZS)</FormLabel>
+                <FormInput type="number" placeholder="0 for free" value={formState.fee} onChange={(value) => updateField("fee", value)} />
+                <p className="mt-1 text-[10.5px] text-[var(--muted)]">Charged equally to all registrants.</p>
+              </div>
+            ) : (
+              <div className="grid gap-[14px] md:grid-cols-2">
+                <div>
+                  <FormLabel>Active member fee (TZS)</FormLabel>
+                  <FormInput type="number" placeholder="0 for free" value={formState.memberFee} onChange={(value) => updateField("memberFee", value)} />
+                  <p className="mt-1 text-[10.5px] text-[var(--muted)]">Users whose membership status is Active.</p>
+                </div>
+                <div>
+                  <FormLabel>Non-member fee (TZS)</FormLabel>
+                  <FormInput type="number" placeholder="0 for free" value={formState.fee} onChange={(value) => updateField("fee", value)} />
+                  <p className="mt-1 text-[10.5px] text-[var(--muted)]">Inactive, pending, guests, and non-members.</p>
+                </div>
+              </div>
+            )}
+
             <label className="flex items-center justify-between gap-4 rounded-[10px] border border-[var(--border)] bg-[var(--bg)] px-4 py-3">
               <span>
                 <span className="block text-[12px] font-bold text-[var(--red-dark)]">Registration Open</span>
@@ -961,8 +1219,50 @@ export default function EventsAndTrainingPage() {
                     <div className="grid gap-2 md:grid-cols-2">
                       <FormInput placeholder="Name" value={speaker.name} onChange={(value) => updateSpeaker(index, "name", value)} />
                       <FormInput placeholder="Title" value={speaker.title} onChange={(value) => updateSpeaker(index, "title", value)} />
-                      <FormInput placeholder="Photo URL" value={speaker.photo} onChange={(value) => updateSpeaker(index, "photo", value)} />
-                      <FormTextarea rows={2} placeholder="Short bio" value={speaker.bio} onChange={(value) => updateSpeaker(index, "bio", value)} />
+                      <div className="md:col-span-2">
+                        <FormLabel>Photo</FormLabel>
+                        {speaker.photo ? (
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={speaker.photo}
+                              alt={speaker.name || `Speaker ${index + 1}`}
+                              className="size-14 rounded-[8px] object-cover border border-[var(--border)]"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <label className={`cursor-pointer rounded-[7px] border border-[var(--border)] bg-white px-3 py-[7px] text-[11px] font-semibold text-[var(--text)] hover:border-[var(--red-dark)] ${uploadingSpeakerIndex === index ? "opacity-60 pointer-events-none" : ""}`}>
+                                {uploadingSpeakerIndex === index ? "Uploading..." : "Replace"}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  className="sr-only"
+                                  disabled={uploadingSpeakerIndex === index}
+                                  onChange={(e) => void handleSpeakerPhotoChange(index, e)}
+                                />
+                              </label>
+                              <Button type="button" tone="outline" onClick={() => updateSpeaker(index, "photo", "")}>
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className={`flex h-[64px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[7px] border-[1.5px] border-dashed border-[var(--border)] bg-white transition-colors hover:border-[var(--red-dark)] hover:bg-[var(--red-pale)] ${uploadingSpeakerIndex === index ? "opacity-60 pointer-events-none" : ""}`}>
+                            <span className="text-[11px] font-semibold text-[var(--muted)]">
+                              {uploadingSpeakerIndex === index ? "Uploading..." : "Click to upload photo"}
+                            </span>
+                            <span className="text-[10px] text-[var(--muted)]">JPG, PNG or WEBP · max 10 MB</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="sr-only"
+                              disabled={uploadingSpeakerIndex === index}
+                              onChange={(e) => void handleSpeakerPhotoChange(index, e)}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <div className="md:col-span-2">
+                        <FormTextarea rows={2} placeholder="Short bio" value={speaker.bio} onChange={(value) => updateSpeaker(index, "bio", value)} />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -973,9 +1273,51 @@ export default function EventsAndTrainingPage() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[12px] font-bold text-[var(--red-dark)]">Agenda</p>
-                  <p className="text-[10.5px] text-[var(--muted)]">Outline the event flow for members.</p>
+                  <p className="text-[10.5px] text-[var(--muted)]">Short outline on the page, plus optional full PDF for long programmes.</p>
                 </div>
                 <Button type="button" tone="outline" onClick={() => updateField("agenda", [...formState.agenda, { time: "", title: "", description: "" }])}>Add</Button>
+              </div>
+              <div className="mb-3">
+                <FormLabel>Full Agenda PDF (optional)</FormLabel>
+                {formState.agendaPdf ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
+                    <a
+                      href={formState.agendaPdf}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-[var(--red-dark)] underline"
+                    >
+                      View uploaded PDF
+                    </a>
+                    <label className={`cursor-pointer rounded-[7px] border border-[var(--border)] bg-white px-3 py-[7px] text-[11px] font-semibold text-[var(--text)] hover:border-[var(--red-dark)] ${isUploadingAgendaPdf ? "opacity-60 pointer-events-none" : ""}`}>
+                      {isUploadingAgendaPdf ? "Uploading..." : "Replace"}
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="sr-only"
+                        disabled={isUploadingAgendaPdf}
+                        onChange={(e) => void handleAgendaPdfChange(e)}
+                      />
+                    </label>
+                    <Button type="button" tone="outline" onClick={() => updateField("agendaPdf", "")}>
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <label className={`flex h-[64px] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-[7px] border-[1.5px] border-dashed border-[var(--border)] bg-[var(--bg)] transition-colors hover:border-[var(--red-dark)] hover:bg-[var(--red-pale)] ${isUploadingAgendaPdf ? "opacity-60 pointer-events-none" : ""}`}>
+                    <span className="text-[11px] font-semibold text-[var(--muted)]">
+                      {isUploadingAgendaPdf ? "Uploading..." : "Click to upload agenda PDF"}
+                    </span>
+                    <span className="text-[10px] text-[var(--muted)]">PDF · max 10 MB</span>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="sr-only"
+                      disabled={isUploadingAgendaPdf}
+                      onChange={(e) => void handleAgendaPdfChange(e)}
+                    />
+                  </label>
+                )}
               </div>
               <div className="space-y-3">
                 {formState.agenda.map((item, index) => (
@@ -1024,6 +1366,31 @@ export default function EventsAndTrainingPage() {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title="Discard changes?"
+        open={discardConfirmOpen}
+        onClose={() => setDiscardConfirmOpen(false)}
+        closeOnOverlay={false}
+        maxWidthClassName="max-w-[420px]"
+        overlayClassName="z-[5100]"
+        footer={
+          <div className="flex flex-wrap justify-end gap-[9px]">
+            <Button tone="outline" onClick={() => setDiscardConfirmOpen(false)}>
+              Keep editing
+            </Button>
+            <Button tone="red" onClick={discardAndClose}>
+              Discard
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-[12.5px] leading-relaxed text-[var(--text)]">
+          You have unsaved changes{isEditing ? " on this event" : " on this new event"}.
+          If you discard, this form data will be cleared
+          {isEditing ? " (including any restored draft)" : " and the saved draft will be removed"}.
+        </p>
       </Modal>
     </section>
   );
