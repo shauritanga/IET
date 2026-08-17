@@ -644,6 +644,56 @@ export default function MembersPage() {
     setImportOpen(true);
   }
 
+  function downloadImportTemplate() {
+    const year = new Date().getFullYear();
+    const headers = [
+      "Reg.No.",
+      "email",
+      "firstName",
+      "middleName",
+      "lastName",
+      "phone",
+      "gender",
+      "organisation",
+      "P.O.Box",
+      "address",
+      "MEMBER_TYPE",
+      "Discipline",
+      "Year of Admission",
+      String(year - 1),
+      String(year),
+    ];
+    const example = [
+      "IET-2020-001",
+      "jane.doe@example.com",
+      "Jane",
+      "A",
+      "Doe",
+      "+255712345678",
+      "F",
+      "Acme Engineering Ltd",
+      "P.O. Box 123",
+      "Dar es Salaam",
+      "CORPORATE",
+      "CIVIL",
+      "15/01/2020",
+      "150000",
+      "150000",
+    ];
+    const escapeCsv = (value: string) => {
+      if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+      return value;
+    };
+    const csv = [headers, example].map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "iet-members-import-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleImport(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1105,10 +1155,53 @@ export default function MembersPage() {
       {/* Import members modal */}
       <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Import Members">
         <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px", marginBottom: 16, fontSize: 11.5, color: "var(--muted)", lineHeight: 1.7 }}>
-          <p style={{ fontWeight: 700, color: "var(--red-dark)", marginBottom: 4 }}>Excel or CSV Format</p>
-          <p>Use <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>Reg.No.</code> as the legacy membership number and <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>email</code> for portal access.</p>
-          <p>Year columns such as <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2012</code>, <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2024</code> are imported as paid yearly subscriptions when they contain an amount.</p>
-          <p style={{ fontSize: 10.5, marginTop: 4 }}>Accepted files: .xlsx and .csv. Save old .xls files as .xlsx before importing.</p>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+            <p style={{ fontWeight: 700, color: "var(--red-dark)", margin: 0 }}>Excel or CSV Format</p>
+            <button
+              type="button"
+              onClick={downloadImportTemplate}
+              style={{
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "var(--white)",
+                color: "var(--red-dark)",
+                border: "1.5px solid var(--border)",
+                borderRadius: 8,
+                padding: "6px 12px",
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "border-color .15s",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+            >
+              Download template
+            </button>
+          </div>
+          <p style={{ marginBottom: 6 }}>
+            <strong style={{ color: "var(--text)" }}>Required:</strong>{" "}
+            <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>email</code>
+            {" "}(portal access). Include{" "}
+            <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>Reg.No.</code>
+            {" "}when available so existing members match correctly.
+          </p>
+          <p style={{ marginBottom: 6 }}>
+            <strong style={{ color: "var(--text)" }}>Optional:</strong>{" "}
+            firstName, middleName, lastName, phone, gender, organisation, P.O.Box, address, MEMBER_TYPE, Discipline, Year of Admission.
+          </p>
+          <p>
+            Year columns such as{" "}
+            <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2012</code>
+            {", "}
+            <code style={{ background: "var(--red-pale)", color: "var(--red-dark)", borderRadius: 4, padding: "1px 5px" }}>2024</code>
+            {" "}are imported as paid yearly subscriptions when they contain an amount.
+          </p>
+          <p style={{ fontSize: 10.5, marginTop: 6 }}>
+            Download the template, replace the example row with your members, then upload .xlsx or .csv. Save old .xls files as .xlsx before importing.
+          </p>
         </div>
 
         {importError && (
