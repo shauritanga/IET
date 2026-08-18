@@ -585,7 +585,7 @@ export class AdminController {
     return {
       success: true,
       data: result,
-      message: `Import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated`,
+      message: `Import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated, ${result.welcomeEmailsQueued} welcome emails queued`,
     };
   }
 

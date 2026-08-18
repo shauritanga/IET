@@ -36,6 +36,8 @@ type ImportResult = {
   skipped: number;
   feesCreated: number;
   feesUpdated: number;
+  welcomeEmailsQueued: number;
+  welcomeEmailsFailed: number;
   errors: Array<{ row: number; membershipId?: string; email?: string; reason: string }>;
   warnings: Array<{ row: number; field: string; value: string; reason: string }>;
 };
@@ -1219,6 +1221,10 @@ export default function MembersPage() {
               <span><strong>{importResult.skipped}</strong> skipped</span>
               <span><strong>{importResult.feesCreated}</strong> fees created</span>
               <span><strong>{importResult.feesUpdated}</strong> fees updated</span>
+              <span><strong>{importResult.welcomeEmailsQueued}</strong> welcome emails queued</span>
+              {importResult.welcomeEmailsFailed > 0 && (
+                <span style={{ color: "var(--warn)" }}><strong>{importResult.welcomeEmailsFailed}</strong> welcome emails failed</span>
+              )}
               <span style={{ color: importResult.errors.length ? "var(--red)" : "inherit" }}><strong>{importResult.errors.length}</strong> errors</span>
               <span style={{ color: importResult.warnings.length ? "var(--warn)" : "inherit" }}><strong>{importResult.warnings.length}</strong> warnings</span>
             </div>

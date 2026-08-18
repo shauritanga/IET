@@ -82,6 +82,8 @@ type LegacyMemberImportResult = {
   skipped: number;
   feesCreated: number;
   feesUpdated: number;
+  welcomeEmailsQueued: number;
+  welcomeEmailsFailed: number;
   errors: Array<{
     row: number;
     membershipId?: string;
@@ -2328,6 +2330,8 @@ export class AdminService {
       skipped: 0,
       feesCreated: 0,
       feesUpdated: 0,
+      welcomeEmailsQueued: 0,
+      welcomeEmailsFailed: 0,
       errors: [],
       warnings: [],
     };
@@ -2428,7 +2432,7 @@ export class AdminService {
           await this.userRepository.save(user);
           result.updated++;
         } else {
-          const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
+          const tempPassword = this.generateTemporaryPassword();
           const hashed = await bcrypt.hash(tempPassword, 10);
           user = this.userRepository.create({
             email,
@@ -2451,8 +2455,30 @@ export class AdminService {
             emailVerified: true,
             isActive: true,
           });
-          await this.userRepository.save(user);
+          user = await this.userRepository.save(user);
           result.created++;
+
+          const welcomeEmailResult = await this.messagingQueue
+            .enqueuePortalWelcomeEmail({
+              email: user.email,
+              firstName: user.firstName ?? 'there',
+              role: user.role,
+              temporaryPassword: tempPassword,
+              portal: AuthPortal.MEMBER_PORTAL,
+            })
+            .catch((error: any) => ({ success: false, error: error.message }));
+
+          if (welcomeEmailResult.success) {
+            result.welcomeEmailsQueued++;
+          } else {
+            result.welcomeEmailsFailed++;
+            result.warnings.push({
+              row: row.rowNumber,
+              field: 'email',
+              value: user.email,
+              reason: `Welcome email failed to queue: ${welcomeEmailResult.error ?? 'unknown error'}`,
+            });
+          }
         }
 
         for (const paidFee of paidFees) {
@@ -2493,7 +2519,7 @@ export class AdminService {
     }
 
     this.logger.log(
-      `Member import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated, ${result.errors.length} errors`,
+      `Member import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated, ${result.welcomeEmailsQueued} welcome emails queued, ${result.welcomeEmailsFailed} welcome emails failed, ${result.errors.length} errors`,
     );
     return result;
   }
