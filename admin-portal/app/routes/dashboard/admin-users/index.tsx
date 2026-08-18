@@ -840,9 +840,12 @@ export default function AdminUsersPage() {
                   setForm((prev) => ({
                     ...prev,
                     role,
-                    ...(prev.useRoleDefaults
-                      ? { permissions: defaultsForRole(role) }
-                      : {}),
+                    // Permissions are role-scoped: always reset to the new
+                    // role's defaults on change so a permission matrix
+                    // customized under the old role (e.g. full access)
+                    // never carries over silently under the new role.
+                    permissions: defaultsForRole(role),
+                    useRoleDefaults: true,
                   }));
                 }}
                 className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
