@@ -473,8 +473,14 @@ export default function AdminUsersPage() {
 
   async function saveUser(event: React.FormEvent) {
     event.preventDefault();
-    setSaving(true);
     setFormError(null);
+
+    if (!form.phoneNumber.trim()) {
+      setFormError("Phone number is required.");
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const disciplineIds = isPanelRole(form.role) ? form.disciplineIds : [];
@@ -490,7 +496,7 @@ export default function AdminUsersPage() {
         await http.patch(`/admin/users/${editing.id}`, {
           firstName: form.firstName,
           lastName: form.lastName,
-          phoneNumber: form.phoneNumber || undefined,
+          phoneNumber: form.phoneNumber.trim(),
           role: form.role,
           isActive: form.isActive,
           disciplineIds,
@@ -501,7 +507,7 @@ export default function AdminUsersPage() {
           email: form.email,
           firstName: form.firstName,
           lastName: form.lastName,
-          phoneNumber: form.phoneNumber || undefined,
+          phoneNumber: form.phoneNumber.trim(),
           role: form.role,
           isActive: form.isActive,
           password: form.password || undefined,
@@ -815,7 +821,7 @@ export default function AdminUsersPage() {
             <TextField label="First Name" value={form.firstName} onChange={(value) => setForm((prev) => ({ ...prev, firstName: value }))} required />
             <TextField label="Last Name" value={form.lastName} onChange={(value) => setForm((prev) => ({ ...prev, lastName: value }))} required />
           </div>
-          <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} />
+          <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} required />
           {!editing && (
             <div>
               <TextField label="Initial Password" value={form.password} onChange={(value) => setForm((prev) => ({ ...prev, password: value }))} type="password" />
