@@ -9,9 +9,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, LessThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as speakeasy from 'speakeasy';
 import { randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
 import { UserEntity } from '../../user/entities/user.entity';
+import { EncryptionService } from '../../../common/services/encryption.service';
 import {
   RegistrationEntity,
   ApplicationStageHistoryEntity,
@@ -182,7 +184,22 @@ export class AdminService {
     private paymentsService: PaymentsService,
     private messagingQueue: MessagingQueueService,
     private permissionsService: PermissionsService,
+    private encryptionService: EncryptionService,
   ) {}
+
+  /**
+   * Admin/Super Admin accounts must always log in with 2FA (enforced in
+   * AuthService.login). Generate and store the secret up front so a newly
+   * created or promoted admin can log in immediately, instead of relying on
+   * SeedService's bootstrap sweep to backfill it on the next server restart.
+   */
+  private generateTwoFactorSecret(email: string): string {
+    const secret = speakeasy.generateSecret({
+      name: `IET Admin Portal (${email})`,
+      issuer: 'Institution of Engineers Tanzania',
+    });
+    return this.encryptionService.encrypt(secret.base32);
+  }
 
   private hasThreeConsecutiveUnpaidFeeYears(
     fees: Array<{ year: number; status: FeeStatus }>,
@@ -570,6 +587,15 @@ export class AdminService {
       throw new BadRequestException('User with this email already exists');
     }
 
+    const requiresTwoFactor = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
+      dto.role,
+    );
+    if (requiresTwoFactor && !dto.phoneNumber) {
+      throw new BadRequestException(
+        'A phone number is required for Admin/Super Admin accounts because two-factor authentication is mandatory for these roles.',
+      );
+    }
+
     // When no password is supplied, generate a temporary one.
     // Always email the new user that their portal account exists.
     const plainPassword = dto.password || this.generateTemporaryPassword();
@@ -583,7 +609,10 @@ export class AdminService {
       role: dto.role,
       isActive: dto.isActive ?? true,
       emailVerified: true,
-      enable2FA: false,
+      enable2FA: requiresTwoFactor,
+      twoFASecret: requiresTwoFactor
+        ? this.generateTwoFactorSecret(dto.email)
+        : undefined,
       membershipStatus: MembershipStatus.PENDING,
       failedLoginAttempts: 0,
       emailPreferences: {},
@@ -731,6 +760,19 @@ export class AdminService {
         dto.permissions as ResourcePermissions | undefined,
         dto.useRoleDefaults,
       );
+    }
+
+    const requiresTwoFactor = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
+      user.role,
+    );
+    if (requiresTwoFactor && !(user.enable2FA && user.twoFASecret)) {
+      if (!user.phoneNumber) {
+        throw new BadRequestException(
+          'A phone number is required before promoting this account to Admin/Super Admin, because two-factor authentication is mandatory for these roles.',
+        );
+      }
+      user.enable2FA = true;
+      user.twoFASecret = this.generateTwoFactorSecret(user.email);
     }
 
     const saved = await this.userRepository.save(user);
