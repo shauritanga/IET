@@ -5,7 +5,8 @@ export type AdminRole =
   | "EVALUATOR"
   | "MPDC"
   | "COUNCIL"
-  | "REVIEWER";
+  | "REVIEWER"
+  | "ACCOUNTANT";
 
 export type ApiEnvelope<T> = {
   success?: boolean;

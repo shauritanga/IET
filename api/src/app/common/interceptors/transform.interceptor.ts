@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -28,6 +29,13 @@ export class TransformInterceptor<T> implements NestInterceptor<
 
     return next.handle().pipe(
       map((data) => {
+        // Binary/file responses (e.g. PDF downloads) must pass through
+        // untouched — wrapping them in the JSON envelope below would
+        // serialize the internal stream object instead of the file bytes.
+        if (data instanceof StreamableFile) {
+          return data as unknown as ApiResponse<T>;
+        }
+
         // If response is already in our format (has 'data' key from controller), use it
         // Otherwise wrap the entire response
 

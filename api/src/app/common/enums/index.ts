@@ -30,6 +30,7 @@ export enum UserRole {
   EVALUATOR = 'EVALUATOR',
   MPDC = 'MPDC',
   COUNCIL = 'COUNCIL',
+  ACCOUNTANT = 'ACCOUNTANT',
 }
 
 export enum AuthPortal {

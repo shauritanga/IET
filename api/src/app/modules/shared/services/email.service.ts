@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 import { AuthPortal } from '../../../common/enums';
 
 export interface EmailOptions {
@@ -28,10 +29,11 @@ export interface EmailResult {
 }
 
 /**
- * Email Service - Nodemailer SMTP with Mock Fallback
+ * Email Service - Resend (primary), Nodemailer SMTP (legacy fallback), Mock (last resort)
  *
- * When SMTP_HOST is configured, emails are sent via SMTP (Nodemailer).
- * When SMTP_HOST is not set, a mock implementation logs emails to console.
+ * When RESEND_API_KEY is configured, emails are sent via the Resend API.
+ * Otherwise, when SMTP_HOST is configured, emails are sent via SMTP (Nodemailer).
+ * When neither is set, a mock implementation logs emails to console.
  */
 @Injectable()
 export class EmailService implements OnModuleInit {
@@ -39,16 +41,22 @@ export class EmailService implements OnModuleInit {
   private readonly isDevelopment: boolean;
   private readonly fromEmail: string;
   private readonly fromName: string;
+  private readonly resendEnabled: boolean;
   private readonly smtpEnabled: boolean;
+  private resend: Resend;
   private transporter: Transporter;
 
   constructor(private configService: ConfigService) {
     this.isDevelopment = configService.get('NODE_ENV') !== 'production';
     this.fromEmail = configService.get('EMAIL_FROM', 'noreply@iet.or.tz');
     this.fromName = configService.get('EMAIL_FROM_NAME', 'IET Tanzania');
-    this.smtpEnabled = !!configService.get('SMTP_HOST');
+    this.resendEnabled = !!configService.get('RESEND_API_KEY');
+    this.smtpEnabled = !this.resendEnabled && !!configService.get('SMTP_HOST');
 
-    if (this.smtpEnabled) {
+    if (this.resendEnabled) {
+      this.resend = new Resend(configService.get('RESEND_API_KEY'));
+      this.logger.log('Resend email provider configured');
+    } else if (this.smtpEnabled) {
       const rejectUnauthorized =
         configService.get('SMTP_TLS_REJECT_UNAUTHORIZED') !== 'false';
       this.transporter = nodemailer.createTransport({
@@ -70,7 +78,7 @@ export class EmailService implements OnModuleInit {
         `SMTP transport configured: ${configService.get('SMTP_HOST')}:${configService.get('SMTP_PORT', 465)}`,
       );
     } else {
-      this.logger.log('SMTP not configured - using mock email service');
+      this.logger.log('No email provider configured - using mock email service');
     }
   }
 
@@ -96,9 +104,12 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
-   * Send an email (via SMTP if configured, otherwise mock)
+   * Send an email (via Resend if configured, else SMTP, else mock)
    */
   async send(options: EmailOptions): Promise<EmailResult> {
+    if (this.resendEnabled) {
+      return this.sendViaResend(options);
+    }
     if (this.smtpEnabled) {
       return this.sendViaSmtp(options);
     }
@@ -528,6 +539,39 @@ export class EmailService implements OnModuleInit {
     ].join('\n');
 
     return { html, text };
+  }
+
+  // ============================================
+  // RESEND IMPLEMENTATION
+  // ============================================
+
+  private async sendViaResend(options: EmailOptions): Promise<EmailResult> {
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: `${this.fromName} <${this.fromEmail}>`,
+        to: Array.isArray(options.to) ? options.to : [options.to],
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        replyTo: options.replyTo,
+        attachments: options.attachments?.map((attachment) => ({
+          filename: attachment.filename,
+          content: attachment.content,
+          path: attachment.path,
+        })),
+      });
+
+      if (error) {
+        this.logger.error(`Resend send error: ${error.message}`);
+        return { success: false, error: error.message, provider: 'resend' };
+      }
+
+      this.logger.log(`Email sent via Resend: ${data?.id} to ${options.to}`);
+      return { success: true, messageId: data?.id, provider: 'resend' };
+    } catch (error: any) {
+      this.logger.error(`Resend send error: ${error.message}`);
+      return { success: false, error: error.message, provider: 'resend' };
+    }
   }
 
   // ============================================

@@ -29,6 +29,7 @@ import {
   RegistrationCategory,
   RegistrationStep,
   EventRegistrationStatus,
+  UserRole,
 } from '../../../common/enums';
 import { PaymentGatewayService } from '../../shared/services/payment-gateway.service';
 import { MessagingQueueService } from '../../queues/messaging-queue.service';
@@ -961,37 +962,123 @@ export class PaymentsService {
   private async sendPaymentNotifications(
     payment: PaymentEntity,
   ): Promise<void> {
+    let payer: { name: string; email?: string; phoneNumber?: string } | null =
+      null;
+
     try {
-      const user = await this.userRepository.findOneBy({ id: payment.userId });
-      if (!user) return;
+      const user = payment.userId
+        ? await this.userRepository.findOneBy({ id: payment.userId })
+        : null;
 
-      // Send SMS confirmation
-      if (user.phoneNumber) {
-        await this.messagingQueue.enqueuePaymentConfirmationSms(
-          user.phoneNumber,
-          payment.amount,
-          payment.currency,
-          payment.receiptNumber,
+      if (user) {
+        payer = {
+          name: user.firstName || 'Member',
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+        };
+
+        // Send SMS confirmation
+        if (user.phoneNumber) {
+          await this.messagingQueue.enqueuePaymentConfirmationSms(
+            user.phoneNumber,
+            payment.amount,
+            payment.currency,
+            payment.receiptNumber,
+          );
+        }
+
+        // Send email receipt
+        await this.messagingQueue.enqueuePaymentReceipt(
+          user.email,
+          user.firstName || 'Member',
+          {
+            receiptNumber: payment.receiptNumber,
+            amount: payment.amount,
+            currency: payment.currency,
+            description: payment.description,
+            date: payment.completedAt,
+          },
         );
+
+        this.logger.log(`Payment notifications queued for payment ${payment.id}`);
+      } else if (payment.referenceType === 'guest_registration' && payment.referenceId) {
+        // Guest (non-portal) payer — no user row, so pull contact details
+        // from the guest registration this payment is for.
+        const guestReg = await this.guestRegistrationRepository.findOneBy({
+          id: payment.referenceId,
+        });
+        if (guestReg) {
+          payer = {
+            name: `${guestReg.firstName} ${guestReg.lastName}`.trim(),
+            email: guestReg.email,
+            phoneNumber: guestReg.phoneNumber,
+          };
+        }
       }
-
-      // Send email receipt
-      await this.messagingQueue.enqueuePaymentReceipt(
-        user.email,
-        user.firstName || 'Member',
-        {
-          receiptNumber: payment.receiptNumber,
-          amount: payment.amount,
-          currency: payment.currency,
-          description: payment.description,
-          date: payment.completedAt,
-        },
-      );
-
-      this.logger.log(`Payment notifications queued for payment ${payment.id}`);
     } catch (error) {
       this.logger.error(
         `Failed to send payment notifications: ${error.message}`,
+      );
+      // Don't throw - notifications are non-critical
+    }
+
+    await this.notifyAccountants(payment, payer);
+  }
+
+  /**
+   * Notify every ACCOUNTANT-role user by email and SMS whenever a payment
+   * completes, regardless of payment type or whether the payer is a portal
+   * user or a guest. Best-effort — never blocks payment fulfillment.
+   */
+  private async notifyAccountants(
+    payment: PaymentEntity,
+    payer: { name: string; email?: string; phoneNumber?: string } | null,
+  ): Promise<void> {
+    try {
+      const accountants = await this.userRepository.find({
+        where: { role: UserRole.ACCOUNTANT, isActive: true },
+      });
+      if (accountants.length === 0) return;
+
+      const amountLabel = `${payment.currency} ${Number(payment.amount).toLocaleString()}`;
+      const payerLabel = payer
+        ? `${payer.name}${payer.email ? ` (${payer.email})` : ''}`
+        : 'Unknown payer';
+      const subject = `Payment received: ${amountLabel} — ${payment.paymentType}`;
+      const smsMessage = `IET Payment received: ${amountLabel} from ${payerLabel} (${payment.paymentType}). Receipt: ${payment.receiptNumber || 'N/A'}`;
+      const html = `
+        <p>A payment has been completed on the IET platform.</p>
+        <ul>
+          <li><strong>Amount:</strong> ${amountLabel}</li>
+          <li><strong>Type:</strong> ${payment.paymentType}</li>
+          <li><strong>Payer:</strong> ${payerLabel}</li>
+          <li><strong>Method:</strong> ${payment.paymentMethod || 'N/A'}</li>
+          <li><strong>Receipt Number:</strong> ${payment.receiptNumber || 'N/A'}</li>
+          <li><strong>Description:</strong> ${payment.description || 'N/A'}</li>
+          <li><strong>Date:</strong> ${payment.completedAt ? new Date(payment.completedAt).toLocaleString() : 'N/A'}</li>
+        </ul>
+      `;
+
+      for (const accountant of accountants) {
+        if (accountant.phoneNumber) {
+          await this.messagingQueue.enqueueSms({
+            to: accountant.phoneNumber,
+            message: smsMessage,
+          });
+        }
+        await this.messagingQueue.enqueueEmail({
+          to: accountant.email,
+          subject,
+          html,
+        });
+      }
+
+      this.logger.log(
+        `Accountant payment notifications queued for payment ${payment.id} (${accountants.length} recipient(s))`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to notify accountants for payment ${payment.id}: ${error.message}`,
       );
       // Don't throw - notifications are non-critical
     }

@@ -111,6 +111,7 @@ const PORTAL_ROLES = [
   UserRole.MPDC,
   UserRole.COUNCIL,
   UserRole.REVIEWER,
+  UserRole.ACCOUNTANT,
 ] as const;
 
 // Roles for which discipline tagging is meaningful (review-panel members).
@@ -133,6 +134,7 @@ const ADMIN_MANAGEABLE_ROLES = [
   UserRole.MPDC,
   UserRole.COUNCIL,
   UserRole.REVIEWER,
+  UserRole.ACCOUNTANT,
 ] as const;
 
 const isAdminManageableRole = (role: UserRole): boolean =>
