@@ -117,4 +117,32 @@ http.interceptors.response.use(
   },
 );
 
+export interface ApiErrorPayload {
+  message?: string;
+  errors?:
+    | Array<{ property?: string; message?: string; constraints?: string[] } | string>
+    | null;
+}
+
+/**
+ * Extract a human-readable message from an API error response. The backend's
+ * ValidationPipe always sets `message` to the generic "Validation failed" for
+ * DTO errors and puts the actual per-field problems in `errors` — so callers
+ * must read `errors` first or the user only ever sees "Validation failed"
+ * with no indication of which field or why.
+ */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  const data = (error as { response?: { data?: ApiErrorPayload } })?.response?.data;
+  if (!data) return fallback;
+
+  if (Array.isArray(data.errors) && data.errors.length > 0) {
+    const parts = data.errors
+      .map((e) => (typeof e === "string" ? e : e?.message))
+      .filter((m): m is string => Boolean(m));
+    if (parts.length > 0) return parts.join("; ");
+  }
+
+  return data.message ?? fallback;
+}
+
 export default http;

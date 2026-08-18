@@ -33,6 +33,7 @@ export function isAdminRole(role: string | null | undefined): role is AdminRole 
     "MPDC",
     "COUNCIL",
     "REVIEWER",
+    "ACCOUNTANT",
   ].includes(role ?? "");
 }
 

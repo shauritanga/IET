@@ -740,7 +740,7 @@ export class GuestService {
     // Send SMS
     await this.messagingQueue.enqueueSms({
       to: registration.phoneNumber,
-      message: `IET Event Registration: ${event.title} on ${event.startDate.toLocaleDateString()}. Ticket: ${registration.ticketNumber}. Control No: ${registration.controlNumber}`,
+      message: `IET Event Registration: ${event.title} on ${new Date(event.startDate).toLocaleDateString()}. Ticket: ${registration.ticketNumber}. Control No: ${registration.controlNumber}`,
     });
 
     // Send Email

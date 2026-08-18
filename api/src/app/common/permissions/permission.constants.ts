@@ -103,6 +103,12 @@ export const ROLE_PERMISSION_DEFAULTS: Record<UserRole, PermissionMatrix> = {
     [PermissionResource.MEMBERS]: READ,
     [PermissionResource.REPORTS]: READ,
   },
+  [UserRole.ACCOUNTANT]: {
+    ...emptyMatrix(),
+    [PermissionResource.DASHBOARD]: READ,
+    [PermissionResource.PAYMENTS]: READ_UPDATE,
+    [PermissionResource.REPORTS]: READ,
+  },
 };
 
 export const PERMISSION_RESOURCE_META: Array<{

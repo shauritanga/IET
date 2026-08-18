@@ -1,10 +1,9 @@
-import type { AxiosError } from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Mail, MoreVertical, PencilLine, Trash2 } from "lucide-react";
 import { Button, Modal, PageHeader, StatusBadge } from "~/components/prototype-ui";
 import { PermissionMatrixEditor } from "~/components/permission-matrix-editor";
 import { usePermissions } from "~/providers/permissions";
-import http from "~/utils/http";
+import http, { getApiErrorMessage } from "~/utils/http";
 import {
   cloneMatrix,
   emptyMatrix,
@@ -65,8 +64,36 @@ const ROLE_OPTIONS: AdminRole[] = [
   "EVALUATOR",
   "MPDC",
   "COUNCIL",
+  "ACCOUNTANT",
   "SUPER_ADMIN",
 ];
+
+const PAGE_SIZE = 10;
+
+function buildPaginationItems(current: number, total: number): Array<number | "..."> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+
+  const items: Array<number | "..."> = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  if (start > 2) {
+    items.push("...");
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    items.push(page);
+  }
+
+  if (end < total - 1) {
+    items.push("...");
+  }
+
+  items.push(total);
+  return items;
+}
 
 const PANEL_ROLES: AdminRole[] = ["EVALUATOR", "MPDC", "COUNCIL"];
 
@@ -224,6 +251,10 @@ export default function AdminUsersPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [viewingUser, setViewingUser] = useState<AdminUser | null>(null);
@@ -255,16 +286,16 @@ export default function AdminUsersPage() {
 
     setLoading(true);
     setPageError(null);
-    const params = new URLSearchParams({ page: "1", limit: "100" });
+    const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (search) params.set("search", search);
     if (roleFilter) params.set("role", roleFilter);
 
     try {
       const { data } = await http.get<ApiEnvelope<AdminUser[]>>(`/admin/users?${params}`);
       setUsers(data.data ?? []);
+      setTotal(data.meta?.total ?? 0);
     } catch (error) {
-      const apiError = error as AxiosError<{ message?: string }>;
-      setPageError(apiError.response?.data?.message ?? "Failed to load admin users.");
+      setPageError(getApiErrorMessage(error, "Failed to load admin users."));
     } finally {
       setLoading(false);
     }
@@ -274,7 +305,18 @@ export default function AdminUsersPage() {
     const timer = setTimeout(() => void loadUsers(), search ? 300 : 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, roleFilter, canManage]);
+  }, [search, roleFilter, page, canManage]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, roleFilter]);
 
   useEffect(() => {
     if (!canManage) return;
@@ -408,8 +450,7 @@ export default function AdminUsersPage() {
       setDeletingUser(null);
       await loadUsers();
     } catch (error) {
-      const apiError = error as AxiosError<{ message?: string }>;
-      setFormError(apiError.response?.data?.message ?? "Failed to delete admin user.");
+      setFormError(getApiErrorMessage(error, "Failed to delete admin user."));
     } finally {
       setSaving(false);
     }
@@ -425,9 +466,8 @@ export default function AdminUsersPage() {
       setPageError(null);
       setSuccessMessage(`Welcome email sent to ${user.email} with a new temporary password.`);
     } catch (error) {
-      const apiError = error as AxiosError<{ message?: string }>;
       setSuccessMessage(null);
-      setPageError(apiError.response?.data?.message ?? "Failed to resend welcome email.");
+      setPageError(getApiErrorMessage(error, "Failed to resend welcome email."));
     }
   }
 
@@ -472,8 +512,7 @@ export default function AdminUsersPage() {
       setModalOpen(false);
       await loadUsers();
     } catch (error) {
-      const apiError = error as AxiosError<{ message?: string }>;
-      setFormError(apiError.response?.data?.message ?? "Failed to save admin user.");
+      setFormError(getApiErrorMessage(error, "Failed to save admin user."));
     } finally {
       setSaving(false);
     }
@@ -700,6 +739,55 @@ export default function AdminUsersPage() {
               </div>
             )}
           </div>
+
+          {!loading && total > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-[12px] border border-[var(--border)] bg-white px-4 py-2.5">
+              <span className="text-[11px] text-[var(--muted)]">
+                Showing <strong>{(safePage - 1) * PAGE_SIZE + 1}</strong>-<strong>{Math.min(total, safePage * PAGE_SIZE)}</strong> of <strong>{total}</strong> users
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={safePage === 1}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] text-[13px] font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                {buildPaginationItems(safePage, totalPages).map((item, index) =>
+                  item === "..." ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="flex h-[30px] w-[22px] items-center justify-center text-[13px] font-bold text-[var(--muted)]"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item)}
+                      className={`flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] text-[11.5px] font-bold transition-colors duration-150 ${
+                        safePage === item
+                          ? "border-[var(--red)] bg-[var(--red)] text-white"
+                          : "border-[var(--border)] bg-[var(--white)] text-[var(--text)]"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={safePage === totalPages}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] text-[13px] font-bold text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
