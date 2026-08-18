@@ -524,6 +524,32 @@ export class AdminService {
     return undefined;
   }
 
+  /**
+   * Best-effort membership class -> category match, by exact (case-insensitive)
+   * category name. Deliberately exact rather than substring: several seeded
+   * categories share a class via a name prefix (e.g. "Affiliate Graduate" vs
+   * "Graduate" both resolve to GRADUATE via resolveMembershipClassFromCategoryName),
+   * so a loose match risks silently linking a member to the wrong category.
+   */
+  private resolveMembershipCategoryForClass(
+    membershipClass: MembershipClass,
+    categories: MembershipCategoryEntity[],
+  ): string | undefined {
+    const candidateNames: Record<MembershipClass, string[]> = {
+      [MembershipClass.GRADUATE]: ['graduate'],
+      [MembershipClass.ASSOCIATE]: ['associate member', 'associate'],
+      [MembershipClass.MEMBER]: ['member'],
+      [MembershipClass.CORPORATE]: ['corporate member', 'corporate'],
+      [MembershipClass.SENIOR]: ['senior member', 'senior'],
+      [MembershipClass.FELLOW]: ['fellow'],
+      [MembershipClass.HONORARY]: ['honorary fellow', 'honorary'],
+    };
+    const wanted = candidateNames[membershipClass] ?? [];
+    return categories.find((category) =>
+      wanted.includes(category.name.trim().toLowerCase()),
+    )?.id;
+  }
+
   async listAdminUsers(
     actor: UserEntity,
     query: AdminUserQueryDto,
@@ -2368,6 +2394,9 @@ export class AdminService {
 
   async importMembers(file: Express.Multer.File): Promise<LegacyMemberImportResult> {
     const rows = await this.parseMemberImportRows(file);
+    const activeCategories = await this.membershipCategoryRepository.find({
+      where: { isActive: true },
+    });
     const result: LegacyMemberImportResult = {
       created: 0,
       updated: 0,
@@ -2448,6 +2477,21 @@ export class AdminService {
           membershipExpiryDate && membershipExpiryDate >= new Date()
             ? MembershipStatus.ACTIVE
             : MembershipStatus.EXPIRED;
+        const membershipCategoryId = membershipClass
+          ? this.resolveMembershipCategoryForClass(
+              membershipClass,
+              activeCategories,
+            )
+          : undefined;
+        if (membershipClass && !membershipCategoryId) {
+          result.warnings.push({
+            row: row.rowNumber,
+            field: 'MEMBERSHIP_CATEGORY',
+            value: membershipClass,
+            reason:
+              'No active membership category matches this class; member was not linked to a category and cannot request an upgrade until one is assigned.',
+          });
+        }
 
         if (user) {
           user = this.userRepository.merge(user, {
@@ -2463,6 +2507,8 @@ export class AdminService {
               this.cleanImportValue(values.organisation) || user.employer,
             location: location || user.location,
             membershipClass: membershipClass ?? user.membershipClass,
+            membershipCategoryId:
+              membershipCategoryId ?? user.membershipCategoryId,
             engineeringDiscipline:
               engineeringDiscipline ?? user.engineeringDiscipline,
             joiningDate: joiningDate ?? user.joiningDate,
@@ -2490,6 +2536,7 @@ export class AdminService {
             employer: this.cleanImportValue(values.organisation),
             location: location || undefined,
             membershipClass,
+            membershipCategoryId,
             engineeringDiscipline,
             joiningDate,
             membershipStatus,
