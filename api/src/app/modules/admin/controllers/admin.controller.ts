@@ -514,6 +514,26 @@ export class AdminController {
     };
   }
 
+  @Get('applications/:applicationId/assignable-assignees')
+  @ApiOperation({
+    summary:
+      'List people Secretariat may assign for the next review stage of an application',
+  })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  async listAssignableAssignees(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    const result = await this.adminService.listAssignableAssignees(
+      applicationId,
+      admin,
+    );
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
   @Patch('applications/:applicationId/stage')
   @ApiOperation({ summary: 'Update application workflow stage' })
   @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })

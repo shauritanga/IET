@@ -781,6 +781,102 @@ export class AdminService {
     );
   }
 
+  /**
+   * People Secretariat may assign for the next review stage of an application.
+   * Evaluators are filtered to those tagged for the applicant's discipline.
+   */
+  async listAssignableAssignees(
+    applicationId: string,
+    actor: UserEntity,
+  ): Promise<{
+    role: UserRole;
+    discipline?: string | null;
+    items: Array<{
+      id: string;
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      fullName: string;
+      role: UserRole;
+      disciplines: { id: string; name: string }[];
+    }>;
+  }> {
+    if (
+      !this.isFullWorkflowAdmin(actor.role) &&
+      actor.role !== UserRole.SECRETARIAT
+    ) {
+      throw new ForbiddenException(
+        'Only Secretariat can list assignable reviewers',
+      );
+    }
+
+    const registration = await this.registrationRepository.findOne({
+      where: { id: applicationId },
+    });
+    if (!registration) {
+      throw new NotFoundException('Application not found');
+    }
+
+    const stage = registration.reviewStage;
+    let role: UserRole;
+    let users: UserEntity[];
+
+    if (stage === ApplicationReviewStage.SECRETARIAT_REVIEW) {
+      role = UserRole.EVALUATOR;
+      const discipline = registration.engineeringDiscipline;
+      if (!discipline) {
+        return { role, discipline: null, items: [] };
+      }
+      const matchingIds = await this.getMatchingEvaluatorUserIds(discipline);
+      if (!matchingIds.length) {
+        return { role, discipline, items: [] };
+      }
+      users = await this.userRepository.find({
+        where: {
+          id: In(matchingIds),
+          isActive: true,
+          role: In([UserRole.EVALUATOR, UserRole.REVIEWER]),
+        },
+        order: { firstName: 'ASC', email: 'ASC' },
+      });
+      const disciplinesByUser = await this.getUserDisciplinesMap(
+        users.map((u) => u.id),
+      );
+      return {
+        role,
+        discipline,
+        items: users.map((user) =>
+          this.toAdminUserSummary(user, disciplinesByUser.get(user.id) ?? []),
+        ),
+      };
+    }
+
+    if (stage === ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION) {
+      role = UserRole.MPDC;
+    } else if (stage === ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION) {
+      role = UserRole.COUNCIL;
+    } else {
+      throw new BadRequestException(
+        'Assignable reviewers are only available when Secretariat is advancing the application',
+      );
+    }
+
+    users = await this.userRepository.find({
+      where: { role, isActive: true },
+      order: { firstName: 'ASC', email: 'ASC' },
+    });
+    const disciplinesByUser = await this.getUserDisciplinesMap(
+      users.map((u) => u.id),
+    );
+    return {
+      role,
+      discipline: registration.engineeringDiscipline,
+      items: users.map((user) =>
+        this.toAdminUserSummary(user, disciplinesByUser.get(user.id) ?? []),
+      ),
+    };
+  }
+
   async updateAdminUser(
     actor: UserEntity,
     userId: string,
@@ -1488,23 +1584,24 @@ export class AdminService {
       | 'REJECTED'
       | 'NOTICE_SENT' = 'ADVANCED';
 
+    // Person assigned by Secretariat for the destination review stage (evaluator / MPDC / Council).
+    let assignedReviewerId: string | undefined;
+
     switch (dto.action) {
-      case 'ADVANCE_TO_EVALUATOR':
-        // Advance to the evaluator stage without picking an evaluator; every
-        // discipline-matched evaluator is emailed and one claims it.
-        newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
-        historyAction = 'ADVANCED';
-        break;
       case 'ASSIGN_EVALUATOR':
         if (!dto.evaluatorId) {
           throw new BadRequestException(
             'Evaluator ID is required when assigning an evaluator',
           );
         }
-        await this.assertAssignableEvaluator(dto.evaluatorId);
+        await this.assertAssignableEvaluator(
+          dto.evaluatorId,
+          registration.engineeringDiscipline,
+        );
         newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
         registration.assignedEvaluatorId = dto.evaluatorId;
         registration.assignedAt = now;
+        assignedReviewerId = dto.evaluatorId;
         historyAction = 'ASSIGNED';
         break;
       case 'EVALUATOR_RECOMMEND':
@@ -1512,16 +1609,30 @@ export class AdminService {
         historyAction = 'EVALUATOR_RECOMMENDED';
         break;
       case 'SECRETARIAT_ADVANCE_TO_MPDC':
+        if (!dto.assigneeId) {
+          throw new BadRequestException(
+            'Assignee ID is required when advancing to MPDC review',
+          );
+        }
+        await this.assertAssignableReviewer(dto.assigneeId, UserRole.MPDC);
         newStage = ApplicationReviewStage.MPDC_REVIEW;
-        historyAction = 'ADVANCED';
+        assignedReviewerId = dto.assigneeId;
+        historyAction = 'ASSIGNED';
         break;
       case 'MPDC_RECOMMEND':
         newStage = ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION;
         historyAction = 'MPDC_RECOMMENDED';
         break;
       case 'SECRETARIAT_ADVANCE_TO_COUNCIL':
+        if (!dto.assigneeId) {
+          throw new BadRequestException(
+            'Assignee ID is required when advancing to Council review',
+          );
+        }
+        await this.assertAssignableReviewer(dto.assigneeId, UserRole.COUNCIL);
         newStage = ApplicationReviewStage.COUNCIL_REVIEW;
-        historyAction = 'ADVANCED';
+        assignedReviewerId = dto.assigneeId;
+        historyAction = 'ASSIGNED';
         break;
       case 'COUNCIL_RECOMMEND':
         newStage = ApplicationReviewStage.SECRETARIAT_COUNCIL_RECOMMENDATION;
@@ -1580,10 +1691,10 @@ export class AdminService {
       }
     }
 
-    // A directly-assigned evaluator is treated as having already claimed the
-    // evaluator stage (re-applied after the clear above).
-    if (dto.action === 'ASSIGN_EVALUATOR') {
-      registration.stageClaimedById = dto.evaluatorId;
+    // Secretariat assignment locks the destination stage to that person only
+    // (auto-claim). Only they receive notifications and may recommend.
+    if (assignedReviewerId) {
+      registration.stageClaimedById = assignedReviewerId;
       registration.stageClaimedAt = now;
     }
 
@@ -1603,7 +1714,8 @@ export class AdminService {
       action: historyAction,
       actedByUserId: actor.id,
       comments,
-      assignedEvaluatorId: dto.action === 'ASSIGN_EVALUATOR' ? dto.evaluatorId : undefined,
+      assignedEvaluatorId:
+        dto.action === 'ASSIGN_EVALUATOR' ? dto.evaluatorId : undefined,
     });
 
     this.logger.log(
@@ -1880,10 +1992,9 @@ export class AdminService {
   ): Promise<void> {
     if (this.isFullWorkflowAdmin(actor.role)) return;
 
-    // A review-panel member sees an application at their stage only while it is
-    // unclaimed or claimed by them (the claim locks out peers).
-    const unclaimedOrMine =
-      '(reg.stageClaimedById IS NULL OR reg.stageClaimedById = :actorId)';
+    // A review-panel member sees an application at their stage only when it has
+    // been assigned to them by Secretariat (claim lock = assignee).
+    const assignedToMe = 'reg.stageClaimedById = :actorId';
 
     switch (actor.role) {
       case UserRole.SECRETARIAT:
@@ -1893,20 +2004,14 @@ export class AdminService {
         break;
       case UserRole.EVALUATOR:
       case UserRole.REVIEWER: {
-        const disciplineNames =
-          await this.getEvaluatorApplicationDisciplineNames(actor.id);
-        if (!disciplineNames.length) {
-          queryBuilder.andWhere('1 = 0');
-          break;
-        }
         queryBuilder
           .andWhere('reg.reviewStage = :actorStage', {
             actorStage: ApplicationReviewStage.EVALUATOR_REVIEW,
           })
-          .andWhere(unclaimedOrMine, { actorId: actor.id })
-          .andWhere('reg.engineeringDiscipline IN (:...disciplineNames)', {
-            disciplineNames,
-          });
+          .andWhere(
+            '(reg.assignedEvaluatorId = :actorId OR reg.stageClaimedById = :actorId)',
+            { actorId: actor.id },
+          );
         break;
       }
       case UserRole.MPDC:
@@ -1914,14 +2019,14 @@ export class AdminService {
           .andWhere('reg.reviewStage = :actorStage', {
             actorStage: ApplicationReviewStage.MPDC_REVIEW,
           })
-          .andWhere(unclaimedOrMine, { actorId: actor.id });
+          .andWhere(assignedToMe, { actorId: actor.id });
         break;
       case UserRole.COUNCIL:
         queryBuilder
           .andWhere('reg.reviewStage = :actorStage', {
             actorStage: ApplicationReviewStage.COUNCIL_REVIEW,
           })
-          .andWhere(unclaimedOrMine, { actorId: actor.id });
+          .andWhere(assignedToMe, { actorId: actor.id });
         break;
       default:
         queryBuilder.andWhere('1 = 0');
@@ -1935,10 +2040,8 @@ export class AdminService {
     if (this.isFullWorkflowAdmin(actor.role)) return;
 
     const stage = registration.reviewStage;
-    // Unclaimed, or claimed by this actor.
-    const claimOpen =
-      !registration.stageClaimedById ||
-      registration.stageClaimedById === actor.id;
+    // Only the Secretariat-assigned reviewer (stage claim lock) may view.
+    const assignedToActor = registration.stageClaimedById === actor.id;
 
     let allowed = false;
     if (
@@ -1951,24 +2054,19 @@ export class AdminService {
       (actor.role === UserRole.EVALUATOR ||
         actor.role === UserRole.REVIEWER) &&
       stage === ApplicationReviewStage.EVALUATOR_REVIEW &&
-      claimOpen
+      (registration.assignedEvaluatorId === actor.id || assignedToActor)
     ) {
-      // Evaluators may only view applications in a discipline they cover.
-      const disciplineNames =
-        await this.getEvaluatorApplicationDisciplineNames(actor.id);
-      allowed =
-        !!registration.engineeringDiscipline &&
-        disciplineNames.includes(registration.engineeringDiscipline);
+      allowed = true;
     } else if (
       actor.role === UserRole.MPDC &&
       stage === ApplicationReviewStage.MPDC_REVIEW &&
-      claimOpen
+      assignedToActor
     ) {
       allowed = true;
     } else if (
       actor.role === UserRole.COUNCIL &&
       stage === ApplicationReviewStage.COUNCIL_REVIEW &&
-      claimOpen
+      assignedToActor
     ) {
       allowed = true;
     }
@@ -1985,7 +2083,6 @@ export class AdminService {
   ): Promise<void> {
     await this.assertCanViewApplication(actor, registration);
     const secretariatActions: UpdateApplicationStageDto['action'][] = [
-      'ADVANCE_TO_EVALUATOR',
       'ASSIGN_EVALUATOR',
       'SECRETARIAT_ADVANCE_TO_MPDC',
       'SECRETARIAT_ADVANCE_TO_COUNCIL',
@@ -2020,6 +2117,42 @@ export class AdminService {
         );
       }
     }
+
+    if (action === 'CLAIM' && !this.isFullWorkflowAdmin(actor.role)) {
+      const stage = registration.reviewStage;
+      if (stage === ApplicationReviewStage.EVALUATOR_REVIEW) {
+        if (
+          registration.assignedEvaluatorId &&
+          registration.assignedEvaluatorId !== actor.id
+        ) {
+          throw new ForbiddenException(
+            'Only the assigned evaluator can claim this application',
+          );
+        }
+        if (!registration.assignedEvaluatorId) {
+          throw new ForbiddenException(
+            'This application has not been assigned to an evaluator yet',
+          );
+        }
+      } else if (
+        stage === ApplicationReviewStage.MPDC_REVIEW ||
+        stage === ApplicationReviewStage.COUNCIL_REVIEW
+      ) {
+        if (
+          registration.stageClaimedById &&
+          registration.stageClaimedById !== actor.id
+        ) {
+          throw new ForbiddenException(
+            'Only the assigned reviewer can claim this application',
+          );
+        }
+        if (!registration.stageClaimedById) {
+          throw new ForbiddenException(
+            'This application has not been assigned to a reviewer yet',
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -2041,6 +2174,39 @@ export class AdminService {
     const stage = registration.reviewStage as ApplicationReviewStage;
     const now = new Date();
     const isEvaluatorStage = stage === ApplicationReviewStage.EVALUATOR_REVIEW;
+
+    // Already locked to this actor (Secretariat auto-claim on assign).
+    if (registration.stageClaimedById === actor.id) {
+      return {
+        applicationId: registration.id,
+        status: registration.status,
+        reviewStage: registration.reviewStage,
+        reviewedBy: actor.id,
+        reviewedAt: registration.stageClaimedAt ?? now,
+        membershipId: undefined,
+      };
+    }
+
+    if (registration.stageClaimedById) {
+      throw new ConflictException(
+        'This application has already been claimed by another reviewer',
+      );
+    }
+
+    if (isEvaluatorStage) {
+      if (
+        !registration.assignedEvaluatorId ||
+        registration.assignedEvaluatorId !== actor.id
+      ) {
+        throw new ForbiddenException(
+          'Only the assigned evaluator can claim this application',
+        );
+      }
+    } else {
+      throw new ForbiddenException(
+        'This application must be assigned by Secretariat before it can be claimed',
+      );
+    }
 
     const result = await this.registrationRepository
       .createQueryBuilder()
@@ -2092,7 +2258,10 @@ export class AdminService {
     };
   }
 
-  private async assertAssignableEvaluator(evaluatorId: string): Promise<void> {
+  private async assertAssignableEvaluator(
+    evaluatorId: string,
+    applicationDiscipline?: string | null,
+  ): Promise<void> {
     const evaluator = await this.userRepository.findOneBy({ id: evaluatorId });
     if (
       !evaluator ||
@@ -2101,6 +2270,28 @@ export class AdminService {
     ) {
       throw new BadRequestException(
         'Assigned evaluator must be an active evaluator user',
+      );
+    }
+
+    if (applicationDiscipline) {
+      const matchingIds =
+        await this.getMatchingEvaluatorUserIds(applicationDiscipline);
+      if (!matchingIds.includes(evaluatorId)) {
+        throw new BadRequestException(
+          `Evaluator is not tagged for the application discipline "${applicationDiscipline}"`,
+        );
+      }
+    }
+  }
+
+  private async assertAssignableReviewer(
+    userId: string,
+    role: UserRole.MPDC | UserRole.COUNCIL,
+  ): Promise<void> {
+    const user = await this.userRepository.findOneBy({ id: userId });
+    if (!user || !user.isActive || user.role !== role) {
+      throw new BadRequestException(
+        `Assignee must be an active ${role} user`,
       );
     }
   }
@@ -2131,7 +2322,6 @@ export class AdminService {
   ): void {
     const allowedActions: Record<ApplicationReviewStage, UpdateApplicationStageDto['action'][]> = {
       [ApplicationReviewStage.SECRETARIAT_REVIEW]: [
-        'ADVANCE_TO_EVALUATOR',
         'ASSIGN_EVALUATOR',
         'RETURN_FOR_CHANGES',
         'REJECT',
@@ -3182,6 +3372,7 @@ export class AdminService {
     const applicationUrl = `/dashboard/applications/${registration.id}`;
     const applicantUrl = '/dashboard/status';
 
+    // Direct assignment: only the assigned person gets email + SMS.
     if (action === 'ASSIGN_EVALUATOR' && registration.assignedEvaluatorId) {
       await this.notificationsService.sendAdminWorkflowNotification(
         registration.assignedEvaluatorId,
@@ -3197,52 +3388,60 @@ export class AdminService {
       );
     }
 
-    // Discipline-filtered evaluator broadcast: every active evaluator whose
-    // disciplines cover the application's discipline (family) is emailed; the
-    // first to claim locks it.
-    if (action === 'ADVANCE_TO_EVALUATOR') {
-      const discipline = registration.engineeringDiscipline;
-      const evaluatorIds = discipline
-        ? await this.getMatchingEvaluatorUserIds(discipline)
-        : [];
-      if (evaluatorIds.length) {
-        await this.notificationsService.sendAdminWorkflowNotificationToUsers(
-          evaluatorIds,
-          NotificationType.APPLICATION_UPDATE,
-          'Application Ready for Evaluator Review',
-          `Application ${reference} (${discipline}) is ready for evaluator review. The first evaluator to claim it will handle the review.`,
-          {
-            actionUrl: applicationUrl,
-            data: { applicationId: registration.id, action, actedBy: actor.id },
-            sendEmail: true,
-            sendSms: true,
-          },
-        );
-      } else {
-        this.logger.warn(
-          `No matching evaluators for application ${reference} discipline "${discipline}"; it will sit unclaimed in the evaluator queue.`,
-        );
-      }
+    if (
+      action === 'SECRETARIAT_ADVANCE_TO_MPDC' &&
+      registration.stageClaimedById
+    ) {
+      await this.notificationsService.sendAdminWorkflowNotification(
+        registration.stageClaimedById,
+        NotificationType.APPLICATION_UPDATE,
+        'Application Assigned for MPDC Review',
+        `Application ${reference} has been assigned to you for MPDC review.`,
+        {
+          actionUrl: applicationUrl,
+          data: { applicationId: registration.id, action, assignedBy: actor.id },
+          sendEmail: true,
+          sendSms: true,
+        },
+      );
     }
 
-    const queueRoleByAction: Partial<Record<UpdateApplicationStageDto['action'], UserRole>> = {
-      SECRETARIAT_ADVANCE_TO_MPDC: UserRole.MPDC,
-      SECRETARIAT_ADVANCE_TO_COUNCIL: UserRole.COUNCIL,
+    if (
+      action === 'SECRETARIAT_ADVANCE_TO_COUNCIL' &&
+      registration.stageClaimedById
+    ) {
+      await this.notificationsService.sendAdminWorkflowNotification(
+        registration.stageClaimedById,
+        NotificationType.APPLICATION_UPDATE,
+        'Application Assigned for Council Review',
+        `Application ${reference} has been assigned to you for Council review.`,
+        {
+          actionUrl: applicationUrl,
+          data: { applicationId: registration.id, action, assignedBy: actor.id },
+          sendEmail: true,
+          sendSms: true,
+        },
+      );
+    }
+
+    const queueRoleByAction: Partial<
+      Record<UpdateApplicationStageDto['action'], UserRole>
+    > = {
       EVALUATOR_RECOMMEND: UserRole.SECRETARIAT,
       MPDC_RECOMMEND: UserRole.SECRETARIAT,
       COUNCIL_RECOMMEND: UserRole.SECRETARIAT,
     };
     const queueRole = queueRoleByAction[action];
-    const queueTitleByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
-      SECRETARIAT_ADVANCE_TO_MPDC: 'Application Ready for MPDC Review',
-      SECRETARIAT_ADVANCE_TO_COUNCIL: 'Application Ready for Council Review',
+    const queueTitleByAction: Partial<
+      Record<UpdateApplicationStageDto['action'], string>
+    > = {
       EVALUATOR_RECOMMEND: 'Evaluator Recommendation Submitted',
       MPDC_RECOMMEND: 'MPDC Recommendation Submitted',
       COUNCIL_RECOMMEND: 'Council Recommendation Submitted',
     };
-    const queueMessageByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
-      SECRETARIAT_ADVANCE_TO_MPDC: `Application ${reference} has been advanced to MPDC review.`,
-      SECRETARIAT_ADVANCE_TO_COUNCIL: `Application ${reference} has been advanced to Council review.`,
+    const queueMessageByAction: Partial<
+      Record<UpdateApplicationStageDto['action'], string>
+    > = {
       EVALUATOR_RECOMMEND: `Application ${reference} has been recommended by the assigned evaluator and is waiting for Secretariat action.`,
       MPDC_RECOMMEND: `Application ${reference} has been recommended by MPDC and is waiting for Secretariat action.`,
       COUNCIL_RECOMMEND: `Application ${reference} has been recommended by Council and is waiting for Secretariat action.`,
@@ -3264,8 +3463,9 @@ export class AdminService {
       );
     }
 
-    const applicantTitleByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
-      ADVANCE_TO_EVALUATOR: 'Application Under Evaluation',
+    const applicantTitleByAction: Partial<
+      Record<UpdateApplicationStageDto['action'], string>
+    > = {
       ASSIGN_EVALUATOR: 'Application Under Evaluation',
       EVALUATOR_RECOMMEND: 'Application Advanced',
       SECRETARIAT_ADVANCE_TO_MPDC: 'Application Advanced to MPDC Review',
@@ -3273,8 +3473,9 @@ export class AdminService {
       SECRETARIAT_ADVANCE_TO_COUNCIL: 'Application Advanced to Council Review',
       COUNCIL_RECOMMEND: 'Council Recommendation Submitted',
     };
-    const applicantMessageByAction: Partial<Record<UpdateApplicationStageDto['action'], string>> = {
-      ADVANCE_TO_EVALUATOR: `Your application ${reference} has been forwarded for evaluator review.`,
+    const applicantMessageByAction: Partial<
+      Record<UpdateApplicationStageDto['action'], string>
+    > = {
       ASSIGN_EVALUATOR: `Your application ${reference} has been assigned to an evaluator for review.`,
       EVALUATOR_RECOMMEND: `Your application ${reference} has completed evaluator review and is now back with Secretariat.`,
       SECRETARIAT_ADVANCE_TO_MPDC: `Your application ${reference} has been forwarded to MPDC for further review.`,

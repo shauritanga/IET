@@ -109,7 +109,6 @@ export class UpdateApplicationStageDto {
     example: 'ASSIGN_EVALUATOR',
     description: 'Workflow action',
     enum: [
-      'ADVANCE_TO_EVALUATOR',
       'ASSIGN_EVALUATOR',
       'CLAIM',
       'EVALUATOR_RECOMMEND',
@@ -125,7 +124,6 @@ export class UpdateApplicationStageDto {
   @IsNotEmpty()
   @IsString()
   action:
-    | 'ADVANCE_TO_EVALUATOR'
     | 'ASSIGN_EVALUATOR'
     | 'CLAIM'
     | 'EVALUATOR_RECOMMEND'
@@ -148,11 +146,21 @@ export class UpdateApplicationStageDto {
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440010',
-    description: 'Evaluator to assign during secretariat review',
+    description:
+      'Evaluator to assign when advancing from secretariat review (ASSIGN_EVALUATOR)',
   })
   @IsOptional()
   @IsString()
   evaluatorId?: string;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440011',
+    description:
+      'MPDC or Council member to assign when advancing to MPDC or Council review',
+  })
+  @IsOptional()
+  @IsString()
+  assigneeId?: string;
 
   @ApiPropertyOptional({
     example: 'MIET',

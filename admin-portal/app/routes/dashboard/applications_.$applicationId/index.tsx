@@ -45,6 +45,14 @@ type ApplicationDetail = {
 };
 
 
+type AssigneeOption = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  disciplines?: Array<{ id: string; name: string }>;
+};
+
 const STAGE_LABELS: Record<ReviewStage, string> = {
   SECRETARIAT_REVIEW: "Secretariat Review",
   EVALUATOR_REVIEW: "Evaluator Review",
@@ -155,11 +163,19 @@ function getPrimaryAction(
   }
 
   if (!isSecretariat) return null;
-  if (stage === "SECRETARIAT_REVIEW") return { action: "ADVANCE_TO_EVALUATOR", label: "Advance to Evaluator Review" };
-  if (stage === "SECRETARIAT_EVALUATOR_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_MPDC", label: "Advance to MPDC" };
-  if (stage === "SECRETARIAT_MPDC_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_COUNCIL", label: "Advance to Council" };
+  if (stage === "SECRETARIAT_REVIEW") return { action: "ASSIGN_EVALUATOR", label: "Assign Evaluator and Advance" };
+  if (stage === "SECRETARIAT_EVALUATOR_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_MPDC", label: "Assign MPDC Member and Advance" };
+  if (stage === "SECRETARIAT_MPDC_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_COUNCIL", label: "Assign Council Member and Advance" };
   if (stage === "SECRETARIAT_COUNCIL_RECOMMENDATION") return { action: "APPROVE", label: "Approve and Notify" };
   return null;
+}
+
+function needsAssigneePicker(action?: string | null) {
+  return (
+    action === "ASSIGN_EVALUATOR" ||
+    action === "SECRETARIAT_ADVANCE_TO_MPDC" ||
+    action === "SECRETARIAT_ADVANCE_TO_COUNCIL"
+  );
 }
 
 export default function ApplicationReviewPage() {
@@ -175,6 +191,11 @@ export default function ApplicationReviewPage() {
   const [actionPending, setActionPending] = useState(false);
   const [comments, setComments] = useState("");
   const [membershipClass, setMembershipClass] = useState("MIET");
+  const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
+  const [assigneesLoading, setAssigneesLoading] = useState(false);
+  const [assigneesError, setAssigneesError] = useState<string | null>(null);
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
+  const [assigneeRole, setAssigneeRole] = useState<string | null>(null);
 
   async function loadDetail() {
     if (!applicationId) return;
@@ -192,6 +213,27 @@ export default function ApplicationReviewPage() {
     }
   }
 
+  async function loadAssignees() {
+    if (!applicationId) return;
+    setAssigneesLoading(true);
+    setAssigneesError(null);
+    try {
+      const { data } = await http.get<
+        ApiEnvelope<{ role: string; discipline?: string | null; items: AssigneeOption[] }>
+      >(`/admin/applications/${applicationId}/assignable-assignees`);
+      setAssignees(data.data.items ?? []);
+      setAssigneeRole(data.data.role ?? null);
+      setSelectedAssigneeId("");
+    } catch (err) {
+      const apiErr = err as AxiosError<{ message?: string }>;
+      setAssignees([]);
+      setAssigneeRole(null);
+      setAssigneesError(apiErr.response?.data?.message ?? "Failed to load assignees.");
+    } finally {
+      setAssigneesLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,6 +243,21 @@ export default function ApplicationReviewPage() {
     () => getPrimaryAction(detail, currentUser),
     [detail, currentUser],
   );
+  const showAssigneePicker =
+    detail?.status === "IN_REVIEW" && needsAssigneePicker(primaryAction?.action);
+
+  useEffect(() => {
+    if (showAssigneePicker) {
+      void loadAssignees();
+    } else {
+      setAssignees([]);
+      setSelectedAssigneeId("");
+      setAssigneeRole(null);
+      setAssigneesError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAssigneePicker, detail?.id, detail?.reviewStage]);
+
   const isSecretariat = currentUser?.role === "SECRETARIAT" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN";
   const canAct = detail?.status === "IN_REVIEW" && primaryAction && canUpdateApplications;
   const canTerminate =
@@ -220,11 +277,23 @@ export default function ApplicationReviewPage() {
     !!detail?.stageClaimedById &&
     detail.stageClaimedById !== currentUser?.id;
   const claimAction = primaryAction?.action === "CLAIM";
+  const assigneeLabel =
+    assigneeRole === "EVALUATOR"
+      ? "Evaluator"
+      : assigneeRole === "MPDC"
+        ? "MPDC member"
+        : assigneeRole === "COUNCIL"
+          ? "Council member"
+          : "Reviewer";
 
   async function performAction(action: string) {
     if (!detail) return;
     if (["EVALUATOR_RECOMMEND", "MPDC_RECOMMEND", "COUNCIL_RECOMMEND", "REJECT", "RETURN_FOR_CHANGES"].includes(action) && !comments.trim()) {
       setActionError("Comments or reason are required for this action.");
+      return;
+    }
+    if (needsAssigneePicker(action) && !selectedAssigneeId) {
+      setActionError(`Select a ${assigneeLabel.toLowerCase()} before advancing.`);
       return;
     }
     setActionPending(true);
@@ -235,9 +304,14 @@ export default function ApplicationReviewPage() {
         comments: comments.trim() || undefined,
       };
       if (action === "APPROVE") payload.membershipClass = membershipClass;
+      if (action === "ASSIGN_EVALUATOR") payload.evaluatorId = selectedAssigneeId;
+      if (action === "SECRETARIAT_ADVANCE_TO_MPDC" || action === "SECRETARIAT_ADVANCE_TO_COUNCIL") {
+        payload.assigneeId = selectedAssigneeId;
+      }
       if (action === "CLAIM") payload.comments = undefined;
       await http.patch(`/admin/applications/${detail.id}/stage`, payload);
       setComments("");
+      setSelectedAssigneeId("");
       await loadDetail();
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
@@ -380,16 +454,48 @@ export default function ApplicationReviewPage() {
               <p className="text-[12px] font-semibold text-[var(--muted)]">This application is {STATUS_LABELS[detail.status]}.</p>
             ) : (
               <>
-                {detail.reviewStage === "SECRETARIAT_REVIEW" && isSecretariat && (
-                  <p className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11.5px] text-[var(--muted)]">
-                    Advancing notifies every evaluator whose discipline matches{" "}
-                    <strong>{detail.engineeringDiscipline ?? "the applicant"}</strong>. The first to claim it will handle the review.
-                  </p>
+                {showAssigneePicker && (
+                  <>
+                    <p className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11.5px] text-[var(--muted)]">
+                      Assign one {assigneeLabel.toLowerCase()}. Only that person receives email and SMS and can recommend on this application
+                      {primaryAction?.action === "ASSIGN_EVALUATOR" && detail.engineeringDiscipline
+                        ? ` (matched to ${detail.engineeringDiscipline})`
+                        : ""}.
+                    </p>
+                    <label className="block">
+                      <span className="mb-[5px] block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">
+                        Assign {assigneeLabel}
+                      </span>
+                      <select
+                        value={selectedAssigneeId}
+                        onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                        disabled={assigneesLoading || actionPending}
+                        className="h-[38px] w-full rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--bg)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
+                      >
+                        <option value="">
+                          {assigneesLoading ? "Loading…" : `Select ${assigneeLabel.toLowerCase()}…`}
+                        </option>
+                        {assignees.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.fullName} ({person.email})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {assigneesError && (
+                      <p className="text-[11.5px] font-semibold text-[var(--red)]">{assigneesError}</p>
+                    )}
+                    {!assigneesLoading && !assigneesError && assignees.length === 0 && (
+                      <p className="text-[11.5px] font-semibold text-[var(--muted)]">
+                        No eligible {assigneeLabel.toLowerCase()}s found. Add or tag panel members first.
+                      </p>
+                    )}
+                  </>
                 )}
 
                 {detail.stageClaimedByName && isReviewStage && (
                   <p className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11.5px] text-[var(--muted)]">
-                    Claimed by <strong>{detail.stageClaimedByName}</strong>
+                    Assigned to <strong>{detail.stageClaimedByName}</strong>
                     {detail.stageClaimedById === currentUser?.id ? " (you)" : ""}.
                   </p>
                 )}
@@ -428,7 +534,15 @@ export default function ApplicationReviewPage() {
 
                 <div className="space-y-2">
                   {canAct && primaryAction && (
-                    <Button tone={claimAction ? "dark" : "green"} className="w-full" disabled={actionPending} onClick={() => void performAction(primaryAction.action)}>
+                    <Button
+                      tone={claimAction ? "dark" : "green"}
+                      className="w-full"
+                      disabled={
+                        actionPending ||
+                        (showAssigneePicker && (!selectedAssigneeId || assignees.length === 0))
+                      }
+                      onClick={() => void performAction(primaryAction.action)}
+                    >
                       {actionPending ? "Saving..." : primaryAction.label}
                     </Button>
                   )}
@@ -444,7 +558,7 @@ export default function ApplicationReviewPage() {
                   )}
                   {lockedByOther && (
                     <p className="text-[12px] font-semibold text-[var(--muted)]">
-                      This application has been claimed by another reviewer and is locked.
+                      This application has been assigned to another reviewer and is locked.
                     </p>
                   )}
                   {!canAct && !canTerminate && !lockedByOther && (

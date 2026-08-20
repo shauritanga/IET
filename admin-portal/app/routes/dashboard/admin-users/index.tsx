@@ -878,7 +878,7 @@ export default function AdminUsersPage() {
                 Disciplines
               </span>
               <p className="mb-2 text-[10.5px] text-[var(--muted)]">
-                Applications are routed to evaluators whose disciplines match the applicant&rsquo;s field.
+                Applications are assigned by Secretariat to a specific evaluator whose disciplines match the applicant&rsquo;s field.
               </p>
               {disciplines.length === 0 ? (
                 <p className="text-[11px] text-[var(--muted)]">No disciplines defined yet.</p>
