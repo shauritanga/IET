@@ -1,7 +1,7 @@
 import z from "zod";
 import {useForm, useFieldArray, useWatch} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
-import {useEffect} from "react";
+import {useEffect, useRef} from "react";
 import {useApplicationFormStore} from "~/routes/application/store/useApplicationFormStore";
 import {useGetApplicationDraft} from "~/routes/application/repository/useResumeApplication";
 
@@ -38,7 +38,7 @@ const defaultEducation = {
     startDate: "",
     endDate: "",
     courseName: "",
-    attachment: undefined,
+    attachment: undefined as string | undefined,
 };
 
 const defaultWorkExperience = {
@@ -48,6 +48,36 @@ const defaultWorkExperience = {
     employer: "",
 };
 
+function toDateInputValue(value?: string | null) {
+    if (!value) return "";
+    return String(value).slice(0, 10);
+}
+
+export function isEducationEntryFilled(
+    item?: Partial<ExperienceDetailsFormType["education"][number]> | null,
+) {
+    if (!item) return false;
+    return Boolean(
+        item.institutionName?.trim() &&
+        item.country?.trim() &&
+        item.startDate?.trim() &&
+        item.endDate?.trim() &&
+        item.courseName?.trim(),
+    );
+}
+
+export function isWorkExperienceEntryFilled(
+    item?: Partial<ExperienceDetailsFormType["workExperience"][number]> | null,
+) {
+    if (!item) return false;
+    return Boolean(
+        item.employer?.trim() &&
+        item.position?.trim() &&
+        item.startDate?.trim() &&
+        item.endDate?.trim(),
+    );
+}
+
 export const useManageExperienceForm = () => {
     const {
         experience, setExperience,
@@ -56,6 +86,8 @@ export const useManageExperienceForm = () => {
         _hasHydrated,
     } = useApplicationFormStore();
     const { data: draft } = useGetApplicationDraft();
+    const hydratedFromDraftRef = useRef(false);
+    const hydratedFromStoreRef = useRef(false);
 
     const form = useForm<ExperienceDetailsFormType>({
         resolver: zodResolver(ExperienceDetailsFormSchema),
@@ -69,58 +101,69 @@ export const useManageExperienceForm = () => {
     const educationFieldArray = useFieldArray({ control: form.control, name: "education" });
     const workExperienceFieldArray = useFieldArray({ control: form.control, name: "workExperience" });
 
-    useEffect(() => {
-        if (_hasHydrated && Object.keys(experience).length > 0) {
-            form.reset(experience as Partial<ExperienceDetailsFormType>);
-        }
-    }, [_hasHydrated]);
-
+    // Prefer server draft when available; only fall back to local draft once.
     useEffect(() => {
         const registration = draft?.data?.registration;
-        if (!registration) return;
+        if (!registration || hydratedFromDraftRef.current) return;
 
-        const education = registration.educations?.length
+        hydratedFromDraftRef.current = true;
+
+        const hasEducation = (registration.educations?.length ?? 0) > 0;
+        const hasExperience = (registration.experiences?.length ?? 0) > 0;
+
+        const education = hasEducation
             ? registration.educations.map((item) => ({
                 institutionId: item.institutionId ?? "",
                 institutionName: item.institutionName ?? "",
-                country: item.fieldOfStudy ?? "",
-                startDate: item.startDate ?? "",
-                endDate: item.endDate ?? "",
+                country: item.location ?? "",
+                startDate: toDateInputValue(item.startDate),
+                endDate: toDateInputValue(item.endDate),
                 courseName: item.qualification ?? "",
                 attachment: item.attachmentUrl ?? item.attachment ?? undefined,
             }))
             : [{ ...defaultEducation }];
 
-        const workExperience = registration.experiences?.length
+        const workExperience = hasExperience
             ? registration.experiences.map((item) => ({
                 employer: item.employerName ?? "",
                 position: item.position ?? "",
-                startDate: item.startDate ?? "",
-                endDate: item.endDate ?? "",
+                startDate: toDateInputValue(item.startDate),
+                endDate: toDateInputValue(item.endDate),
             }))
             : [{ ...defaultWorkExperience }];
 
-        setSavedEducationCount(registration.educations?.length ?? 0);
-        setSavedWorkCount(registration.experiences?.length ?? 0);
+        const educationCount = hasEducation ? registration.educations.length : 0;
+        const workCount = hasExperience ? registration.experiences.length : 0;
+
+        setSavedEducationCount(educationCount);
+        setSavedWorkCount(workCount);
 
         form.reset({
-            education: [
-                ...education,
-                { ...defaultEducation },
-            ],
-            workExperience: [
-                ...workExperience,
-                { ...defaultWorkExperience },
-            ],
+            education: hasEducation
+                ? [...education, { ...defaultEducation }]
+                : education,
+            workExperience: hasExperience
+                ? [...workExperience, { ...defaultWorkExperience }]
+                : workExperience,
             cvAttachment: registration.cvAttachment ?? undefined,
         });
     }, [draft, form, setSavedEducationCount, setSavedWorkCount]);
+
+    useEffect(() => {
+        if (!_hasHydrated || hydratedFromDraftRef.current || hydratedFromStoreRef.current) {
+            return;
+        }
+        if (Object.keys(experience).length === 0) return;
+
+        hydratedFromStoreRef.current = true;
+        form.reset(experience as Partial<ExperienceDetailsFormType>);
+    }, [_hasHydrated, experience, form]);
 
     const watched = useWatch({ control: form.control });
     useEffect(() => {
         if (!_hasHydrated) return;
         setExperience(watched);
-    }, [watched, _hasHydrated]);
+    }, [watched, _hasHydrated, setExperience]);
 
     const saveAndAddEducation = async () => {
         const isValid = await form.trigger([

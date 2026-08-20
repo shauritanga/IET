@@ -10,6 +10,7 @@ import {
   IsDateString,
   IsBoolean,
   IsArray,
+  ArrayMinSize,
   IsIn,
   ValidateNested,
   Matches,
@@ -161,6 +162,7 @@ export class WorkExperienceDto {
 export class ExperienceEducationDto {
   @ApiProperty({ type: [EducationDetailDto] })
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least one education record is required' })
   @ValidateNested({ each: true })
   @Type(() => EducationDetailDto)
   education: EducationDetailDto[];

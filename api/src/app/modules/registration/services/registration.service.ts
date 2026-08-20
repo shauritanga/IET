@@ -1113,6 +1113,8 @@ export class RegistrationService {
     registration.reviewStage = ApplicationReviewStage.SECRETARIAT_REVIEW;
     registration.assignedEvaluatorId = null;
     registration.assignedAt = null;
+    registration.stageClaimedById = null;
+    registration.stageClaimedAt = null;
     registration.submittedAt = new Date();
     registration.stageUpdatedAt = registration.submittedAt;
     registration.referenceNumber = referenceNumber;

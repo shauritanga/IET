@@ -4,7 +4,10 @@ import { Link, useSearchParams } from "react-router";
 const PAYMENT_CONTEXT_KEY = "iet_payment_context";
 const PAYMENT_CANCELLED_KEY = "iet_payment_cancelled";
 
-type PaymentContext = { type: "application"; applicationId: string } | { type: "event" } | null;
+type PaymentContext =
+    | { type: "application"; applicationId: string }
+    | { type: "event" }
+    | null;
 
 export default function PaymentCancel() {
     const [params] = useSearchParams();
@@ -15,18 +18,19 @@ export default function PaymentCancel() {
         const raw = sessionStorage.getItem(PAYMENT_CONTEXT_KEY);
         if (raw) {
             try {
-                setContext(JSON.parse(raw));
+                setContext(JSON.parse(raw) as PaymentContext);
             } catch {
                 setContext({ type: "event" });
             }
             sessionStorage.removeItem(PAYMENT_CONTEXT_KEY);
         }
-        // Signal the destination page that payment was cancelled
         sessionStorage.setItem(PAYMENT_CANCELLED_KEY, "1");
     }, []);
 
     const isApplication = context?.type === "application";
-    const returnPath = isApplication ? "/application/submission" : "/dashboard/events/my-registrations";
+    const returnPath = isApplication
+        ? "/application/submission"
+        : "/dashboard/events/my-registrations";
     const returnLabel = isApplication ? "Return to Application" : "Continue Payment";
     const bodyText = isApplication
         ? "Your payment was cancelled. No charge has been made. Your application is still saved — you can complete payment when you are ready."

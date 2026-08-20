@@ -1,7 +1,13 @@
 import {FormProvider} from 'react-hook-form';
 import {useNavigate} from "react-router";
+import toast from "react-hot-toast";
 import ExperienceDetailsForm from "~/routes/application/experience/form/experience-details-form";
-import {useManageExperienceForm, type ExperienceDetailsFormType} from "./form/manage-experience-details-form";
+import {
+    useManageExperienceForm,
+    type ExperienceDetailsFormType,
+    isEducationEntryFilled,
+    isWorkExperienceEntryFilled,
+} from "./form/manage-experience-details-form";
 import { useSubmitExperienceDetails } from './repository/useSubmitExperienceDetails';
 import FormPageLayout from "~/routes/application/components/form-page-layout";
 import { mapServerErrors } from "~/utils/map-server-errors";
@@ -10,6 +16,38 @@ import {
     getRouteAfterSavingStep,
     getSubmitLabel,
 } from "~/routes/application/utils/application-steps";
+
+function collectEducationPayload(
+    value: ExperienceDetailsFormType,
+    savedEducationCount: number,
+) {
+    const rows = value.education ?? [];
+    const committed = rows.slice(0, savedEducationCount);
+    const active = rows[savedEducationCount];
+    const combined = isEducationEntryFilled(active)
+        ? [...committed, active]
+        : committed;
+
+    return combined.map((item) => ({
+        ...item,
+        institutionId:
+            item.institutionId === "OTHER"
+                ? undefined
+                : item.institutionId || undefined,
+    }));
+}
+
+function collectWorkExperiencePayload(
+    value: ExperienceDetailsFormType,
+    savedWorkCount: number,
+) {
+    const rows = value.workExperience ?? [];
+    const committed = rows.slice(0, savedWorkCount);
+    const active = rows[savedWorkCount];
+    return isWorkExperienceEntryFilled(active)
+        ? [...committed, active]
+        : committed;
+}
 
 const Experience = () => {
     const navigate = useNavigate();
@@ -41,15 +79,19 @@ const Experience = () => {
     );
 
     const submit = (value: ExperienceDetailsFormType) => {
-        const payload = {
+        const education = collectEducationPayload(value, savedEducationCount);
+        const workExperience = collectWorkExperiencePayload(value, savedWorkCount);
+
+        if (education.length === 0) {
+            toast.error("Add at least one education record before continuing.");
+            return;
+        }
+
+        mutation.mutate({
             ...value,
-            education: value.education?.slice(0, savedEducationCount).map((item) => ({
-                ...item,
-                institutionId: item.institutionId === "OTHER" ? undefined : item.institutionId || undefined,
-            })),
-            workExperience: value.workExperience?.slice(0, savedWorkCount),
-        };
-        mutation.mutate(payload);
+            education,
+            workExperience,
+        });
     };
 
     return (
