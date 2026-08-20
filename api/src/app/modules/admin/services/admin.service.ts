@@ -524,6 +524,11 @@ export class AdminService {
     return undefined;
   }
 
+  /** Normalizes a category code (or a raw CSV membership-type token) for comparison. */
+  private normalizeCategoryCode(value?: string | null): string {
+    return (value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
   /**
    * Best-effort membership class -> category match, by exact (case-insensitive)
    * category name. Deliberately exact rather than substring: several seeded
@@ -548,6 +553,35 @@ export class AdminService {
     return categories.find((category) =>
       wanted.includes(category.name.trim().toLowerCase()),
     )?.id;
+  }
+
+  /**
+   * Resolves the membership category for an imported row, preferring an exact
+   * match on the category's admin-assigned `code` (e.g. "MIET", "SENMIET")
+   * against the raw CSV member-type token, since codes are the stable
+   * identifier admins control. Falls back to the coarser class/name match
+   * when no category has a matching code (e.g. code not set yet, or the CSV
+   * uses a different token than the category's code).
+   */
+  private resolveMembershipCategoryForImport(
+    rawMembershipType: string | undefined,
+    membershipClass: MembershipClass | undefined,
+    categories: MembershipCategoryEntity[],
+  ): string | undefined {
+    const normalizedRaw = this.normalizeCategoryCode(rawMembershipType);
+    if (normalizedRaw) {
+      const byCode = categories.find(
+        (category) =>
+          category.code &&
+          this.normalizeCategoryCode(category.code) === normalizedRaw,
+      );
+      if (byCode) {
+        return byCode.id;
+      }
+    }
+    return membershipClass
+      ? this.resolveMembershipCategoryForClass(membershipClass, categories)
+      : undefined;
   }
 
   async listAdminUsers(
@@ -2444,6 +2478,9 @@ export class AdminService {
           user = await this.userRepository.findOneBy({ email });
         }
 
+        const rawMembershipType = this.cleanImportValue(
+          values.membertype ?? values.membershipclass,
+        );
         const membershipClass = this.normalizeLegacyMembershipClass(
           values.membertype ?? values.membershipclass,
           row.rowNumber,
@@ -2477,19 +2514,18 @@ export class AdminService {
           membershipExpiryDate && membershipExpiryDate >= new Date()
             ? MembershipStatus.ACTIVE
             : MembershipStatus.EXPIRED;
-        const membershipCategoryId = membershipClass
-          ? this.resolveMembershipCategoryForClass(
-              membershipClass,
-              activeCategories,
-            )
-          : undefined;
-        if (membershipClass && !membershipCategoryId) {
+        const membershipCategoryId = this.resolveMembershipCategoryForImport(
+          rawMembershipType,
+          membershipClass,
+          activeCategories,
+        );
+        if ((rawMembershipType || membershipClass) && !membershipCategoryId) {
           result.warnings.push({
             row: row.rowNumber,
             field: 'MEMBERSHIP_CATEGORY',
-            value: membershipClass,
+            value: rawMembershipType || membershipClass,
             reason:
-              'No active membership category matches this class; member was not linked to a category and cannot request an upgrade until one is assigned.',
+              'No active membership category matches this member type or class; member was not linked to a category and cannot request an upgrade until one is assigned.',
           });
         }
 
@@ -3304,12 +3340,34 @@ export class AdminService {
     };
   }
 
+  /** Case-insensitive lookup for an existing category by code, excluding a given id. */
+  private async findMembershipCategoryByCode(
+    code: string,
+    excludeId?: string,
+  ): Promise<MembershipCategoryEntity | null> {
+    const qb = this.membershipCategoryRepository
+      .createQueryBuilder('category')
+      .where('LOWER(category.code) = LOWER(:code)', { code });
+    if (excludeId) {
+      qb.andWhere('category.id != :excludeId', { excludeId });
+    }
+    return qb.getOne();
+  }
+
   async createMembershipCategory(dto: CreateMembershipCategoryDto) {
     const existing = await this.membershipCategoryRepository.findOne({
       where: { name: dto.name },
     });
     if (existing) {
       throw new BadRequestException(`Category "${dto.name}" already exists`);
+    }
+    if (dto.code) {
+      const existingCode = await this.findMembershipCategoryByCode(dto.code);
+      if (existingCode) {
+        throw new BadRequestException(
+          `Category code "${dto.code}" is already used by "${existingCode.name}"`,
+        );
+      }
     }
     const category = this.membershipCategoryRepository.create({
       name: dto.name,
@@ -3335,6 +3393,17 @@ export class AdminService {
       });
       if (existing) {
         throw new BadRequestException(`Category "${dto.name}" already exists`);
+      }
+    }
+    if (dto.code && dto.code !== category.code) {
+      const existingCode = await this.findMembershipCategoryByCode(
+        dto.code,
+        category.id,
+      );
+      if (existingCode) {
+        throw new BadRequestException(
+          `Category code "${dto.code}" is already used by "${existingCode.name}"`,
+        );
       }
     }
     Object.assign(category, dto);
