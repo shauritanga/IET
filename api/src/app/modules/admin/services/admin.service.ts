@@ -1022,6 +1022,10 @@ export class AdminService {
 
     const queryBuilder = this.userRepository.createQueryBuilder('user');
     queryBuilder.leftJoinAndSelect('user.membershipCategory', 'membershipCategory');
+    // Only approved members (i.e. issued a membership ID) belong in the
+    // Members list; applicants who signed up but haven't passed review yet
+    // live on the separate Applications page instead.
+    queryBuilder.andWhere('user.membershipId IS NOT NULL');
 
     if (status) {
       queryBuilder.andWhere('user.membershipStatus = :status', { status });
@@ -1147,6 +1151,12 @@ export class AdminService {
       await this.userRepository.save(user);
     }
 
+    // Admin-created members bypass the application review flow, so assign a
+    // membership ID immediately - otherwise they'd be invisible in the
+    // Members list, which only shows users who have one.
+    await this.userService.assignMembershipId(user.id);
+    const created = await this.userRepository.findOneBy({ id: user.id });
+
     void this.messagingQueue
       .enqueuePortalWelcomeEmail({
         email: user.email,
@@ -1161,7 +1171,7 @@ export class AdminService {
         );
       });
 
-    return user;
+    return created ?? user;
   }
 
   private generateTemporaryPassword(): string {
