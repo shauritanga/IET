@@ -8,19 +8,22 @@ import {useGetApplicationDraft} from "~/routes/application/repository/useResumeA
 
 export const EducationDetailSchema = z.object({
     institutionId: z.string().optional(),
-    institutionName: z.string(),
-    country: z.string(),
-    startDate: z.string(),
-    endDate: z.string(),
-    courseName: z.string(),
-    attachment: z.url().optional(),
+    institutionName: z.string().min(1, "Institution name is required"),
+    country: z.string().min(1, "Country is required"),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().min(1, "End date is required"),
+    courseName: z.string().min(1, "Qualification / course name is required"),
+    attachment: z.preprocess(
+        (value) => (value === "" || value == null ? undefined : value),
+        z.string().url().optional(),
+    ),
 });
 
 export const WorkExperienceSchema = z.object({
-    startDate: z.string(),
-    endDate: z.string(),
-    position: z.string(),
-    employer: z.string(),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().min(1, "End date is required"),
+    position: z.string().min(1, "Position is required"),
+    employer: z.string().min(1, "Employer is required"),
 });
 
 export const ExperienceDetailsFormSchema = z.object({
@@ -66,6 +69,21 @@ export function isEducationEntryFilled(
     );
 }
 
+export function isEducationEntryStarted(
+    item?: Partial<ExperienceDetailsFormType["education"][number]> | null,
+) {
+    if (!item) return false;
+    return Boolean(
+        item.institutionId?.trim() ||
+        item.institutionName?.trim() ||
+        item.country?.trim() ||
+        item.startDate?.trim() ||
+        item.endDate?.trim() ||
+        item.courseName?.trim() ||
+        item.attachment,
+    );
+}
+
 export function isWorkExperienceEntryFilled(
     item?: Partial<ExperienceDetailsFormType["workExperience"][number]> | null,
 ) {
@@ -77,6 +95,35 @@ export function isWorkExperienceEntryFilled(
         item.endDate?.trim(),
     );
 }
+
+export function isWorkExperienceEntryStarted(
+    item?: Partial<ExperienceDetailsFormType["workExperience"][number]> | null,
+) {
+    if (!item) return false;
+    return Boolean(
+        item.employer?.trim() ||
+        item.position?.trim() ||
+        item.startDate?.trim() ||
+        item.endDate?.trim(),
+    );
+}
+
+export const educationActiveFieldPaths = (index: number) =>
+    [
+        `education.${index}.institutionName`,
+        `education.${index}.country`,
+        `education.${index}.startDate`,
+        `education.${index}.endDate`,
+        `education.${index}.courseName`,
+    ] as const;
+
+export const workExperienceActiveFieldPaths = (index: number) =>
+    [
+        `workExperience.${index}.employer`,
+        `workExperience.${index}.position`,
+        `workExperience.${index}.startDate`,
+        `workExperience.${index}.endDate`,
+    ] as const;
 
 export const useManageExperienceForm = () => {
     const {
@@ -166,13 +213,10 @@ export const useManageExperienceForm = () => {
     }, [watched, _hasHydrated, setExperience]);
 
     const saveAndAddEducation = async () => {
-        const isValid = await form.trigger([
-            `education.${savedEducationCount}.institutionName`,
-            `education.${savedEducationCount}.country`,
-            `education.${savedEducationCount}.startDate`,
-            `education.${savedEducationCount}.endDate`,
-            `education.${savedEducationCount}.courseName`,
-        ]);
+        const isValid = await form.trigger(
+            [...educationActiveFieldPaths(savedEducationCount)],
+            { shouldFocus: true },
+        );
         if (!isValid) return;
         setSavedEducationCount(savedEducationCount + 1);
         educationFieldArray.append({ ...defaultEducation });
@@ -184,12 +228,10 @@ export const useManageExperienceForm = () => {
     };
 
     const saveAndAddWorkExperience = async () => {
-        const isValid = await form.trigger([
-            `workExperience.${savedWorkCount}.employer`,
-            `workExperience.${savedWorkCount}.position`,
-            `workExperience.${savedWorkCount}.startDate`,
-            `workExperience.${savedWorkCount}.endDate`,
-        ]);
+        const isValid = await form.trigger(
+            [...workExperienceActiveFieldPaths(savedWorkCount)],
+            { shouldFocus: true },
+        );
         if (!isValid) return;
         setSavedWorkCount(savedWorkCount + 1);
         workExperienceFieldArray.append({ ...defaultWorkExperience });

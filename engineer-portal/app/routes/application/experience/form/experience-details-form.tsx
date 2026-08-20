@@ -158,6 +158,10 @@ const ExperienceDetailsForm = ({
 
                 {/* Active education form — always bound to savedEducationCount */}
                 <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <p className="md:col-span-2 text-[12.5px] text-[var(--iet-muted)] leading-relaxed">
+                        Fill in your education below. Click <strong>Save &amp; Continue</strong> when you are done —
+                        you do not need to click “Add another” unless you have more than one institution.
+                    </p>
                     <Field className={isOtherInstitution ? "" : "md:col-span-2"}>
                         <FieldLabel>Institution Name</FieldLabel>
                         <InstitutionCombobox
@@ -267,7 +271,7 @@ const ExperienceDetailsForm = ({
                         onClick={saveAndAddEducation}
                     >
                         <PlusIcon className="w-4 h-4"/>
-                        <span>Add another institution</span>
+                        <span>Add another institution (optional)</span>
                     </Button>
                     <Separator orientation="horizontal" className="shrink"/>
                 </div>
@@ -276,6 +280,9 @@ const ExperienceDetailsForm = ({
             {/* ── Work Experience Section ── */}
             <div className="flex flex-col gap-8">
                 <h3 className="text-base font-semibold">Work Experience</h3>
+                <p className="text-[12.5px] text-[var(--iet-muted)] leading-relaxed -mt-4">
+                    Optional. Fill in a role below if you have work experience. Use “Add another” only for additional positions.
+                </p>
 
                 {/* Saved work experience cards */}
                 {workFields.slice(0, savedWorkCount).map((field, index) => (
@@ -360,7 +367,7 @@ const ExperienceDetailsForm = ({
                         onClick={saveAndAddWorkExperience}
                     >
                         <PlusIcon className="w-4 h-4"/>
-                        <span>Add another position</span>
+                        <span>Add another position (optional)</span>
                     </Button>
                     <Separator orientation="horizontal" className="shrink"/>
                 </div>
