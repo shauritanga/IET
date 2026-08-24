@@ -63,14 +63,17 @@ const Profile = () => {
         setFirstName(profile.firstName ?? "")
         setLastName(profile.lastName ?? "")
         setPhone(profile.phoneNumber ?? "")
-        setLocation(profile.location ?? "")
-        setEmployer(profile.employer ?? "")
-        setDiscipline(profile.engineeringDiscipline ?? "")
+        setLocation(profile.location ?? profile.latestApplication?.educations?.find((education) => education.location)?.location ?? "")
+        setEmployer(profile.employer ?? profile.latestApplication?.experiences?.find((experience) => experience.isCurrent)?.employerName ?? "")
+        setDiscipline(profile.engineeringDiscipline ?? profile.latestApplication?.engineeringDiscipline ?? "")
         setPhotoPreview(profile.profilePhotoUrl ?? null)
     }, [profile])
 
     const handleSave = () => {
-        saveProfile({ firstName, lastName, phoneNumber: phone, location, employer, engineeringDiscipline: discipline })
+        const payload: Record<string, string> = { firstName, lastName, location, employer }
+        if (phone.trim()) payload.phoneNumber = phone.trim()
+        if (discipline.trim()) payload.engineeringDiscipline = discipline.trim()
+        saveProfile(payload)
     }
 
     const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,13 +240,30 @@ const Profile = () => {
                         </div>
                         <div className="form-group">
                             <label className="form-label">Engineering Discipline</label>
-                            <input
+                            <select
                                 className="form-input"
                                 value={discipline}
-                                placeholder={displayDiscipline || undefined}
                                 onChange={(e) => setDiscipline(e.target.value)}
                                 disabled={isPending}
-                            />
+                            >
+                                <option value="">Select discipline</option>
+                                <option value="Civil">Civil</option>
+                                <option value="Mechanical">Mechanical</option>
+                                <option value="Electrical">Electrical</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Chemical">Chemical</option>
+                                <option value="Mining">Mining</option>
+                                <option value="Agricultural">Agricultural</option>
+                                <option value="Environmental">Environmental</option>
+                                <option value="Computer">Computer</option>
+                                <option value="Telecommunications">Telecommunications</option>
+                                <option value="Petroleum">Petroleum</option>
+                                <option value="Biomedical">Biomedical</option>
+                                <option value="Industrial">Industrial</option>
+                                <option value="Marine">Marine</option>
+                                <option value="Aeronautical">Aeronautical</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
                     </div>
                 </div>
