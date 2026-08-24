@@ -1156,16 +1156,17 @@ export class AdminService {
 
     // Get last payment dates
     const userIds = users.map((u) => u.id);
-    const lastPayments = await this.feeRepository
-      .createQueryBuilder('fee')
-      .select('fee.userId', 'userId')
-      .addSelect('MAX(fee.paidAt)', 'lastPaymentDate')
-      .where('fee.userId IN (:...userIds)', {
-        userIds: userIds.length > 0 ? userIds : [''],
-      })
-      .andWhere('fee.status = :status', { status: FeeStatus.PAID })
-      .groupBy('fee.userId')
-      .getRawMany();
+    const lastPayments =
+      userIds.length > 0
+        ? await this.feeRepository
+            .createQueryBuilder('fee')
+            .select('fee.userId', 'userId')
+            .addSelect('MAX(fee.paidAt)', 'lastPaymentDate')
+            .where('fee.userId IN (:...userIds)', { userIds })
+            .andWhere('fee.status = :status', { status: FeeStatus.PAID })
+            .groupBy('fee.userId')
+            .getRawMany()
+        : [];
 
     const paymentMap = new Map(
       lastPayments.map((p) => [p.userId, p.lastPaymentDate]),
