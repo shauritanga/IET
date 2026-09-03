@@ -3024,18 +3024,46 @@ export class AdminService {
     if (!normalized) return undefined;
     const map: Record<string, EngineeringDiscipline> = {
       CIVIL: EngineeringDiscipline.CIVIL,
+      CIVILTRANSPORTATION: EngineeringDiscipline.CIVIL,
+      CIVILWATERRESOURCES: EngineeringDiscipline.CIVIL,
+      BUILDING: EngineeringDiscipline.CIVIL,
       MECH: EngineeringDiscipline.MECHANICAL,
       MECHANICAL: EngineeringDiscipline.MECHANICAL,
       ELEC: EngineeringDiscipline.ELECTRICAL,
       ELECT: EngineeringDiscipline.ELECTRICAL,
       ELECTRICAL: EngineeringDiscipline.ELECTRICAL,
+      ELECTRICALELECTRONICS: EngineeringDiscipline.ELECTRICAL,
       ELECTRONICS: EngineeringDiscipline.ELECTRONICS,
       'ELECTRONICSANDIT': EngineeringDiscipline.ELECTRONICS,
       CPE: EngineeringDiscipline.COMPUTER,
       COMPUTER: EngineeringDiscipline.COMPUTER,
+      COMPUTERIT: EngineeringDiscipline.COMPUTER,
+      ICT: EngineeringDiscipline.COMPUTER,
       PETROLEUM: EngineeringDiscipline.PETROLEUM,
-      METTALUGICAL: EngineeringDiscipline.OTHER,
-      METALLURGICAL: EngineeringDiscipline.OTHER,
+      // Metallurgy/geology have no dedicated enum value; Mining is the
+      // closest existing discipline for mineral-processing-adjacent work.
+      METTALUGICAL: EngineeringDiscipline.MINING,
+      METALLURGICAL: EngineeringDiscipline.MINING,
+      METALLURGYMINERALPROCESSING: EngineeringDiscipline.MINING,
+      MINERALPROCESSING: EngineeringDiscipline.MINING,
+      MINING: EngineeringDiscipline.MINING,
+      GEOROGY: EngineeringDiscipline.MINING, // common template typo for "Geology"
+      GEOLOGY: EngineeringDiscipline.MINING,
+      ENVIRONMENTAL: EngineeringDiscipline.ENVIRONMENTAL,
+      WATER: EngineeringDiscipline.ENVIRONMENTAL,
+      CHEMICAL: EngineeringDiscipline.CHEMICAL,
+      CHEMICALPROCESS: EngineeringDiscipline.CHEMICAL,
+      AGRICULTURAL: EngineeringDiscipline.AGRICULTURAL,
+      AGRICULTURALWATERRESOURCES: EngineeringDiscipline.AGRICULTURAL,
+      TELECOM: EngineeringDiscipline.TELECOMMUNICATIONS,
+      TELECOMMUNICATION: EngineeringDiscipline.TELECOMMUNICATIONS,
+      TELECOMMUNICATIONS: EngineeringDiscipline.TELECOMMUNICATIONS,
+      TELECOMANDICT: EngineeringDiscipline.TELECOMMUNICATIONS,
+      ELECTRONICSTELECOM: EngineeringDiscipline.TELECOMMUNICATIONS,
+      ELECTRONICSTELECOMS: EngineeringDiscipline.TELECOMMUNICATIONS,
+      ELECTRICALTELECOM: EngineeringDiscipline.TELECOMMUNICATIONS,
+      AEROSPACE: EngineeringDiscipline.AERONAUTICAL,
+      AERONAUTICAL: EngineeringDiscipline.AERONAUTICAL,
     };
     const mapped = map[normalized.replace(/[^A-Z0-9]/g, '')] ?? map[normalized];
     if (!mapped) {
