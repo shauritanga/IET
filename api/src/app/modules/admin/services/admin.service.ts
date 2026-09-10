@@ -656,10 +656,8 @@ export class AdminService {
       );
     }
 
-    // When no password is supplied, generate a temporary one.
-    // Always email the new user that their portal account exists.
-    const plainPassword = dto.password || this.generateTemporaryPassword();
-    const usedTemporaryPassword = !dto.password;
+    // Auto-generate a temporary password. Login credentials are emailed to the user.
+    const temporaryPassword = this.generateTemporaryPassword();
 
     const user = this.userRepository.create({
       email: dto.email,
@@ -678,7 +676,7 @@ export class AdminService {
       emailPreferences: {},
       smsPreferences: {},
       pushPreferences: {},
-      password: await bcrypt.hash(plainPassword, 10),
+      password: await bcrypt.hash(temporaryPassword, 10),
       customPermissions: this.permissionsService.normalizeForStorage(
         dto.role,
         dto.permissions as ResourcePermissions | undefined,
@@ -697,7 +695,8 @@ export class AdminService {
         email: saved.email,
         firstName: saved.firstName ?? 'there',
         role: saved.role,
-        temporaryPassword: usedTemporaryPassword ? plainPassword : undefined,
+        temporaryPassword,
+        isTemporaryPassword: true,
         portal: AuthPortal.ADMIN_PORTAL,
       })
       .then((result) => {
@@ -721,7 +720,7 @@ export class AdminService {
     return {
       ...this.toAdminUserSummary(saved, disciplines),
       credentialsEmailQueued: true,
-      temporaryPasswordIssued: usedTemporaryPassword,
+      temporaryPasswordIssued: true,
     };
   }
 
@@ -746,6 +745,7 @@ export class AdminService {
       firstName: user.firstName ?? 'there',
       role: user.role,
       temporaryPassword,
+      isTemporaryPassword: true,
       portal: AuthPortal.ADMIN_PORTAL,
     });
 

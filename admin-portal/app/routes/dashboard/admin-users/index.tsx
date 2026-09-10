@@ -46,7 +46,6 @@ type AdminUserForm = {
   phoneNumber: string;
   role: AdminRole;
   isActive: boolean;
-  password: string;
   disciplineIds: string[];
   permissions: PermissionMatrix;
   useRoleDefaults: boolean;
@@ -116,7 +115,6 @@ const EMPTY_FORM: AdminUserForm = {
   phoneNumber: "",
   role: "SECRETARIAT",
   isActive: true,
-  password: "",
   disciplineIds: [],
   permissions: emptyMatrix([
     "dashboard",
@@ -386,7 +384,6 @@ export default function AdminUsersPage() {
       phoneNumber: user.phoneNumber ?? "",
       role: user.role,
       isActive: user.isActive,
-      password: "",
       disciplineIds: (user.disciplines ?? []).map((d) => d.id),
       permissions: user.permissions
         ? cloneMatrix(user.permissions)
@@ -510,7 +507,6 @@ export default function AdminUsersPage() {
           phoneNumber: form.phoneNumber.trim(),
           role: form.role,
           isActive: form.isActive,
-          password: form.password || undefined,
           disciplineIds,
           ...permissionPayload,
         });
@@ -823,11 +819,8 @@ export default function AdminUsersPage() {
           </div>
           <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} required />
           {!editing && (
-            <div>
-              <TextField label="Initial Password" value={form.password} onChange={(value) => setForm((prev) => ({ ...prev, password: value }))} type="password" />
-              <p className="mt-1 text-[10.5px] text-[var(--muted)]">
-                Optional. Leave blank to auto-generate a temporary password. Either way, the user is emailed that their account was created (temp password is included only when auto-generated).
-              </p>
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted)]">
+              A secure temporary password will be auto-generated and emailed to the user with sign-in instructions.
             </div>
           )}
           <div className="grid gap-3 md:grid-cols-2">

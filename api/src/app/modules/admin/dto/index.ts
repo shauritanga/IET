@@ -386,7 +386,7 @@ export class CreateAdminUserDto {
 
   @ApiPropertyOptional({
     description:
-      'Password. Omit to auto-generate a temporary password and email login credentials to the user.',
+      'Password. Omit to auto-generate a temporary password. The login credentials will be emailed to the user.',
     example: 'AdminPass123!',
   })
   @IsOptional()

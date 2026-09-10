@@ -205,6 +205,7 @@ export class EmailService implements OnModuleInit {
     firstName: string;
     role: string;
     temporaryPassword?: string;
+    isTemporaryPassword?: boolean;
     portal: AuthPortal;
   }): Promise<EmailResult> {
     const isAdminPortal = params.portal === AuthPortal.ADMIN_PORTAL;
@@ -220,6 +221,7 @@ export class EmailService implements OnModuleInit {
       email: params.email,
       role: params.role,
       temporaryPassword: params.temporaryPassword,
+      isTemporaryPassword: params.isTemporaryPassword,
       portalLabel,
       loginUrl,
     });
@@ -667,7 +669,7 @@ export class EmailService implements OnModuleInit {
                                                         <div><strong>Login email:</strong> ${ctx.email}</div>
                                                         ${
                                                           ctx.temporaryPassword
-                                                            ? `<div><strong>Temporary password:</strong> ${ctx.temporaryPassword}</div>`
+                                                            ? `<div><strong>${ctx.isTemporaryPassword === false ? 'Password' : 'Temporary password'}:</strong> ${ctx.temporaryPassword}</div>`
                                                             : `<div>Use the initial password provided by your administrator.</div>`
                                                         }
                                                     </td>
@@ -675,7 +677,7 @@ export class EmailService implements OnModuleInit {
                                             </table>
                                             ${
                                               ctx.temporaryPassword
-                                                ? `<p style="margin:0 0 18px;font-size:13px;color:#4a3a3a;">Please sign in and change your password immediately.</p>`
+                                                ? `<p style="margin:0 0 18px;font-size:13px;color:#4a3a3a;">Please sign in and change your password upon login.</p>`
                                                 : ''
                                             }
                                             <p style="text-align:center;margin:24px 0 0;">
