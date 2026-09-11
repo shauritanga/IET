@@ -572,6 +572,20 @@ export class AdminController {
     };
   }
 
+  @Delete('applications/:applicationId')
+  @ApiOperation({ summary: 'Permanently delete an application' })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  async deleteApplication(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() admin: UserEntity,
+  ) {
+    await this.adminService.deleteApplication(admin, applicationId);
+    return {
+      success: true,
+      message: 'Application deleted successfully',
+    };
+  }
+
   // ============================================
   // MEMBER IMPORT
   // ============================================
@@ -606,6 +620,19 @@ export class AdminController {
       success: true,
       data: result,
       message: `Import complete: ${result.created} created, ${result.updated} updated, ${result.feesCreated} fees created, ${result.feesUpdated} fees updated, ${result.welcomeEmailsQueued} welcome emails queued`,
+    };
+  }
+
+  @Post('members/resend-credentials')
+  @ApiOperation({
+    summary: 'Reset passwords and resend welcome credentials to all active members',
+  })
+  async resendAllMemberCredentials() {
+    const result = await this.adminService.resendAllMemberCredentials();
+    return {
+      success: true,
+      data: result,
+      message: `${result.emailsQueued} member welcome emails queued`,
     };
   }
 

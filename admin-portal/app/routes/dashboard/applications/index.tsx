@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router";
-import { Button, StatusBadge } from "~/components/prototype-ui";
+import { Trash2 } from "lucide-react";
+import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import { MobileCardList, MobileCard, CardFieldGrid } from "~/components/mobile-card";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
+import { usePermissions } from "~/providers/permissions";
 
 type ReviewStage =
   | "SECRETARIAT_REVIEW"
@@ -131,12 +133,17 @@ function FilterSelect({
 
 export default function ApplicationsPage() {
   const navigate = useNavigate();
+  const { canDelete } = usePermissions();
+  const canDeleteApplications = canDelete("applications");
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("All");
   const [stageFilter, setStageFilter] = useState("All Stages");
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ApplicationRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function loadApplications() {
     setLoading(true);
@@ -157,6 +164,27 @@ export default function ApplicationsPage() {
   useEffect(() => {
     void loadApplications();
   }, []);
+
+  function openDelete(row: ApplicationRow) {
+    setDeleteTarget(row);
+    setDeleteError(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await http.delete(`/admin/applications/${deleteTarget.id}`);
+      setRows((current) => current.filter((row) => row.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      const apiErr = err as AxiosError<{ message?: string }>;
+      setDeleteError(apiErr.response?.data?.message ?? "Failed to delete application.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const stageOptions = ["All Stages", ...Object.values(STAGE_LABELS)];
   const statusOptions = ["All", ...Object.values(STATUS_LABELS)];
@@ -267,12 +295,25 @@ export default function ApplicationsPage() {
                     </td>
                     <td className="text-[11.5px]">{formatDate(row.submittedAt)}</td>
                     <td>
-                      <Button
-                        tone={row.status === "IN_REVIEW" ? "dark" : "outline"}
-                        onClick={() => navigate(`/dashboard/applications/${row.id}`)}
-                      >
-                        {row.status === "IN_REVIEW" ? "Review" : "View"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          tone={row.status === "IN_REVIEW" ? "dark" : "outline"}
+                          onClick={() => navigate(`/dashboard/applications/${row.id}`)}
+                        >
+                          {row.status === "IN_REVIEW" ? "Review" : "View"}
+                        </Button>
+                        {canDeleteApplications ? (
+                          <button
+                            type="button"
+                            onClick={() => openDelete(row)}
+                            aria-label={`Delete application ${row.referenceNumber ?? row.applicantName}`}
+                            title="Delete application"
+                            className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border border-[var(--border)] text-[var(--red)] transition-colors hover:border-[var(--red)] hover:bg-[var(--red-pale)]"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -342,7 +383,16 @@ export default function ApplicationsPage() {
                 ]}
               />
 
-              <div className="mt-3 flex justify-end border-t border-[var(--border)] pt-2.5">
+              <div className="mt-3 flex items-center justify-end gap-3 border-t border-[var(--border)] pt-2.5">
+                {canDeleteApplications ? (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openDelete(row); }}
+                    className="inline-flex items-center gap-1 text-[11.5px] font-bold text-[var(--red)] hover:underline"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                ) : null}
                 <span className="text-[11.5px] font-bold text-[var(--red)]">
                   {row.status === "IN_REVIEW" ? "Review ›" : "View ›"}
                 </span>
@@ -351,6 +401,38 @@ export default function ApplicationsPage() {
           ))}
         </MobileCardList>
       )}
+
+      <Modal
+        title="Delete Application"
+        open={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        closeOnOverlay={!deleting}
+        closeOnEscape={!deleting}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button tone="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+            <Button tone="red" onClick={() => void handleDelete()} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete Application"}
+            </Button>
+          </div>
+        }
+      >
+        {deleteTarget ? (
+          <div className="space-y-3">
+            <p className="text-[12px] leading-5 text-[var(--text)]">
+              Permanently delete the application for <strong>{deleteTarget.applicantName}</strong>?
+            </p>
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[11px] leading-5 text-[var(--muted)]">
+              <div>Reference: <span className="font-mono">{deleteTarget.referenceNumber ?? "Not assigned"}</span></div>
+              <div>Email: {deleteTarget.email}</div>
+            </div>
+            <p className="text-[11px] leading-5 text-[var(--muted)]">
+              This permanently removes the application, its submitted details, document records, references, and review history. The applicant&rsquo;s portal account is not deleted.
+            </p>
+            {deleteError ? <p className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">{deleteError}</p> : null}
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
 }

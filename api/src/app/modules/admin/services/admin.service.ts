@@ -1271,6 +1271,63 @@ export class AdminService {
     return created ?? user;
   }
 
+  /**
+   * Issue fresh temporary passwords to every active member portal account and
+   * queue their replacement credentials. A password is restored if its email
+   * cannot be queued, so a member is never locked out by a queue failure.
+   */
+  async resendAllMemberCredentials(): Promise<{
+    eligible: number;
+    emailsQueued: number;
+    emailsFailed: number;
+  }> {
+    const members = await this.userRepository.find({
+      where: {
+        role: UserRole.MEMBER,
+        isActive: true,
+      },
+    });
+    const eligibleMembers = members.filter((member) => member.email?.trim());
+    let emailsQueued = 0;
+    let emailsFailed = 0;
+
+    for (const member of eligibleMembers) {
+      const previousPassword = member.password;
+      const temporaryPassword = this.generateTemporaryPassword();
+      member.password = await bcrypt.hash(temporaryPassword, 10);
+      await this.userRepository.save(member);
+
+      try {
+        const queued = await this.messagingQueue.enqueuePortalWelcomeEmail({
+          email: member.email,
+          firstName: member.firstName ?? 'Member',
+          role: member.role,
+          temporaryPassword,
+          isTemporaryPassword: true,
+          portal: AuthPortal.MEMBER_PORTAL,
+        });
+        if (!queued.success) throw new Error(queued.error || 'Failed to queue email');
+        emailsQueued++;
+      } catch (error) {
+        member.password = previousPassword;
+        await this.userRepository.save(member);
+        emailsFailed++;
+        this.logger.warn(
+          `Failed to queue replacement member credentials for ${member.email}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Replacement member credentials: ${emailsQueued} queued, ${emailsFailed} failed, ${eligibleMembers.length} eligible`,
+    );
+    return {
+      eligible: eligibleMembers.length,
+      emailsQueued,
+      emailsFailed,
+    };
+  }
+
   private generateTemporaryPassword(): string {
     const token = randomBytes(6).toString('hex');
     return `${token}A1!`;
@@ -1515,6 +1572,24 @@ export class AdminService {
       references: registration.references,
       stageHistory: registration.stageHistory,
     };
+  }
+
+  /** Permanently remove an application and its database-owned application data. */
+  async deleteApplication(actor: UserEntity, applicationId: string): Promise<void> {
+    const registration = await this.registrationRepository.findOneBy({
+      id: applicationId,
+    });
+    if (!registration) {
+      throw new NotFoundException('Application not found');
+    }
+    await this.assertCanViewApplication(actor, registration);
+
+    // Registration child records use database-level ON DELETE CASCADE. The user
+    // account intentionally remains available and is not affected by this action.
+    await this.registrationRepository.delete(applicationId);
+    this.logger.log(
+      `Application ${applicationId} (${registration.referenceNumber ?? 'no reference'}) deleted by ${actor.id}`,
+    );
   }
 
   async updateApplicationStage(

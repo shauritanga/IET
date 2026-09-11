@@ -42,6 +42,12 @@ type ImportResult = {
   warnings: Array<{ row: number; field: string; value: string; reason: string }>;
 };
 
+type ResendCredentialsResult = {
+  eligible: number;
+  emailsQueued: number;
+  emailsFailed: number;
+};
+
 type CreateMemberForm = {
   email: string;
   firstName: string;
@@ -515,6 +521,13 @@ export default function MembersPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // bulk credential reset state
+  const [resendCredentialsOpen, setResendCredentialsOpen] = useState(false);
+  const [resendConfirmed, setResendConfirmed] = useState(false);
+  const [resendingCredentials, setResendingCredentials] = useState(false);
+  const [resendCredentialsError, setResendCredentialsError] = useState<string | null>(null);
+  const [resendCredentialsResult, setResendCredentialsResult] = useState<ResendCredentialsResult | null>(null);
+
   // action state
   const [feeConfig, setFeeConfig] = useState<Record<string, number>>({});
   const [renewTarget, setRenewTarget] = useState<MemberRow | null>(null);
@@ -719,6 +732,30 @@ export default function MembersPage() {
     }
   }
 
+  function openResendCredentials() {
+    setResendConfirmed(false);
+    setResendCredentialsError(null);
+    setResendCredentialsResult(null);
+    setResendCredentialsOpen(true);
+  }
+
+  async function handleResendCredentials() {
+    if (!resendConfirmed) return;
+    setResendingCredentials(true);
+    setResendCredentialsError(null);
+    try {
+      const { data } = await http.post<ApiEnvelope<ResendCredentialsResult>>(
+        "/admin/members/resend-credentials",
+      );
+      setResendCredentialsResult(data.data);
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string }>;
+      setResendCredentialsError(e.response?.data?.message ?? "Could not resend member credentials.");
+    } finally {
+      setResendingCredentials(false);
+    }
+  }
+
   function openRenew(member: MemberRow) {
     const configuredAmount = member.membershipClass ? feeConfig[member.membershipClass] : undefined;
     setRenewTarget(member);
@@ -792,7 +829,7 @@ export default function MembersPage() {
             Manage all IET Tanzania registered members
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
           {canAddMembers ? (
             <button
               onClick={openCreate}
@@ -811,6 +848,16 @@ export default function MembersPage() {
               onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
             >
               <UploadIcon /> Import Members
+            </button>
+          ) : null}
+          {canRenewMembers ? (
+            <button
+              onClick={openResendCredentials}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--white)", color: "var(--red-dark)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "border-color .15s" }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+            >
+              Resend credentials
             </button>
           ) : null}
         </div>
@@ -1213,7 +1260,7 @@ export default function MembersPage() {
         )}
 
         {importResult && (
-          <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderLeft: "4px solid var(--success)", borderRadius: 10, padding: "14px 16px", marginBottom: 12, color: "var(--text)" }}>
+          <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px", marginBottom: 12, color: "var(--text)" }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: "var(--success)", marginBottom: 8 }}>Import Complete</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "var(--text)" }}>
               <span><strong>{importResult.created}</strong> created</span>
@@ -1265,6 +1312,37 @@ export default function MembersPage() {
             Close
           </button>
         </div>
+      </Modal>
+
+      <Modal open={resendCredentialsOpen} onClose={() => !resendingCredentials && setResendCredentialsOpen(false)} title="Resend Member Credentials">
+        {resendCredentialsResult ? (
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--success)", marginBottom: 6 }}>Credentials queued</p>
+            <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 16 }}>
+              New temporary passwords were issued for {resendCredentialsResult.emailsQueued} of {resendCredentialsResult.eligible} active member accounts.
+              {resendCredentialsResult.emailsFailed > 0 ? ` ${resendCredentialsResult.emailsFailed} accounts were unchanged because their emails could not be queued.` : ""}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+              <button type="button" onClick={() => setResendCredentialsOpen(false)} style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer" }}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>Issue new passwords to every active member?</p>
+            <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 16 }}>
+              Each active member account will receive a new temporary password and a welcome email. Their current password will stop working once the email is queued.
+            </p>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 9, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "11px 12px", fontSize: 12, color: "var(--text)", lineHeight: 1.45, cursor: "pointer", marginBottom: 14 }}>
+              <input type="checkbox" checked={resendConfirmed} onChange={(e) => setResendConfirmed(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--red)" }} />
+              I understand that this replaces every active member’s current password.
+            </label>
+            {resendCredentialsError && <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>{resendCredentialsError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+              <button type="button" onClick={() => setResendCredentialsOpen(false)} disabled={resendingCredentials} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: resendingCredentials ? "not-allowed" : "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => void handleResendCredentials()} disabled={!resendConfirmed || resendingCredentials} style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: !resendConfirmed || resendingCredentials ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: !resendConfirmed || resendingCredentials ? "not-allowed" : "pointer" }}>{resendingCredentials ? "Sending…" : "Reset & send"}</button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal open={!!renewTarget} onClose={() => setRenewTarget(null)} title="Renew Membership">
