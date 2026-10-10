@@ -66,8 +66,8 @@ function StatusBadge({ status }: { status: CommunicationMessage["status"] }) {
 
 function MessageTypePill({ type }: { type: CommunicationType }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 10px", background: type === "EMAIL" ? "#eff6ff" : "#f0fdf4", color: type === "EMAIL" ? "#1d4ed8" : "#15803d", fontSize: 11, fontWeight: 700 }}>
-      {type === "EMAIL" ? "Email" : "SMS"}
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 10px", background: type === "SMS" ? "#f0fdf4" : "#eff6ff", color: type === "SMS" ? "#15803d" : "#1d4ed8", fontSize: 11, fontWeight: 700 }}>
+      {typeLabel(type)}
     </span>
   );
 }
@@ -193,6 +193,7 @@ export default function CommunicationHistoryPage() {
           <option value="">All Types</option>
           <option value="SMS">SMS</option>
           <option value="EMAIL">Email</option>
+          <option value="BOTH">SMS + Email</option>
         </SelectField>
 
         <SelectField

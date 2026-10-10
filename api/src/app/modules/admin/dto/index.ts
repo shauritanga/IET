@@ -104,6 +104,25 @@ export class ApplicationQueryDto {
   reviewStage?: ApplicationReviewStage;
 }
 
+export class UpdateApplicationCategoryDto {
+  @ApiProperty({
+    enum: MembershipClass,
+    example: MembershipClass.ASSOCIATE,
+    description: 'Membership category the application should be considered for',
+  })
+  @IsEnum(MembershipClass)
+  membershipClass: MembershipClass;
+
+  @ApiPropertyOptional({
+    example: 'Your qualifications match Associate membership.',
+    description: 'Optional reason shared with the applicant',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  comments?: string;
+}
+
 export class UpdateApplicationStageDto {
   @ApiProperty({
     example: 'ASSIGN_EVALUATOR',

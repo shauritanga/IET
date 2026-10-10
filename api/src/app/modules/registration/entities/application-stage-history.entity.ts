@@ -16,7 +16,8 @@ export type ApplicationStageAction =
   | 'REJECTED'
   | 'APPROVED_BY_COUNCIL'
   | 'NOTICE_SENT'
-  | 'RESUBMITTED';
+  | 'RESUBMITTED'
+  | 'CATEGORY_CHANGED';
 
 @Entity('application_stage_history')
 @Index(['registrationId', 'createdAt'])

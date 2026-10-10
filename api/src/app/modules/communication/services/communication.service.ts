@@ -17,6 +17,7 @@ import {
 } from '../entities';
 import {
   COMMUNICATION_TYPES,
+  COMMUNICATION_SEND_TYPES,
   COMMUNICATION_TARGETS,
   CommunicationHistoryQueryDto,
   CommunicationTemplateQueryDto,
@@ -82,13 +83,13 @@ export class CommunicationService {
     adminId: string,
     dto: SendCommunicationDto,
   ): Promise<{ message: MessageListItem; deliverySummary: { total: number; successful: number; failed: number } }> {
-    if (!COMMUNICATION_TYPES.includes(dto.type)) {
+    if (!COMMUNICATION_SEND_TYPES.includes(dto.type)) {
       throw new BadRequestException('Invalid communication type');
     }
     if (!COMMUNICATION_TARGETS.includes(dto.recipients)) {
       throw new BadRequestException('Invalid recipient target');
     }
-    if (dto.type === 'EMAIL' && !dto.subject?.trim()) {
+    if (dto.type !== 'SMS' && !dto.subject?.trim()) {
       throw new BadRequestException('Subject is required for email messages');
     }
     if (dto.recipients === 'GROUP' && !dto.groupId) {
@@ -133,28 +134,39 @@ export class CommunicationService {
       };
     }
 
+    const channels: Array<'SMS' | 'EMAIL'> =
+      dto.type === 'BOTH' ? ['SMS', 'EMAIL'] : [dto.type];
     let successful = 0;
     let failed = 0;
 
     for (const chunk of this.chunk(recipients, this.chunkSize)) {
-      const deliveryRows = await Promise.all(
-        chunk.map(async (recipient) => {
-          const result = await this.sendToRecipient(dto, recipient);
-          if (result.success) successful += 1;
-          else failed += 1;
+      const deliveryRows = (
+        await Promise.all(
+          chunk.map(async (recipient) => {
+            const results = await Promise.all(
+              channels.map(async (channel) => ({
+                channel,
+                result: await this.sendToRecipient(dto, recipient, channel),
+              })),
+            );
+            // A recipient counts as successful if at least one channel got through.
+            if (results.some(({ result }) => result.success)) successful += 1;
+            else failed += 1;
 
-          const delivery = this.deliveryRepository.create({
-            messageId: message.id,
-            userId: recipient.id,
-            recipient: result.recipient,
-            channel: dto.type,
-            status: result.success ? 'SENT' : 'FAILED',
-            error: result.error ?? null,
-            sentAt: new Date(),
-          });
-          return delivery;
-        }),
-      );
+            return results.map(({ channel, result }) =>
+              this.deliveryRepository.create({
+                messageId: message.id,
+                userId: recipient.id,
+                recipient: result.recipient,
+                channel,
+                status: result.success ? 'SENT' : 'FAILED',
+                error: result.error ?? null,
+                sentAt: new Date(),
+              }),
+            );
+          }),
+        )
+      ).flat();
 
       await this.deliveryRepository.save(deliveryRows);
     }
@@ -360,8 +372,9 @@ export class CommunicationService {
   private async sendToRecipient(
     dto: SendCommunicationDto,
     recipient: Recipient,
+    channel: 'SMS' | 'EMAIL',
   ): Promise<{ success: boolean; recipient: string; error?: string }> {
-    if (dto.type === 'EMAIL') {
+    if (channel === 'EMAIL') {
       if (!recipient.email) {
           return {
             success: false,

@@ -34,6 +34,7 @@ import {
   MemberQueryDto,
   ApplicationQueryDto,
   UpdateApplicationStageDto,
+  UpdateApplicationCategoryDto,
   UpdateMemberStatusDto,
   AnalyticsQueryDto,
   CreateMemberDto,
@@ -1591,6 +1592,90 @@ export class AdminService {
       `Application ${applicationId} (${registration.referenceNumber ?? 'no reference'}) deleted by ${actor.id}`,
     );
   }
+
+  async updateApplicationCategory(
+    applicationId: string,
+    actor: UserEntity,
+    dto: UpdateApplicationCategoryDto,
+  ): Promise<{ applicationId: string; appliedMembershipClass: string }> {
+    const registration = await this.registrationRepository.findOne({
+      where: { id: applicationId },
+      relations: ['user'],
+    });
+    if (!registration) {
+      throw new NotFoundException('Application not found');
+    }
+    if (registration.status !== ApplicationStatus.IN_REVIEW) {
+      throw new BadRequestException(
+        'The applied category can only be changed while the application is in review',
+      );
+    }
+    if (
+      !this.isFullWorkflowAdmin(actor.role) &&
+      actor.role !== UserRole.SECRETARIAT
+    ) {
+      throw new ForbiddenException(
+        'Only Secretariat can change the applied category',
+      );
+    }
+    await this.assertCanViewApplication(actor, registration);
+
+    const previous = registration.appliedMembershipClass;
+    if (previous === dto.membershipClass) {
+      return {
+        applicationId: registration.id,
+        appliedMembershipClass: dto.membershipClass,
+      };
+    }
+
+    registration.appliedMembershipClass = dto.membershipClass;
+    await this.registrationRepository.save(registration);
+
+    const stage = registration.reviewStage as ApplicationReviewStage;
+    const labelOf = (value?: string) =>
+      value ? (this.membershipClassLabels[value as MembershipClass] ?? value) : 'previous category';
+    const comments = dto.comments?.trim();
+    await this.recordStageHistory(registration, {
+      fromStage: stage,
+      toStage: stage,
+      action: 'CATEGORY_CHANGED',
+      actedByUserId: actor.id,
+      comments: `Applied category changed from ${labelOf(previous)} to ${labelOf(dto.membershipClass)}${comments ? `: ${comments}` : ''}`,
+    });
+
+    const reference = registration.referenceNumber ?? registration.id;
+    await this.notificationsService.sendMemberWorkflowNotification(
+      registration.userId,
+      NotificationType.APPLICATION_UPDATE,
+      'Application Category Updated',
+      `After review, your application ${reference} has been moved from ${labelOf(previous)} to ${labelOf(dto.membershipClass)}.${comments ? ` ${comments}` : ''}`,
+      {
+        actionUrl: '/dashboard/status',
+        data: {
+          applicationId: registration.id,
+          action: 'CATEGORY_CHANGED',
+          actedBy: actor.id,
+        },
+        sendEmail: true,
+        sendSms: true,
+      },
+    );
+
+    return {
+      applicationId: registration.id,
+      appliedMembershipClass: dto.membershipClass,
+    };
+  }
+
+  private readonly membershipClassLabels: Record<MembershipClass, string> = {
+    [MembershipClass.GRADUATE]: 'Graduate Member',
+    [MembershipClass.ASSOCIATE]: 'Associate Member',
+    [MembershipClass.MEMBER]: 'Member',
+    [MembershipClass.CORPORATE]: 'Corporate Member',
+    [MembershipClass.SENIOR]: 'Senior Member',
+    [MembershipClass.FELLOW]: 'Fellow',
+    [MembershipClass.HONORARY]: 'Honorary Fellow',
+  };
 
   async updateApplicationStage(
     applicationId: string,

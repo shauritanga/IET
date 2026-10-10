@@ -44,6 +44,7 @@ import {
   ApplicationQueryDto,
   UpdateApplicationStageDto,
   UpdateMemberStatusDto,
+  UpdateApplicationCategoryDto,
   AnalyticsQueryDto,
   PaymentQueryDto,
   CreateMemberDto,
@@ -531,6 +532,28 @@ export class AdminController {
     return {
       success: true,
       data: result,
+    };
+  }
+
+  @Patch('applications/:applicationId/category')
+  @ApiOperation({
+    summary: 'Change the category an application is being considered for',
+  })
+  @ApiParam({ name: 'applicationId', type: 'string', format: 'uuid' })
+  async updateApplicationCategory(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: UpdateApplicationCategoryDto,
+  ) {
+    const result = await this.adminService.updateApplicationCategory(
+      applicationId,
+      admin,
+      dto,
+    );
+    return {
+      success: true,
+      data: result,
+      message: 'Applied category updated and applicant notified',
     };
   }
 

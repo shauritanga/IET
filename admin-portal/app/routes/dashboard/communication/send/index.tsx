@@ -4,7 +4,8 @@ import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import {
-  MESSAGE_TYPES,
+  SEND_MESSAGE_TYPES,
+  typeHasEmail,
   RECIPIENT_OPTIONS,
   SelectField,
   type CommunicationTemplate,
@@ -166,7 +167,7 @@ export default function CommunicationSendPage() {
           next.subject = "";
         }
         if (field === "templateId" && !value) {
-          next.subject = prev.type === "EMAIL" ? prev.subject : "";
+          next.subject = typeHasEmail(prev.type) ? prev.subject : "";
         }
         return next;
       });
@@ -186,7 +187,7 @@ export default function CommunicationSendPage() {
       setError("Message body is required.");
       return;
     }
-    if (form.type === "EMAIL" && !form.subject.trim()) {
+    if (typeHasEmail(form.type) && !form.subject.trim()) {
       setError("Subject is required for email messages.");
       return;
     }
@@ -205,7 +206,7 @@ export default function CommunicationSendPage() {
         type: form.type,
         recipients: form.recipients,
         groupId: form.recipients === "GROUP" ? form.groupId : undefined,
-        subject: form.type === "EMAIL" ? form.subject.trim() : undefined,
+        subject: typeHasEmail(form.type) ? form.subject.trim() : undefined,
         message: form.message.trim(),
       });
 
@@ -229,11 +230,11 @@ export default function CommunicationSendPage() {
         <div>
           <h1 style={{ fontSize: 15, fontWeight: 800, color: "var(--red-dark)", margin: 0 }}>Send Message</h1>
           <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
-            Send SMS or Email messages to all members or a membership category.
+            Send SMS, Email or both to all members or a membership category.
           </p>
         </div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--border)", borderRadius: 999, background: "var(--white)", padding: "7px 12px", fontSize: 11.5, color: "var(--muted)" }}>
-          {form.type === "EMAIL" ? <MailIcon /> : <SmsIcon />}
+          {form.type === "SMS" ? <SmsIcon /> : <MailIcon />}
           <span>{typeLabel(form.type)}</span>
         </div>
       </div>
@@ -284,7 +285,7 @@ export default function CommunicationSendPage() {
                 onChange={setField("type")}
                 disabled={loadingOptions}
               >
-                {MESSAGE_TYPES.map((option) => (
+                {SEND_MESSAGE_TYPES.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -334,7 +335,7 @@ export default function CommunicationSendPage() {
             )}
           </div>
 
-          {form.type === "EMAIL" && (
+          {typeHasEmail(form.type) && (
             <div>
               <SectionLabel>Subject</SectionLabel>
               <input
@@ -353,10 +354,10 @@ export default function CommunicationSendPage() {
               style={baseTextareaStyle}
               value={form.message}
               onChange={setField("message")}
-              placeholder={form.type === "EMAIL" ? "Write the email body here..." : "Write the SMS message here..."}
+              placeholder={form.type === "BOTH" ? "Write the message (sent as both SMS and email body)..." : form.type === "EMAIL" ? "Write the email body here..." : "Write the SMS message here..."}
               disabled={loadingOptions}
             />
-            {form.type === "EMAIL" ? (
+            {typeHasEmail(form.type) ? (
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
                 Emails are sent with the standard IET header and footer signature automatically.
                 You only need to write the message body.

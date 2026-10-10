@@ -1,6 +1,7 @@
 import type { CSSProperties, ChangeEvent, ReactNode } from "react";
 
-export type CommunicationType = "SMS" | "EMAIL";
+export type ChannelType = "SMS" | "EMAIL";
+export type CommunicationType = ChannelType | "BOTH";
 export type CommunicationTarget = "ALL" | "GROUP";
 export type CommunicationStatus = "PENDING" | "SENT" | "FAILED";
 
@@ -31,7 +32,7 @@ export type CommunicationMessage = {
 export type CommunicationTemplate = {
   id: string;
   name: string;
-  type: CommunicationType;
+  type: ChannelType;
   subject: string | null;
   body: string;
   isActive: boolean;
@@ -39,10 +40,19 @@ export type CommunicationTemplate = {
   updatedAt: string;
 };
 
-export const MESSAGE_TYPES: Array<{ value: CommunicationType; label: string }> = [
+export const MESSAGE_TYPES: Array<{ value: ChannelType; label: string }> = [
   { value: "SMS", label: "SMS" },
   { value: "EMAIL", label: "Email" },
 ];
+
+export const SEND_MESSAGE_TYPES: Array<{ value: CommunicationType; label: string }> = [
+  ...MESSAGE_TYPES,
+  { value: "BOTH", label: "SMS + Email" },
+];
+
+export function typeHasEmail(type: CommunicationType) {
+  return type === "EMAIL" || type === "BOTH";
+}
 
 export const RECIPIENT_OPTIONS: Array<{ value: CommunicationTarget; label: string }> = [
   { value: "ALL", label: "All Members" },
@@ -50,6 +60,7 @@ export const RECIPIENT_OPTIONS: Array<{ value: CommunicationTarget; label: strin
 ];
 
 export function typeLabel(type: CommunicationType) {
+  if (type === "BOTH") return "SMS + Email";
   return type === "EMAIL" ? "Email" : "SMS";
 }
 

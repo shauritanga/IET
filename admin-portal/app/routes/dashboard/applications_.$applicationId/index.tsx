@@ -190,6 +190,10 @@ export default function ApplicationReviewPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [comments, setComments] = useState("");
+  const [categoryChoice, setCategoryChoice] = useState("");
+  const [categoryReason, setCategoryReason] = useState("");
+  const [categoryPending, setCategoryPending] = useState(false);
+  const [categoryMessage, setCategoryMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [membershipClass, setMembershipClass] = useState("MIET");
   const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
   const [assigneesLoading, setAssigneesLoading] = useState(false);
@@ -321,6 +325,27 @@ export default function ApplicationReviewPage() {
     }
   }
 
+  async function handleChangeCategory() {
+    if (!detail || !categoryChoice || categoryChoice === detail.appliedMembershipClass) return;
+    setCategoryPending(true);
+    setCategoryMessage(null);
+    try {
+      await http.patch(`/admin/applications/${detail.id}/category`, {
+        membershipClass: categoryChoice,
+        comments: categoryReason.trim() || undefined,
+      });
+      setCategoryReason("");
+      setCategoryChoice("");
+      setCategoryMessage({ tone: "ok", text: "Category updated. The applicant has been notified." });
+      await loadDetail();
+    } catch (err) {
+      const apiErr = err as AxiosError<{ message?: string }>;
+      setCategoryMessage({ tone: "error", text: apiErr.response?.data?.message ?? "Failed to change category." });
+    } finally {
+      setCategoryPending(false);
+    }
+  }
+
   if (loading) {
     return <section className="py-8 text-center text-[12px] text-[var(--muted)]">Loading application...</section>;
   }
@@ -363,10 +388,45 @@ export default function ApplicationReviewPage() {
                 ["Applicant", detail.applicant.fullName],
                 ["Email", detail.applicant.email],
                 ["Phone", detail.applicant.phoneNumber ?? "-"],
-                ["Applied Grade", detail.appliedMembershipClass ?? "-"],
+                ["Applied Category", detail.appliedMembershipClass ?? "-"],
                 ["Discipline", detail.engineeringDiscipline ?? "-"],
                 ["Submitted", formatDate(detail.submittedAt)],
               ]} />
+              {isSecretariat && canUpdateApplications && detail.status === "IN_REVIEW" && (
+                <div className="mt-3 space-y-2 rounded-[8px] border border-[var(--border)] bg-[var(--bg)] p-3">
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.6px] text-[var(--muted)]">Change applied category</span>
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={categoryChoice}
+                      onChange={(e) => setCategoryChoice(e.target.value)}
+                      className="h-[36px] min-w-[180px] rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
+                    >
+                      <option value="">Select category…</option>
+                      {MEMBERSHIP_CLASSES.filter((grade) => grade !== detail.appliedMembershipClass).map((grade) => (
+                        <option key={grade} value={grade}>{grade}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={categoryReason}
+                      onChange={(e) => setCategoryReason(e.target.value)}
+                      placeholder="Reason shared with applicant (optional)"
+                      className="h-[36px] min-w-[220px] flex-1 rounded-[7px] border-[1.5px] border-[var(--border)] bg-[var(--white)] px-3 text-[12.5px] outline-none focus:border-[var(--red-dark)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleChangeCategory}
+                      disabled={!categoryChoice || categoryPending}
+                      className="h-[36px] rounded-[7px] bg-[var(--red-dark)] px-4 text-[12px] font-bold text-white disabled:opacity-50"
+                    >
+                      {categoryPending ? "Saving…" : "Change & notify"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[var(--muted)]">The applicant is notified by email and SMS; the application is not returned to them.</p>
+                  {categoryMessage && (
+                    <p className={`text-[11.5px] ${categoryMessage.tone === "ok" ? "text-green-700" : "text-[var(--red)]"}`}>{categoryMessage.text}</p>
+                  )}
+                </div>
+              )}
             </Section>
 
             <Section title="Education">

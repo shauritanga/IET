@@ -13,13 +13,14 @@ import {
 import { Type } from 'class-transformer';
 
 export const COMMUNICATION_TYPES = ['SMS', 'EMAIL'] as const;
+export const COMMUNICATION_SEND_TYPES = ['SMS', 'EMAIL', 'BOTH'] as const;
 export const COMMUNICATION_TARGETS = ['ALL', 'GROUP'] as const;
 export const COMMUNICATION_STATUSES = ['PENDING', 'SENT', 'FAILED'] as const;
 
 export class SendCommunicationDto {
-  @ApiProperty({ example: 'SMS', enum: COMMUNICATION_TYPES })
-  @IsIn(COMMUNICATION_TYPES)
-  type: (typeof COMMUNICATION_TYPES)[number];
+  @ApiProperty({ example: 'SMS', enum: COMMUNICATION_SEND_TYPES })
+  @IsIn(COMMUNICATION_SEND_TYPES)
+  type: (typeof COMMUNICATION_SEND_TYPES)[number];
 
   @ApiProperty({ example: 'ALL', enum: COMMUNICATION_TARGETS })
   @IsIn(COMMUNICATION_TARGETS)
