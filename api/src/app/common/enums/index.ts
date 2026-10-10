@@ -52,6 +52,15 @@ export enum MembershipClass {
   HONORARY = 'HONORARY', // Honorary Fellow
 }
 
+export enum EducationLevel {
+  CERTIFICATE = 'CERTIFICATE',
+  DIPLOMA = 'DIPLOMA',
+  BACHELOR = 'BACHELOR',
+  POSTGRADUATE_DIPLOMA = 'POSTGRADUATE_DIPLOMA',
+  MASTERS = 'MASTERS',
+  PHD = 'PHD',
+}
+
 export enum MembershipStatus {
   PENDING = 'PENDING', // Application pending review
   ACTIVE = 'ACTIVE', // Active membership

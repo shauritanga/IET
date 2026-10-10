@@ -6,7 +6,7 @@ import {Button} from "~/components/ui/button";
 import {PlusIcon, Trash2, GraduationCap, Briefcase, CheckIcon, ChevronsUpDown} from "lucide-react";
 import {Controller, useFormContext} from "react-hook-form";
 import type {UseFieldArrayReturn} from "react-hook-form";
-import type {ExperienceDetailsFormType} from "./manage-experience-details-form";
+import {EDUCATION_LEVELS, type ExperienceDetailsFormType} from "./manage-experience-details-form";
 import {FilePickerCard} from '~/components/custom/file-pickers/file-picker-card';
 import {useQuery} from "@tanstack/react-query";
 import http from "~/utils/http";
@@ -234,6 +234,21 @@ const ExperienceDetailsForm = ({
                         />
                         {errors.education?.[savedEducationCount]?.endDate && (
                             <FieldError>{errors.education[savedEducationCount]?.endDate?.message}</FieldError>
+                        )}
+                    </Field>
+                    <Field className="md:col-span-2">
+                        <FieldLabel>Level of Education</FieldLabel>
+                        <select
+                            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            {...register(`education.${savedEducationCount}.educationLevel`)}
+                        >
+                            <option value="">Select level (e.g. Bachelor's, Master's, PhD)</option>
+                            {EDUCATION_LEVELS.map((level) => (
+                                <option key={level.value} value={level.value}>{level.label}</option>
+                            ))}
+                        </select>
+                        {errors.education?.[savedEducationCount]?.educationLevel && (
+                            <FieldError>{errors.education[savedEducationCount]?.educationLevel?.message}</FieldError>
                         )}
                     </Field>
                     <Field className="md:col-span-2">

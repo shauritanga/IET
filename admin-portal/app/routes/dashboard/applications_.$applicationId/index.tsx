@@ -37,7 +37,7 @@ type ApplicationDetail = {
   stageUpdatedAt?: string;
   reviewComments?: string;
   rejectionReason?: string;
-  educations: Array<{ institutionName?: string; qualification?: string; startDate?: string; endDate?: string }>;
+  educations: Array<{ institutionName?: string; qualification?: string; educationLevel?: string | null; startDate?: string; endDate?: string }>;
   experiences: Array<{ employerName?: string; position?: string; startDate?: string; endDate?: string }>;
   documents: Array<{ id: string; documentType?: string; fileName?: string; fileUrl?: string; status?: string }>;
   references: Array<{ fullName?: string; membershipNumber?: string; membershipCategory?: string; referenceType?: string }>;
@@ -88,6 +88,24 @@ const STATUS_TONES: Record<AppStatus, "pending" | "approved" | "rejected" | "war
   REJECTED: "rejected",
   CHANGES_REQUESTED: "pending",
 };
+
+const EDUCATION_LEVEL_LABELS: Record<string, string> = {
+  PHD: "PhD / Doctorate",
+  MASTERS: "Master's Degree",
+  POSTGRADUATE_DIPLOMA: "Postgraduate Diploma",
+  BACHELOR: "Bachelor's Degree",
+  DIPLOMA: "Diploma",
+  CERTIFICATE: "Certificate",
+};
+// Highest first.
+const EDUCATION_LEVEL_RANK = ["PHD", "MASTERS", "POSTGRADUATE_DIPLOMA", "BACHELOR", "DIPLOMA", "CERTIFICATE"];
+
+function highestEducationLevel(educations: Array<{ educationLevel?: string | null }>) {
+  const ranks = educations
+    .map((education) => EDUCATION_LEVEL_RANK.indexOf(education.educationLevel ?? ""))
+    .filter((rank) => rank >= 0);
+  return ranks.length ? EDUCATION_LEVEL_LABELS[EDUCATION_LEVEL_RANK[Math.min(...ranks)]] : null;
+}
 
 const MEMBERSHIP_CLASSES = ["GRADUATE", "ASSOCIATE", "MIET", "CORPORATE", "SENIOR", "FELLOW", "HONORARY"];
 
@@ -389,6 +407,7 @@ export default function ApplicationReviewPage() {
                 ["Email", detail.applicant.email],
                 ["Phone", detail.applicant.phoneNumber ?? "-"],
                 ["Applied Category", detail.appliedMembershipClass ?? "-"],
+                ["Highest Level of Education", highestEducationLevel(detail.educations) ?? "-"],
                 ["Discipline", detail.engineeringDiscipline ?? "-"],
                 ["Submitted", formatDate(detail.submittedAt)],
               ]} />
@@ -435,6 +454,9 @@ export default function ApplicationReviewPage() {
                   {detail.educations.map((education, index) => (
                     <div key={index} className="py-3 text-[12px]">
                       <div className="font-bold text-[var(--text)]">{education.qualification ?? "-"}</div>
+                      {education.educationLevel && (
+                        <div className="mt-0.5 text-[11px] font-semibold text-[var(--red-dark)]">{EDUCATION_LEVEL_LABELS[education.educationLevel] ?? education.educationLevel}</div>
+                      )}
                       <div className="mt-1 text-[var(--muted)]">{education.institutionName ?? "-"} · {formatDate(education.startDate)} - {formatDate(education.endDate)}</div>
                     </div>
                   ))}

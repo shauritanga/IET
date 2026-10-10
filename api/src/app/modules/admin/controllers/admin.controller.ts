@@ -45,6 +45,7 @@ import {
   UpdateApplicationStageDto,
   UpdateMemberStatusDto,
   UpdateApplicationCategoryDto,
+  UpdateMemberDetailsDto,
   AnalyticsQueryDto,
   PaymentQueryDto,
   CreateMemberDto,
@@ -391,6 +392,26 @@ export class AdminController {
       'Content-Disposition': `attachment; filename="${filename}"`,
     });
     return new StreamableFile(buffer);
+  }
+
+  @Patch('members/:memberId')
+  @ApiOperation({ summary: 'Edit a member\'s name, title, email or phone' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async updateMemberDetails(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUser() admin: UserEntity,
+    @Body() dto: UpdateMemberDetailsDto,
+  ) {
+    const data = await this.adminService.updateMemberDetails(
+      memberId,
+      admin.id,
+      dto,
+    );
+    return {
+      success: true,
+      data,
+      message: 'Member details updated successfully',
+    };
   }
 
   @Patch('members/:memberId/status')

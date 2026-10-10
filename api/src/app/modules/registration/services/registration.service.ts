@@ -492,6 +492,7 @@ export class RegistrationService {
       education.institutionId = selectedInstitution?.id ?? null;
       education.institutionName = selectedInstitution?.name ?? ed.institutionName;
       education.qualification = ed.courseName;
+      education.educationLevel = ed.educationLevel ?? null;
       education.location = selectedInstitution?.country ?? ed.country;
       education.startDate = new Date(ed.startDate);
       education.endDate = new Date(ed.endDate);
@@ -548,6 +549,7 @@ export class RegistrationService {
     education.registrationId = registration.id;
     education.institutionName = dto.institutionName;
     education.qualification = dto.qualification;
+    education.educationLevel = dto.educationLevel ?? null;
     education.fieldOfStudy = dto.fieldOfStudy;
     education.startDate = new Date(dto.startDate);
     education.endDate = dto.endDate ? new Date(dto.endDate) : undefined;
@@ -597,6 +599,7 @@ export class RegistrationService {
     Object.assign(education, {
       institutionName: dto.institutionName,
       qualification: dto.qualification,
+      educationLevel: dto.educationLevel ?? null,
       fieldOfStudy: dto.fieldOfStudy,
       startDate: new Date(dto.startDate),
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,

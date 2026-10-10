@@ -35,6 +35,7 @@ import {
   ApplicationQueryDto,
   UpdateApplicationStageDto,
   UpdateApplicationCategoryDto,
+  UpdateMemberDetailsDto,
   UpdateMemberStatusDto,
   AnalyticsQueryDto,
   CreateMemberDto,
@@ -1967,6 +1968,67 @@ export class AdminService {
     );
 
     // TODO: Send notification and log activity
+  }
+
+  /**
+   * Correct a member's name, contact details or title (e.g. fix a typo).
+   */
+  async updateMemberDetails(
+    memberId: string,
+    adminId: string,
+    dto: UpdateMemberDetailsDto,
+  ): Promise<{
+    title?: string | null;
+    firstName?: string | null;
+    middleName?: string | null;
+    lastName?: string | null;
+    fullName: string;
+    email: string;
+    phoneNumber?: string | null;
+  }> {
+    const user = await this.userRepository.findOneBy({
+      id: memberId,
+      role: UserRole.MEMBER,
+    });
+    if (!user) {
+      throw new NotFoundException('Member not found');
+    }
+
+    const changes = Object.keys(dto).filter(
+      (key) => (dto as Record<string, unknown>)[key] !== undefined,
+    );
+    if (changes.length === 0) {
+      throw new BadRequestException('No changes were provided');
+    }
+
+    if (dto.email !== undefined && dto.email !== user.email) {
+      const existing = await this.userRepository.findOneBy({ email: dto.email });
+      if (existing && existing.id !== user.id) {
+        throw new ConflictException('Another account already uses this email');
+      }
+      user.email = dto.email;
+    }
+    if (dto.title !== undefined) user.title = dto.title;
+    if (dto.firstName !== undefined) user.firstName = dto.firstName;
+    if (dto.middleName !== undefined) user.middleName = dto.middleName || undefined;
+    if (dto.lastName !== undefined) user.lastName = dto.lastName;
+    if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
+
+    const saved = await this.userRepository.save(user);
+
+    this.logger.log(
+      `Member ${memberId} details updated by admin ${adminId}: ${changes.join(', ')}`,
+    );
+
+    return {
+      title: saved.title ?? null,
+      firstName: saved.firstName ?? null,
+      middleName: saved.middleName ?? null,
+      lastName: saved.lastName ?? null,
+      fullName: saved.fullName,
+      email: saved.email,
+      phoneNumber: saved.phoneNumber ?? null,
+    };
   }
 
   async renewMember(

@@ -6,6 +6,15 @@ import {useApplicationFormStore} from "~/routes/application/store/useApplication
 import {useGetApplicationDraft} from "~/routes/application/repository/useResumeApplication";
 
 
+export const EDUCATION_LEVELS = [
+    {value: "PHD", label: "PhD / Doctorate"},
+    {value: "MASTERS", label: "Master's Degree"},
+    {value: "POSTGRADUATE_DIPLOMA", label: "Postgraduate Diploma"},
+    {value: "BACHELOR", label: "Bachelor's Degree"},
+    {value: "DIPLOMA", label: "Diploma"},
+    {value: "CERTIFICATE", label: "Certificate"},
+] as const;
+
 export const EducationDetailSchema = z.object({
     institutionId: z.string().optional(),
     institutionName: z.string().min(1, "Institution name is required"),
@@ -13,6 +22,7 @@ export const EducationDetailSchema = z.object({
     startDate: z.string().min(1, "Start date is required"),
     endDate: z.string().min(1, "End date is required"),
     courseName: z.string().min(1, "Qualification / course name is required"),
+    educationLevel: z.string().min(1, "Education level is required"),
     attachment: z.preprocess(
         (value) => (value === "" || value == null ? undefined : value),
         z.string().url().optional(),
@@ -41,6 +51,7 @@ const defaultEducation = {
     startDate: "",
     endDate: "",
     courseName: "",
+    educationLevel: "",
     attachment: undefined as string | undefined,
 };
 
@@ -65,7 +76,8 @@ export function isEducationEntryFilled(
         item.country?.trim() &&
         item.startDate?.trim() &&
         item.endDate?.trim() &&
-        item.courseName?.trim(),
+        item.courseName?.trim() &&
+        item.educationLevel?.trim(),
     );
 }
 
@@ -115,6 +127,7 @@ export const educationActiveFieldPaths = (index: number) =>
         `education.${index}.startDate`,
         `education.${index}.endDate`,
         `education.${index}.courseName`,
+        `education.${index}.educationLevel`,
     ] as const;
 
 export const workExperienceActiveFieldPaths = (index: number) =>
@@ -166,6 +179,7 @@ export const useManageExperienceForm = () => {
                 startDate: toDateInputValue(item.startDate),
                 endDate: toDateInputValue(item.endDate),
                 courseName: item.qualification ?? "",
+                educationLevel: item.educationLevel ?? "",
                 attachment: item.attachmentUrl ?? item.attachment ?? undefined,
             }))
             : [{ ...defaultEducation }];

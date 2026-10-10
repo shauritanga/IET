@@ -25,6 +25,7 @@ import {
   MembershipClass,
   EngineeringDiscipline,
   UserRole,
+  Title,
 } from '../../../common/enums';
 import {
   PermissionAction,
@@ -202,6 +203,56 @@ export class UpdateMemberStatusDto {
   @IsString()
   @MaxLength(500)
   reason?: string;
+}
+
+export class UpdateMemberDetailsDto {
+  @ApiPropertyOptional({ enum: Title, example: Title.ENG })
+  @IsOptional()
+  @IsEnum(Title)
+  title?: Title;
+
+  @ApiPropertyOptional({ example: 'Felix' })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Allan' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  middleName?: string;
+
+  @ApiPropertyOptional({ example: 'Jackson' })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: '+255657000000' })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.replace(/[\s()-]/g, '').trim() : value,
+  )
+  @Matches(/^\+[1-9]\d{1,14}$/, {
+    message:
+      'Phone number must be in international format (e.g., +255657000000)',
+  })
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'felix@example.com' })
+  @IsOptional()
+  @IsEmail({}, { message: 'Please provide a valid email address' })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : value,
+  )
+  email?: string;
 }
 
 export class RenewMemberDto {

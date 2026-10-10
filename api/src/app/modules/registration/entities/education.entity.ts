@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import type { RegistrationEntity } from './registration.entity';
+import { EducationLevel } from '../../../common/enums';
 import { EngineeringInstitutionEntity } from '../../admin/entities/engineering-institution.entity';
 
 @Entity('registration_educations')
@@ -44,6 +45,15 @@ export class EducationEntity extends BaseEntity {
   })
   @Column()
   qualification: string;
+
+  @ApiProperty({
+    enum: EducationLevel,
+    example: EducationLevel.BACHELOR,
+    description: 'Level of the qualification obtained',
+    required: false,
+  })
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  educationLevel?: EducationLevel | null;
 
   @ApiProperty({
     example: 'Mechanical Engineering',

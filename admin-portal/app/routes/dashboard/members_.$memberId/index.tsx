@@ -9,6 +9,7 @@ type MemberDetails = {
   id: string;
   membershipId?: string | null;
   personalDetails: {
+    title?: string | null;
     fullName?: string | null;
     firstName?: string | null;
     middleName?: string | null;
@@ -222,6 +223,11 @@ export default function MemberDetailsPage() {
   const [cardBusy, setCardBusy] = useState(false);
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaved, setEditSaved] = useState(false);
+  const [editForm, setEditForm] = useState({ title: "", firstName: "", middleName: "", lastName: "", email: "", phoneNumber: "" });
 
   const loadCard = useCallback(async () => {
     if (!memberId) return;
@@ -253,6 +259,60 @@ export default function MemberDetailsPage() {
     }
     void loadMember();
   }, [memberId, loadCard]);
+
+  function startEditing() {
+    if (!member) return;
+    const details = member.personalDetails;
+    setEditForm({
+      title: details.title ?? "",
+      firstName: details.firstName ?? "",
+      middleName: details.middleName ?? "",
+      lastName: details.lastName ?? "",
+      email: details.email ?? "",
+      phoneNumber: details.phoneNumber ?? "",
+    });
+    setEditError(null);
+    setEditSaved(false);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!member || !memberId) return;
+    const details = member.personalDetails;
+    const original: Record<string, string> = {
+      title: details.title ?? "",
+      firstName: details.firstName ?? "",
+      middleName: details.middleName ?? "",
+      lastName: details.lastName ?? "",
+      email: details.email ?? "",
+      phoneNumber: details.phoneNumber ?? "",
+    };
+    // Send only the fields that changed.
+    const payload: Record<string, string> = {};
+    for (const [key, value] of Object.entries(editForm)) {
+      if (value.trim() !== original[key] && (value.trim() !== "" || key === "middleName")) {
+        payload[key] = value.trim();
+      }
+    }
+    if (Object.keys(payload).length === 0) {
+      setEditing(false);
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await http.patch(`/admin/members/${memberId}`, payload);
+      const { data } = await http.get<ApiEnvelope<MemberDetails>>(`/admin/members/${memberId}`);
+      setMember(data.data);
+      setEditing(false);
+      setEditSaved(true);
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string; errors?: Array<{ message?: string }> }>;
+      setEditError(e.response?.data?.errors?.[0]?.message ?? e.response?.data?.message ?? "Failed to update member.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function runCardAction(action: "issue" | "ready-for-collection" | "collected" | "pdf") {
     if (!memberId) return;
@@ -354,6 +414,54 @@ export default function MemberDetailsPage() {
         <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 28 }}>
             <Section title="Personal Information" compact>
+              {canManageCard && !editing && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <button type="button" onClick={startEditing} style={{ border: "1px solid var(--border)", background: "var(--white)", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, color: "var(--red-dark)", cursor: "pointer" }}>
+                    Edit details
+                  </button>
+                  {editSaved && <span style={{ fontSize: 11.5, color: "#166534" }}>Details updated.</span>}
+                </div>
+              )}
+              {editing ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {([
+                    ["firstName", "First name"],
+                    ["middleName", "Middle name"],
+                    ["lastName", "Last name"],
+                    ["email", "Email"],
+                    ["phoneNumber", "Phone (+255…)"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)" }}>
+                      {label}
+                      <input
+                        value={editForm[key]}
+                        onChange={(event) => setEditForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                        style={{ display: "block", width: "100%", marginTop: 4, height: 34, borderRadius: 7, border: "1.5px solid var(--border)", background: "var(--bg)", padding: "0 10px", fontSize: 12.5, textTransform: "none", letterSpacing: 0, fontWeight: 400, color: "var(--text)", boxSizing: "border-box" }}
+                      />
+                    </label>
+                  ))}
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)" }}>
+                    Title
+                    <select
+                      value={editForm.title}
+                      onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                      style={{ display: "block", width: "100%", marginTop: 4, height: 34, borderRadius: 7, border: "1.5px solid var(--border)", background: "var(--bg)", padding: "0 8px", fontSize: 12.5, boxSizing: "border-box" }}
+                    >
+                      <option value="">—</option>
+                      {["Eng.", "Dr.", "Prof.", "Mr.", "Ms.", "Mrs."].map((title) => <option key={title} value={title}>{title}</option>)}
+                    </select>
+                  </label>
+                  {editError && <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: "var(--red)" }}>{editError}</div>}
+                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
+                    <button type="button" onClick={saveEdit} disabled={editSaving} style={{ background: "var(--red-dark)", color: "white", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: editSaving ? 0.6 : 1 }}>
+                      {editSaving ? "Saving…" : "Save changes"}
+                    </button>
+                    <button type="button" onClick={() => setEditing(false)} disabled={editSaving} style={{ border: "1px solid var(--border)", background: "var(--white)", borderRadius: 7, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <DetailRows rows={[
                 ["Email", valueOrDash(member.personalDetails.email)],
                 ["Phone", valueOrDash(member.personalDetails.phoneNumber)],
@@ -364,6 +472,7 @@ export default function MemberDetailsPage() {
                 ["Position", valueOrDash(member.personalDetails.position)],
                 ["Location", valueOrDash(member.personalDetails.location)],
               ]} />
+              )}
             </Section>
 
             <Section title="Membership and Account" compact>

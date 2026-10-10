@@ -471,6 +471,7 @@ export class UserService {
                 id: education.id,
                 institutionName: education.institutionName,
                 qualification: education.qualification,
+                educationLevel: education.educationLevel ?? null,
                 fieldOfStudy: education.fieldOfStudy,
                 startDate: education.startDate,
                 endDate: education.endDate,

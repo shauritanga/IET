@@ -161,6 +161,7 @@ export interface Education {
     institutionId?: string | null;
     institutionName: string;
     qualification: string;
+    educationLevel?: string | null;
     fieldOfStudy: string;
     startDate: string;
     endDate: string;

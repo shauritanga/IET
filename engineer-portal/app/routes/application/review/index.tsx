@@ -3,6 +3,15 @@ import { useGetApplicationDraft } from "~/routes/application/repository/useResum
 import { Spinner } from "~/components/ui/spinner";
 import type { Reference, Registration } from "~/routes/application/type";
 
+const EDUCATION_LEVEL_LABELS: Record<string, string> = {
+    PHD: "PhD / Doctorate",
+    MASTERS: "Master's Degree",
+    POSTGRADUATE_DIPLOMA: "Postgraduate Diploma",
+    BACHELOR: "Bachelor's Degree",
+    DIPLOMA: "Diploma",
+    CERTIFICATE: "Certificate",
+};
+
 function SectionCard({
     title,
     editHref,
@@ -119,7 +128,7 @@ function ReviewContent({ registration }: { registration: Registration }) {
                                 <div key={item.id} className="rounded-lg bg-[var(--iet-bg)] px-3 py-2">
                                     <div className="font-semibold">{item.institutionName}</div>
                                     <div className="text-[var(--iet-muted)] text-[12px] mt-0.5">
-                                        {[item.qualification, item.fieldOfStudy].filter(Boolean).join(" · ")}
+                                        {[EDUCATION_LEVEL_LABELS[item.educationLevel ?? ""], item.qualification, item.fieldOfStudy].filter(Boolean).join(" · ")}
                                     </div>
                                 </div>
                             ))}

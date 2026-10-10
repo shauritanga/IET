@@ -21,6 +21,7 @@ import {
   RegistrationCategory,
   ReferenceType,
   DocumentType,
+  EducationLevel,
 } from '../../../common/enums';
 
 
@@ -131,6 +132,11 @@ export class EducationDetailDto {
   @IsString()
   courseName: string;
 
+  @ApiPropertyOptional({ enum: EducationLevel, example: EducationLevel.BACHELOR })
+  @IsOptional()
+  @IsEnum(EducationLevel, { message: 'Please select a valid education level' })
+  educationLevel?: EducationLevel;
+
   @ApiPropertyOptional({ example: 'https://eit-bucket.sfo3.digitaloceanspaces.com/documents/uuid.pdf' })
   @IsOptional()
   @IsString()
@@ -191,6 +197,11 @@ export class AddEducationDto {
   @IsString()
   @MaxLength(255)
   qualification: string;
+
+  @ApiPropertyOptional({ enum: EducationLevel, example: EducationLevel.BACHELOR })
+  @IsOptional()
+  @IsEnum(EducationLevel, { message: 'Please select a valid education level' })
+  educationLevel?: EducationLevel;
 
   @ApiPropertyOptional({ example: 'Mechanical Engineering' })
   @IsOptional()
