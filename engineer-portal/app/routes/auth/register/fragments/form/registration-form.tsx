@@ -19,12 +19,21 @@ const EyeIcon = ({ open }: { open: boolean }) => (
     </svg>
 )
 
+const PASSWORD_RULES = [
+    { label: "8+ characters", test: (p: string) => p.length >= 8 },
+    { label: "Uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+    { label: "Lowercase letter", test: (p: string) => /[a-z]/.test(p) },
+    { label: "Number", test: (p: string) => /\d/.test(p) },
+    { label: "Special character (# _ - ! @)", test: (p: string) => /[^A-Za-z\d\s]/.test(p) },
+]
+
 function getStrength(password: string): { width: string; color: string; label: string } {
     if (!password) return { width: "0%", color: "transparent", label: "" }
-    if (password.length < 6) return { width: "25%", color: "#E20C0A", label: "Weak" }
-    if (password.length < 8) return { width: "50%", color: "#F57F17", label: "Fair" }
-    if (/[A-Z]/.test(password) && /[0-9]/.test(password)) return { width: "100%", color: "#1a6b3c", label: "Strong" }
-    return { width: "75%", color: "#2196F3", label: "Good" }
+    const passed = PASSWORD_RULES.filter((rule) => rule.test(password)).length
+    const percent = `${(passed / PASSWORD_RULES.length) * 100}%`
+    if (passed <= 2) return { width: percent, color: "#E20C0A", label: "Weak" }
+    if (passed <= 4) return { width: percent, color: "#F57F17", label: "Fair" }
+    return { width: percent, color: "#1a6b3c", label: "Strong" }
 }
 
 function focusField(fieldName: keyof RegistrationFormValues) {
@@ -171,7 +180,11 @@ const RegistrationForm = () => {
                                 className="auth-inp"
                                 style={{ paddingRight: 40 }}
                                 type={showPassword ? "text" : "password"}
-                                placeholder="Min 8 characters"
+                                placeholder="Create a password"
+                                autoComplete="new-password"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                spellCheck={false}
                                 {...form.register("password")}
                             />
                             <button type="button" onClick={() => setShowPassword((value) => !value)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", cursor: "pointer", color: "var(--iet-muted)", background: "transparent", border: "none", padding: 0 }}>
@@ -188,6 +201,10 @@ const RegistrationForm = () => {
                                 style={{ paddingRight: 40 }}
                                 type={showConfirm ? "text" : "password"}
                                 placeholder="Repeat password"
+                                autoComplete="new-password"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                spellCheck={false}
                                 {...form.register("confirmPassword")}
                             />
                             <button type="button" onClick={() => setShowConfirm((value) => !value)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", cursor: "pointer", color: "var(--iet-muted)", background: "transparent", border: "none", padding: 0 }}>
@@ -203,6 +220,16 @@ const RegistrationForm = () => {
                         <div style={{ height: "100%", width: strength.width, borderRadius: 20, transition: "width .3s,background .3s", background: strength.color }} />
                     </div>
                     <div style={{ fontSize: 10, color: "var(--iet-muted)", marginTop: 3 }}>{strength.label}</div>
+                    <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0, display: "flex", flexWrap: "wrap", gap: "2px 12px", fontSize: 11 }}>
+                        {PASSWORD_RULES.map((rule) => {
+                            const ok = rule.test(password)
+                            return (
+                                <li key={rule.label} style={{ color: ok ? "#1a6b3c" : "var(--iet-muted)" }}>
+                                    {ok ? "✓" : "○"} {rule.label}
+                                </li>
+                            )
+                        })}
+                    </ul>
                 </div>
 
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--iet-muted)", cursor: "pointer", marginBottom: 10 }}>

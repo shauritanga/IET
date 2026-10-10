@@ -25,11 +25,13 @@ export const RegistrationFormSchema = z.object({
     password: z
         .string()
         .min(8, "Password must be at least 8 characters")
-        .regex(
-            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-            "Password must include uppercase, lowercase, number, and special character"
-        ),
-    confirmPassword: z.string().min(8, "Confirm password must be at least 8 characters"),
+        .max(50, "Password cannot exceed 50 characters")
+        .regex(/^\S+$/, "Password cannot contain spaces")
+        .regex(/[a-z]/, "Add a lowercase letter")
+        .regex(/[A-Z]/, "Add an uppercase letter")
+        .regex(/\d/, "Add a number")
+        .regex(/[^A-Za-z\d\s]/, "Add a special character (e.g. # _ - ! @)"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
     acceptTerms: z.boolean().refine((value) => value, {
         message: "You must accept the terms.",
     }),
@@ -51,6 +53,7 @@ export type RegistrationFormType = {
 export const useManageRegistrationForm = () => {
     const form = useForm<RegistrationFormValues>({
         resolver: zodResolver(RegistrationFormSchema),
+        mode: "onTouched",
         defaultValues: {
             firstName: "",
             lastName: "",

@@ -12,7 +12,13 @@ import {
 } from 'class-validator';
 import { AuthPortal } from '../../../common/enums';
 
-const normalizePhoneNumber = (value?: string) =>
+// Any non-alphanumeric, non-space character counts as "special".
+const PASSWORD_PATTERN =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d\s])\S{8,50}$/;
+const PASSWORD_MESSAGE =
+  'Password must include an uppercase letter, a lowercase letter, a number and a special character (e.g. # _ - ! @), with no spaces';
+
+const normalizePhoneNumber =(value?: string) =>
   typeof value === 'string'
     ? value.replace(/[\s()-]/g, '').trim()
     : value;
@@ -35,13 +41,7 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(50, { message: 'Password cannot exceed 50 characters' })
-  @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-    {
-      message:
-        'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
-    },
-  )
+  @Matches(PASSWORD_PATTERN, { message: PASSWORD_MESSAGE })
   password: string;
 
   @ApiProperty({
@@ -141,13 +141,7 @@ export class ResetPasswordDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(50, { message: 'Password cannot exceed 50 characters' })
-  @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-    {
-      message:
-        'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
-    },
-  )
+  @Matches(PASSWORD_PATTERN, { message: PASSWORD_MESSAGE })
   password: string;
 
   @ApiProperty({
@@ -173,13 +167,7 @@ export class ChangePasswordDto {
   @IsNotEmpty({ message: 'New password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(50, { message: 'Password cannot exceed 50 characters' })
-  @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-    {
-      message:
-        'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
-    },
-  )
+  @Matches(PASSWORD_PATTERN, { message: PASSWORD_MESSAGE })
   newPassword: string;
 
   @ApiProperty({
