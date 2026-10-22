@@ -1091,10 +1091,11 @@ export class UserService {
           'MAX(CAST(SUBSTRING(user.membershipId, 9) AS INTEGER))',
           'maxId',
         )
-        .where('user.membershipId IS NOT NULL')
+        // Imported members carry legacy IDs (e.g. FIET-75); only count our own format
+        .where("user.membershipId ~ '^IET/ENG/[0-9]+$'")
         .getRawOne();
 
-      const nextNumber = (result?.maxId || 0) + 1;
+      const nextNumber = (Number(result?.maxId) || 0) + 1;
       return `IET/ENG/${nextNumber.toString().padStart(4, '0')}`;
     } catch (error: any) {
       this.logger.error(
