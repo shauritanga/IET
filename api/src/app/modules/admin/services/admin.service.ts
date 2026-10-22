@@ -7,7 +7,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, LessThan } from 'typeorm';
+import { Repository, In, LessThan, Not } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as speakeasy from 'speakeasy';
 import { randomBytes } from 'crypto';
@@ -918,7 +918,10 @@ export class AdminService {
       if (!discipline) {
         return { role, discipline: null, items: [] };
       }
-      const matchingIds = await this.getMatchingEvaluatorUserIds(discipline);
+      // The applicant can never evaluate their own application.
+      const matchingIds = (
+        await this.getMatchingEvaluatorUserIds(discipline)
+      ).filter((id) => id !== registration.userId);
       if (!matchingIds.length) {
         return { role, discipline, items: [] };
       }
@@ -956,7 +959,7 @@ export class AdminService {
     }
 
     users = await this.userRepository.find({
-      where: { role, isActive: true },
+      where: { role, isActive: true, id: Not(registration.userId) },
       order: { firstName: 'ASC', email: 'ASC' },
     });
     const disciplinesByUser = await this.getUserDisciplinesMap(
@@ -1928,6 +1931,7 @@ export class AdminService {
         await this.assertAssignableEvaluator(
           dto.evaluatorId,
           registration.engineeringDiscipline,
+          registration.userId,
         );
         newStage = ApplicationReviewStage.EVALUATOR_REVIEW;
         registration.assignedEvaluatorId = dto.evaluatorId;
@@ -1945,7 +1949,11 @@ export class AdminService {
             'Assignee ID is required when advancing to MPDC review',
           );
         }
-        await this.assertAssignableReviewer(dto.assigneeId, UserRole.MPDC);
+        await this.assertAssignableReviewer(
+          dto.assigneeId,
+          UserRole.MPDC,
+          registration.userId,
+        );
         newStage = ApplicationReviewStage.MPDC_REVIEW;
         assignedReviewerId = dto.assigneeId;
         historyAction = 'ASSIGNED';
@@ -1960,7 +1968,11 @@ export class AdminService {
             'Assignee ID is required when advancing to Council review',
           );
         }
-        await this.assertAssignableReviewer(dto.assigneeId, UserRole.COUNCIL);
+        await this.assertAssignableReviewer(
+          dto.assigneeId,
+          UserRole.COUNCIL,
+          registration.userId,
+        );
         newStage = ApplicationReviewStage.COUNCIL_REVIEW;
         assignedReviewerId = dto.assigneeId;
         historyAction = 'ASSIGNED';
@@ -2386,6 +2398,9 @@ export class AdminService {
   ): Promise<void> {
     if (this.isFullWorkflowAdmin(actor.role)) return;
 
+    // Never show someone their own application in a review queue.
+    queryBuilder.andWhere('reg.userId <> :actorUserId', { actorUserId: actor.id });
+
     // A review-panel member sees an application at their stage only when it has
     // been assigned to them by Secretariat (claim lock = assignee).
     const assignedToMe = 'reg.stageClaimedById = :actorId';
@@ -2475,6 +2490,13 @@ export class AdminService {
     registration: RegistrationEntity,
     action: UpdateApplicationStageDto['action'],
   ): Promise<void> {
+    // Conflict of interest: nobody acts on their own membership application,
+    // whatever their role (including admins).
+    if (registration.userId === actor.id) {
+      throw new ForbiddenException(
+        'You cannot review or act on your own application',
+      );
+    }
     await this.assertCanViewApplication(actor, registration);
     const secretariatActions: UpdateApplicationStageDto['action'][] = [
       'ASSIGN_EVALUATOR',
@@ -2655,7 +2677,13 @@ export class AdminService {
   private async assertAssignableEvaluator(
     evaluatorId: string,
     applicationDiscipline?: string | null,
+    applicantId?: string,
   ): Promise<void> {
+    if (applicantId && evaluatorId === applicantId) {
+      throw new BadRequestException(
+        'An applicant cannot evaluate their own application',
+      );
+    }
     const evaluator = await this.userRepository.findOneBy({ id: evaluatorId });
     if (
       !evaluator ||
@@ -2681,7 +2709,13 @@ export class AdminService {
   private async assertAssignableReviewer(
     userId: string,
     role: UserRole.MPDC | UserRole.COUNCIL,
+    applicantId?: string,
   ): Promise<void> {
+    if (applicantId && userId === applicantId) {
+      throw new BadRequestException(
+        'An applicant cannot review their own application',
+      );
+    }
     const user = await this.userRepository.findOneBy({ id: userId });
     if (!user || !user.isActive || user.role !== role) {
       throw new BadRequestException(
