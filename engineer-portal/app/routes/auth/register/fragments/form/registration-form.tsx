@@ -9,6 +9,7 @@ import {
     useManageRegistrationForm,
 } from "~/routes/auth/register/fragments/form/manage-registration-form";
 import type { APIValidationError, TErrorMessage } from "~/types";
+import { notify } from "~/utils/notify";
 
 const EyeIcon = ({ open }: { open: boolean }) => (
     <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -49,7 +50,6 @@ const RegistrationForm = () => {
     const { form } = useManageRegistrationForm();
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirm, setShowConfirm] = useState(false)
-    const [apiError, setApiError] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const navigate = useNavigate()
     const password = form.watch("password") ?? "";
@@ -77,16 +77,15 @@ const RegistrationForm = () => {
 
         if (firstInvalidField) {
             focusField(firstInvalidField);
-            setApiError("Please fix the highlighted fields and try again.");
+            notify.error("Check your details", "Please fix the highlighted fields and try again.");
             return;
         }
 
-        setApiError(error.response?.data.message ?? "Registration failed.");
+        notify.error("Couldn't create account", error.response?.data.message ?? "Registration failed. Please try again.");
     };
 
     const handleSubmit = async (values: RegistrationFormValues) => {
         form.clearErrors();
-        setApiError("");
         setIsSubmitting(true);
 
         try {
@@ -107,6 +106,7 @@ const RegistrationForm = () => {
                 name: `${values.firstName} ${values.lastName}`.trim(),
             });
 
+            notify.success("Account created", `We sent a verification code to ${values.email}.`);
             navigate("/auth/verify-otp", { replace: true });
         } catch (error) {
             handleServerError(error as TErrorMessage);
@@ -242,7 +242,6 @@ const RegistrationForm = () => {
                 </label>
                 <div className="auth-err">{form.formState.errors.acceptTerms?.message ?? ""}</div>
 
-                {apiError ? <div className="auth-err">{apiError}</div> : null}
 
                 <button className="auth-btn-main" type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Creating Account..." : "Create Account"}

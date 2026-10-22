@@ -10,6 +10,7 @@ import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import { settings } from "~/data/admin-prototype";
+import { useToast } from "~/providers/toast";
 
 type FiscalYearSettings = {
   startMonth: number;
@@ -80,14 +81,11 @@ export default function SettingsPage() {
   });
   const [fiscalLoading, setFiscalLoading] = useState(true);
   const [fiscalSaving, setFiscalSaving] = useState(false);
-  const [fiscalError, setFiscalError] = useState<string | null>(null);
-  const [fiscalSavedMsg, setFiscalSavedMsg] = useState<string | null>(null);
+  const toast = useToast();
 
   const [feeConfig, setFeeConfig] = useState<ApplicationEntryFees>(DEFAULT_APPLICATION_ENTRY_FEES);
   const [feesLoading, setFeesLoading] = useState(true);
   const [feesSaving, setFeesSaving] = useState(false);
-  const [feesError, setFeesError] = useState<string | null>(null);
-  const [feesSavedMsg, setFeesSavedMsg] = useState<string | null>(null);
 
   useEffect(() => {
     void loadFiscalYear();
@@ -96,14 +94,13 @@ export default function SettingsPage() {
 
   async function loadFiscalYear() {
     setFiscalLoading(true);
-    setFiscalError(null);
     try {
       const { data } = await http.get<ApiEnvelope<FiscalYearSettings>>("/admin/settings/fiscal-year");
       if (data.data) {
         setFiscalYear(data.data);
       }
     } catch {
-      setFiscalError("Failed to load fiscal year configuration.");
+      toast.error("Fiscal year settings", "Failed to load fiscal year configuration.");
     } finally {
       setFiscalLoading(false);
     }
@@ -111,18 +108,15 @@ export default function SettingsPage() {
 
   async function saveFiscalYear() {
     setFiscalSaving(true);
-    setFiscalError(null);
-    setFiscalSavedMsg(null);
     try {
       const { data } = await http.put<ApiEnvelope<FiscalYearSettings>>("/admin/settings/fiscal-year", fiscalYear);
       if (data.data) {
         setFiscalYear(data.data);
       }
-      setFiscalSavedMsg("Fiscal year configuration saved successfully.");
-      setTimeout(() => setFiscalSavedMsg(null), 3000);
+      toast.success("Fiscal year saved", "Fiscal year configuration saved successfully.");
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setFiscalError(apiError.response?.data?.message ?? "Failed to save fiscal year configuration.");
+      toast.error("Fiscal year settings", apiError.response?.data?.message ?? "Failed to save fiscal year configuration.");
     } finally {
       setFiscalSaving(false);
     }
@@ -130,7 +124,6 @@ export default function SettingsPage() {
 
   async function loadApplicationEntryFees() {
     setFeesLoading(true);
-    setFeesError(null);
     try {
       const { data } = await http.get<ApiEnvelope<ApplicationEntryFees>>(
         "/admin/settings/application-entry-fees",
@@ -139,7 +132,7 @@ export default function SettingsPage() {
         setFeeConfig(data.data);
       }
     } catch {
-      setFeesError("Failed to load application and entry fee configuration.");
+      toast.error("Fee settings", "Failed to load application and entry fee configuration.");
     } finally {
       setFeesLoading(false);
     }
@@ -147,8 +140,6 @@ export default function SettingsPage() {
 
   async function saveApplicationEntryFees() {
     setFeesSaving(true);
-    setFeesError(null);
-    setFeesSavedMsg(null);
     try {
       const { data } = await http.put<ApiEnvelope<ApplicationEntryFees>>(
         "/admin/settings/application-entry-fees",
@@ -157,11 +148,10 @@ export default function SettingsPage() {
       if (data.data) {
         setFeeConfig(data.data);
       }
-      setFeesSavedMsg("Application and entry fees saved successfully.");
-      setTimeout(() => setFeesSavedMsg(null), 3000);
+      toast.success("Fees saved", "Application and entry fees saved successfully.");
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setFeesError(
+      toast.error("Fee settings",
         apiError.response?.data?.message ??
           "Failed to save application and entry fee configuration.",
       );
@@ -203,16 +193,6 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-[14px]">
-              {feesError && (
-                <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-                  {feesError}
-                </div>
-              )}
-              {feesSavedMsg && (
-                <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f5e9] px-3 py-2 text-[11.5px] font-semibold text-[#1a6b3c]">
-                  {feesSavedMsg}
-                </div>
-              )}
               <p className="text-[12px] leading-5 text-[var(--muted)]">
                 Application fee is paid when submitting. Entry fee is the one-time joining fee created after approval.
                 Set entry fee to 0 to skip charging it.
@@ -294,16 +274,6 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-[14px]">
-              {fiscalError && (
-                <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-                  {fiscalError}
-                </div>
-              )}
-              {fiscalSavedMsg && (
-                <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f5e9] px-3 py-2 text-[11.5px] font-semibold text-[#1a6b3c]">
-                  {fiscalSavedMsg}
-                </div>
-              )}
               <p className="text-[12px] leading-5 text-[var(--muted)]">
                 Active memberships expire after the fiscal year end date. Members will be asked to renew after that date.
               </p>

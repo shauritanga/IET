@@ -11,6 +11,7 @@ import { loginUser } from "~/routes/auth/login/requests/login-user"
 import { rememberDays, setRemember, setToCookie, setToStorage } from "~/utils/storage"
 import { TOKEN_KEY, USER_KEY } from "~/utils/http"
 import type { TErrorMessage } from "~/types"
+import { notify } from "~/utils/notify";
 
 const EyeIcon = ({ open }: { open: boolean }) => (
     <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -26,7 +27,6 @@ const LoginForm = () => {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [emailError, setEmailError] = useState("")
-    const [passwordError, setPasswordError] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [rememberMe, setRememberMe] = useState(false)
     const navigate = useNavigate()
@@ -35,7 +35,6 @@ const LoginForm = () => {
         event.preventDefault()
         let valid = true
         setEmailError("")
-        setPasswordError("")
 
         if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             setEmailError("Valid email required.")
@@ -43,7 +42,7 @@ const LoginForm = () => {
         }
 
         if (!password || password.length < 6) {
-            setPasswordError("Password must be at least 6 characters.")
+            notify.error("Check your password", "Password must be at least 6 characters.")
             valid = false
         }
 
@@ -90,7 +89,7 @@ const LoginForm = () => {
             navigate("/dashboard/home", { replace: true })
         } catch (error) {
             const apiError = error as TErrorMessage
-            setPasswordError(apiError.response?.data.message ?? "Invalid email or password.")
+            notify.error("Sign-in failed", apiError.response?.data.message ?? "Invalid email or password.")
         } finally {
             setIsSubmitting(false)
         }
@@ -140,7 +139,6 @@ const LoginForm = () => {
                             <EyeIcon open={showPassword} />
                         </button>
                     </div>
-                    <div className="auth-err">{passwordError}</div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>

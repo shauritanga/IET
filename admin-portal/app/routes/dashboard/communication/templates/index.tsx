@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 import {
   type CommunicationTemplate,
   type CommunicationType,
@@ -308,8 +309,7 @@ export default function CommunicationTemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CommunicationTemplate | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const toast = useToast();
   const [editing, setEditing] = useState<CommunicationTemplate | null>(null);
   const [form, setForm] = useState<TemplateForm>(EMPTY_FORM);
   const [typeFilter, setTypeFilter] = useState<CommunicationType | "">("");
@@ -338,7 +338,6 @@ export default function CommunicationTemplatesPage() {
   function openCreate() {
     setEditing(null);
     setForm(EMPTY_FORM);
-    setFormError(null);
     setFormOpen(true);
   }
 
@@ -351,14 +350,12 @@ export default function CommunicationTemplatesPage() {
       body: template.body,
       isActive: template.isActive,
     });
-    setFormError(null);
     setFormOpen(true);
   }
 
   function closeForm() {
     setFormOpen(false);
     setEditing(null);
-    setFormError(null);
   }
 
   function setField(field: keyof TemplateForm) {
@@ -376,18 +373,17 @@ export default function CommunicationTemplatesPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setFormError(null);
 
     if (!form.name.trim()) {
-      setFormError("Template name is required.");
+      toast.error("Couldn't save template", "Template name is required.");
       return;
     }
     if (!form.body.trim()) {
-      setFormError("Template body is required.");
+      toast.error("Couldn't save template", "Template body is required.");
       return;
     }
     if (form.type === "EMAIL" && !form.subject.trim()) {
-      setFormError("Email templates require a subject.");
+      toast.error("Couldn't save template", "Email templates require a subject.");
       return;
     }
 
@@ -410,11 +406,12 @@ export default function CommunicationTemplatesPage() {
           isActive: form.isActive,
         });
       }
+      toast.success(editing ? "Template updated" : "Template created", `"${form.name.trim()}" was saved.`);
       closeForm();
       void loadTemplates();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setFormError(e.response?.data?.message ?? "Failed to save template.");
+      toast.error("Couldn't save template", e.response?.data?.message ?? "Failed to save template.");
     } finally {
       setSaving(false);
     }
@@ -422,14 +419,14 @@ export default function CommunicationTemplatesPage() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    setActionError(null);
     try {
       await http.delete(`/communication/templates/${deleteTarget.id}`);
+      toast.success("Template deleted", `"${deleteTarget.name}" was removed.`);
       setDeleteTarget(null);
       void loadTemplates();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setActionError(e.response?.data?.message ?? "Failed to delete template.");
+      toast.error("Couldn't delete template", e.response?.data?.message ?? "Failed to delete template.");
     }
   }
 
@@ -500,11 +497,6 @@ export default function CommunicationTemplatesPage() {
       {error && (
         <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "var(--red)" }}>
           {error}
-        </div>
-      )}
-      {actionError && (
-        <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "var(--red)" }}>
-          {actionError}
         </div>
       )}
 
@@ -591,11 +583,6 @@ export default function CommunicationTemplatesPage() {
             </label>
           </FormField>
 
-          {formError && (
-            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
-              {formError}
-            </div>
-          )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={closeForm} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: "pointer" }}>

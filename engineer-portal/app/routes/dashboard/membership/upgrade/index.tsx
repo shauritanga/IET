@@ -8,6 +8,7 @@ import {
     type EligibleCategory,
 } from "~/routes/dashboard/membership/repositories/useUpgrade";
 import { isAxiosError } from "axios";
+import { notify } from "~/utils/notify";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -175,21 +176,19 @@ const UpgradeMembershipPage = () => {
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [notes, setNotes] = useState("");
     const [submitted, setSubmitted] = useState(false);
-    const [serverError, setServerError] = useState<string | null>(null);
 
     const { data: eligibility, isLoading: eligibilityLoading } = useUpgradeEligibility();
 
     const mutation = useSubmitUpgradeApplication(
         () => {
             setSubmitted(true);
-            setServerError(null);
         },
         (err) => {
             if (isAxiosError(err)) {
                 const msg = err.response?.data?.message ?? err.message;
-                setServerError(typeof msg === "string" ? msg : "Something went wrong. Please try again.");
+                notify.error("Upgrade request failed", typeof msg === "string" ? msg : "Something went wrong. Please try again.");
             } else {
-                setServerError("Something went wrong. Please try again.");
+                notify.error("Upgrade request failed", "Something went wrong. Please try again.");
             }
         }
     );
@@ -197,7 +196,6 @@ const UpgradeMembershipPage = () => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCategoryId) return;
-        setServerError(null);
         mutation.mutate({ toCategoryId: selectedCategoryId, applicantNotes: notes || undefined });
     };
 
@@ -377,16 +375,6 @@ const UpgradeMembershipPage = () => {
                 </div>
 
                 {/* Server error */}
-                {serverError && (
-                    <div style={{
-                        marginBottom: 16, padding: "12px 16px", borderRadius: 10,
-                        background: "#fdecea", border: "1.5px solid #f5c6c6",
-                        display: "flex", gap: 10, alignItems: "flex-start"
-                    }}>
-                        <AlertCircle size={18} style={{ color: "#c0392b", flexShrink: 0, marginTop: 1 }} />
-                        <p style={{ margin: 0, fontSize: 13, color: "#c0392b" }}>{serverError}</p>
-                    </div>
-                )}
 
                 {/* Submit */}
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>

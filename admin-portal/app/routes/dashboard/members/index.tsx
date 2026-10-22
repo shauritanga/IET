@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import http from "~/utils/http";
+import { useToast } from "~/providers/toast";
 import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope, MemberSummary } from "~/types";
 
@@ -40,12 +41,6 @@ type ImportResult = {
   welcomeEmailsFailed: number;
   errors: Array<{ row: number; membershipId?: string; email?: string; reason: string }>;
   warnings: Array<{ row: number; field: string; value: string; reason: string }>;
-};
-
-type ResendCredentialsResult = {
-  eligible: number;
-  emailsQueued: number;
-  emailsFailed: number;
 };
 
 type CreateMemberForm = {
@@ -213,6 +208,14 @@ function ViewIcon() {
     </svg>
   );
 }
+function MailIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 6L2 7" />
+    </svg>
+  );
+}
 function RenewIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -321,10 +324,12 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 function MemberActionMenu({
   onView,
   onRenew,
+  onResendCredentials,
   onDelete,
 }: {
   onView: () => void;
   onRenew?: () => void;
+  onResendCredentials?: () => void;
   onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -431,6 +436,13 @@ function MemberActionMenu({
               <RenewIcon /> Renew
             </button>
           ) : null}
+          {onResendCredentials ? (
+            <button type="button" onClick={() => { setOpen(false); onResendCredentials(); }} style={itemStyle}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+              <MailIcon /> Resend credentials
+            </button>
+          ) : null}
           {onDelete ? (
             <>
               <div style={{ height: 1, background: "var(--border)", margin: "0 10px" }} />
@@ -497,6 +509,7 @@ export default function MembersPage() {
   const canRemoveMembers = canDelete("members");
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
   const [pageError, setPageError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -509,7 +522,6 @@ export default function MembersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateMemberForm>(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [membershipCategories, setMembershipCategories] = useState<MembershipCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
@@ -518,15 +530,9 @@ export default function MembersPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // bulk credential reset state
-  const [resendCredentialsOpen, setResendCredentialsOpen] = useState(false);
-  const [resendConfirmed, setResendConfirmed] = useState(false);
-  const [resendingCredentials, setResendingCredentials] = useState(false);
-  const [resendCredentialsError, setResendCredentialsError] = useState<string | null>(null);
-  const [resendCredentialsResult, setResendCredentialsResult] = useState<ResendCredentialsResult | null>(null);
 
   // action state
   const [feeConfig, setFeeConfig] = useState<Record<string, number>>({});
@@ -536,10 +542,8 @@ export default function MembersPage() {
     amount: "",
   });
   const [renewing, setRenewing] = useState(false);
-  const [renewError, setRenewError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // stats derived from members list
   const stats = {
@@ -610,24 +614,22 @@ export default function MembersPage() {
 
   function openCreate() {
     setCreateForm(EMPTY_FORM);
-    setCreateError(null);
     setCreateOpen(true);
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!createForm.email.trim()) { setCreateError("Email is required."); return; }
-    if (categoriesLoading) { setCreateError("Membership categories are still loading."); return; }
-    if (categoriesError) { setCreateError(categoriesError); return; }
-    if (membershipCategories.length === 0) { setCreateError("No membership categories are available."); return; }
+    if (!createForm.email.trim()) { toast.error("Couldn't create member", "Email is required."); return; }
+    if (categoriesLoading) { toast.error("Couldn't create member", "Membership categories are still loading."); return; }
+    if (categoriesError) { toast.error("Couldn't create member", categoriesError); return; }
+    if (membershipCategories.length === 0) { toast.error("Couldn't create member", "No membership categories are available."); return; }
     if (!createForm.membershipCategoryId.trim()) {
-      setCreateError("Membership grade is required.");
+      toast.error("Couldn't create member", "Membership grade is required.");
       return;
     }
     setCreating(true);
-    setCreateError(null);
     try {
-      await http.post("/admin/members", {
+      const { data: created } = await http.post<{ message?: string; welcomeEmailQueued?: boolean }>("/admin/members", {
         email: createForm.email.trim(),
         firstName: createForm.firstName.trim() || undefined,
         middleName: createForm.middleName.trim() || undefined,
@@ -637,10 +639,15 @@ export default function MembersPage() {
         engineeringDiscipline: createForm.engineeringDiscipline || undefined,
       });
       setCreateOpen(false);
+      if (created.welcomeEmailQueued === false) {
+        toast.info("Member created", created.message);
+      } else {
+        toast.success("Member created", created.message);
+      }
       void loadMembers();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setCreateError(e.response?.data?.message ?? "Failed to create member.");
+      toast.error("Couldn't create member", e.response?.data?.message ?? "Failed to create member.");
     } finally {
       setCreating(false);
     }
@@ -655,7 +662,6 @@ export default function MembersPage() {
 
   function openImport() {
     setImportResult(null);
-    setImportError(null);
     setImportOpen(true);
   }
 
@@ -713,7 +719,6 @@ export default function MembersPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setImporting(true);
-    setImportError(null);
     setImportResult(null);
     const formData = new FormData();
     formData.append("file", file);
@@ -725,34 +730,22 @@ export default function MembersPage() {
       void loadMembers();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setImportError(e.response?.data?.message ?? "Import failed.");
+      toast.error("Import failed", e.response?.data?.message ?? "Import failed.");
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
-  function openResendCredentials() {
-    setResendConfirmed(false);
-    setResendCredentialsError(null);
-    setResendCredentialsResult(null);
-    setResendCredentialsOpen(true);
-  }
-
-  async function handleResendCredentials() {
-    if (!resendConfirmed) return;
-    setResendingCredentials(true);
-    setResendCredentialsError(null);
+  async function handleResendCredentials(member: MemberRow) {
     try {
-      const { data } = await http.post<ApiEnvelope<ResendCredentialsResult>>(
-        "/admin/members/resend-credentials",
+      const { data } = await http.post<ApiEnvelope<{ email: string; sent: boolean }>>(
+        `/admin/members/${member.id}/resend-credentials`,
       );
-      setResendCredentialsResult(data.data);
+      toast.success("Credentials sent", `A new temporary password was emailed to ${data.data?.email ?? member.email}.`);
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setResendCredentialsError(e.response?.data?.message ?? "Could not resend member credentials.");
-    } finally {
-      setResendingCredentials(false);
+      toast.error("Couldn't send credentials", e.response?.data?.message ?? "Could not resend member credentials.");
     }
   }
 
@@ -763,7 +756,6 @@ export default function MembersPage() {
       year: String(new Date().getFullYear()),
       amount: String(configuredAmount ?? ""),
     });
-    setRenewError(null);
   }
 
   async function handleRenew(e: React.FormEvent) {
@@ -773,23 +765,23 @@ export default function MembersPage() {
     const year = Number(renewForm.year);
     const amount = Number(renewForm.amount);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      setRenewError("Enter a valid renewal year.");
+      toast.error("Couldn't renew member", "Enter a valid renewal year.");
       return;
     }
     if (!Number.isFinite(amount) || amount < 0) {
-      setRenewError("Enter a valid paid amount.");
+      toast.error("Couldn't renew member", "Enter a valid paid amount.");
       return;
     }
 
     setRenewing(true);
-    setRenewError(null);
     try {
       await http.post(`/admin/members/${renewTarget.id}/renew`, { year, amount });
       setRenewTarget(null);
+      toast.success("Membership renewed", `${renewTarget.fullName ?? renewTarget.email} renewed for ${year}.`);
       void loadMembers();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setRenewError(e.response?.data?.message ?? "Failed to renew member.");
+      toast.error("Couldn't renew member", e.response?.data?.message ?? "Failed to renew member.");
     } finally {
       setRenewing(false);
     }
@@ -797,20 +789,19 @@ export default function MembersPage() {
 
   function openDelete(member: MemberRow) {
     setDeleteTarget(member);
-    setDeleteError(null);
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    setDeleteError(null);
     try {
       await http.delete(`/admin/members/${deleteTarget.id}`);
       setDeleteTarget(null);
+      toast.success("Member deleted", `${deleteTarget.fullName ?? deleteTarget.email} has been removed.`);
       void loadMembers();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setDeleteError(e.response?.data?.message ?? "Failed to delete member.");
+      toast.error("Couldn't delete member", e.response?.data?.message ?? "Failed to delete member.");
     } finally {
       setDeleting(false);
     }
@@ -848,16 +839,6 @@ export default function MembersPage() {
               onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
             >
               <UploadIcon /> Import Members
-            </button>
-          ) : null}
-          {canRenewMembers ? (
-            <button
-              onClick={openResendCredentials}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--white)", color: "var(--red-dark)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "border-color .15s" }}
-              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--red-dark)")}
-              onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-            >
-              Resend credentials
             </button>
           ) : null}
         </div>
@@ -976,6 +957,7 @@ export default function MembersPage() {
           <MemberActionMenu
             onView={() => navigate(`/dashboard/members/${member.id}`)}
             onRenew={canRenewMembers ? () => openRenew(member) : undefined}
+            onResendCredentials={canRenewMembers ? () => void handleResendCredentials(member) : undefined}
             onDelete={canRemoveMembers ? () => openDelete(member) : undefined}
           />
         );
@@ -1179,11 +1161,6 @@ export default function MembersPage() {
             </FormField>
           </div>
 
-          {createError && (
-            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
-              {createError}
-            </div>
-          )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={() => setCreateOpen(false)}
@@ -1253,11 +1230,6 @@ export default function MembersPage() {
           </p>
         </div>
 
-        {importError && (
-          <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 12 }}>
-            {importError}
-          </div>
-        )}
 
         {importResult && (
           <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px", marginBottom: 12, color: "var(--text)" }}>
@@ -1314,37 +1286,6 @@ export default function MembersPage() {
         </div>
       </Modal>
 
-      <Modal open={resendCredentialsOpen} onClose={() => !resendingCredentials && setResendCredentialsOpen(false)} title="Resend Member Credentials">
-        {resendCredentialsResult ? (
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--success)", marginBottom: 6 }}>Credentials queued</p>
-            <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 16 }}>
-              New temporary passwords were issued for {resendCredentialsResult.emailsQueued} of {resendCredentialsResult.eligible} active member accounts.
-              {resendCredentialsResult.emailsFailed > 0 ? ` ${resendCredentialsResult.emailsFailed} accounts were unchanged because their emails could not be queued.` : ""}
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-              <button type="button" onClick={() => setResendCredentialsOpen(false)} style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: "pointer" }}>Done</button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>Issue new passwords to every active member?</p>
-            <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 16 }}>
-              Each active member account will receive a new temporary password and a welcome email. Their current password will stop working once the email is queued.
-            </p>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 9, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "11px 12px", fontSize: 12, color: "var(--text)", lineHeight: 1.45, cursor: "pointer", marginBottom: 14 }}>
-              <input type="checkbox" checked={resendConfirmed} onChange={(e) => setResendConfirmed(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--red)" }} />
-              I understand that this replaces every active member’s current password.
-            </label>
-            {resendCredentialsError && <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>{resendCredentialsError}</div>}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-              <button type="button" onClick={() => setResendCredentialsOpen(false)} disabled={resendingCredentials} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--muted)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 18px", cursor: resendingCredentials ? "not-allowed" : "pointer" }}>Cancel</button>
-              <button type="button" onClick={() => void handleResendCredentials()} disabled={!resendConfirmed || resendingCredentials} style={{ fontSize: 12.5, fontWeight: 700, color: "white", background: !resendConfirmed || resendingCredentials ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: !resendConfirmed || resendingCredentials ? "not-allowed" : "pointer" }}>{resendingCredentials ? "Sending…" : "Reset & send"}</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
       <Modal open={!!renewTarget} onClose={() => setRenewTarget(null)} title="Renew Membership">
         <form onSubmit={(e) => void handleRenew(e)}>
           {renewTarget && (
@@ -1387,11 +1328,6 @@ export default function MembersPage() {
             </FormField>
           </div>
 
-          {renewError && (
-            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
-              {renewError}
-            </div>
-          )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={() => setRenewTarget(null)}
@@ -1415,11 +1351,6 @@ export default function MembersPage() {
             This will hide the member from the directory and deactivate portal access. Existing payments, fees, applications, and event history will remain available in the database.
           </p>
 
-          {deleteError && (
-            <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--red)", marginBottom: 14 }}>
-              {deleteError}
-            </div>
-          )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={() => setDeleteTarget(null)}

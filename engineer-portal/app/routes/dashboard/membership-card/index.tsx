@@ -3,6 +3,7 @@ import type { AxiosError } from "axios";
 import http from "~/utils/http";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { notify } from "~/utils/notify";
 
 type MembershipCardSummary = {
   id: string;
@@ -29,13 +30,11 @@ const STATUS_LABELS: Record<string, string> = {
 export default function MembershipCardPage() {
   const [data, setData] = useState<CardResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
-      setError(null);
       try {
         const { data: response } = await http.get<{ data: CardResponse }>(
           "/memberships/me/card",
@@ -43,7 +42,7 @@ export default function MembershipCardPage() {
         setData(response.data);
       } catch (err) {
         const apiError = err as AxiosError<{ message?: string }>;
-        setError(
+        notify.error("Membership card", 
           apiError.response?.data?.message ??
             "Unable to load membership card status.",
         );
@@ -55,7 +54,6 @@ export default function MembershipCardPage() {
 
   async function downloadPdf() {
     setDownloading(true);
-    setError(null);
     try {
       const response = await http.get("/memberships/me/card/pdf", {
         responseType: "blob",
@@ -69,7 +67,7 @@ export default function MembershipCardPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       const apiError = err as AxiosError<{ message?: string }>;
-      setError(
+      notify.error("Membership card", 
         apiError.response?.data?.message ??
           "Card is not available for download yet.",
       );
@@ -100,11 +98,6 @@ export default function MembershipCardPage() {
         </p>
       </div>
 
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
 
       <Card>
         <CardHeader>

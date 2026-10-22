@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { isAxiosError } from "axios";
+import { useToast } from "~/providers/toast";
 import http from "~/utils/http";
 import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope } from "~/types";
@@ -142,7 +143,7 @@ function ReviewModal({
   const [loading, setLoading] = useState(false);
   const [details, setDetails] = useState<UpgradeApplicationDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -157,23 +158,23 @@ function ReviewModal({
   const handleSubmit = async () => {
     if (!decision) return;
     if (decision === "REJECTED" && !rejectionReason.trim()) {
-      setError("A rejection reason is required.");
+      toast.error("Rejection reason required", "Explain why this upgrade is being rejected.");
       return;
     }
     setLoading(true);
-    setError(null);
     try {
       await http.patch(`/admin/upgrades/applications/${modal.applicationId}/review`, {
         status: decision,
         rejectionReason: decision === "REJECTED" ? rejectionReason : undefined,
       });
+      toast.success(decision === "APPROVED" ? "Upgrade approved" : "Upgrade rejected", "The member will be notified of the decision.");
       onReviewed();
       onClose();
     } catch (err) {
       if (isAxiosError(err)) {
-        setError(err.response?.data?.message ?? err.message);
+        toast.error("Couldn't submit review", err.response?.data?.message ?? err.message);
       } else {
-        setError("An unexpected error occurred.");
+        toast.error("Couldn't submit review", "An unexpected error occurred.");
       }
     } finally {
       setLoading(false);
@@ -269,11 +270,6 @@ function ReviewModal({
           </div>
         )}
 
-        {error && (
-          <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#c0392b", background: "#fdecea", padding: "8px 12px", borderRadius: 8 }}>
-            {error}
-          </p>
-        )}
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
@@ -315,7 +311,7 @@ function UpgradeRulesPanel() {
   const [categories, setCategories] = useState<MembershipCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [form, setForm] = useState({
     fromCategoryId: "",
     toCategoryId: "",
@@ -327,7 +323,6 @@ function UpgradeRulesPanel() {
 
   const loadRules = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const [rulesRes, categoriesRes] = await Promise.all([
         http.get<ApiEnvelope<UpgradeRule[]>>("/admin/upgrades/rules"),
@@ -336,7 +331,7 @@ function UpgradeRulesPanel() {
       setRules(rulesRes.data.data ?? []);
       setCategories(categoriesRes.data.data ?? []);
     } catch (err) {
-      setError(isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to load upgrade rules.");
+      toast.error("Couldn't load upgrade rules", isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to load upgrade rules.");
     } finally {
       setLoading(false);
     }
@@ -346,11 +341,10 @@ function UpgradeRulesPanel() {
 
   const createRule = async () => {
     if (!form.fromCategoryId || !form.toCategoryId) {
-      setError("Choose source and target categories.");
+      toast.error("Couldn't create rule", "Choose source and target categories.");
       return;
     }
     setSaving(true);
-    setError(null);
     try {
       await http.post("/admin/upgrades/rules", {
         fromCategoryId: form.fromCategoryId,
@@ -365,9 +359,10 @@ function UpgradeRulesPanel() {
         isActive: true,
       });
       setForm({ fromCategoryId: "", toCategoryId: "", minYearsExperience: "0", minCpdPoints: "0", requiredDocuments: "CV", description: "" });
+      toast.success("Upgrade rule created");
       await loadRules();
     } catch (err) {
-      setError(isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to create upgrade rule.");
+      toast.error("Couldn't create rule", isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to create upgrade rule.");
     } finally {
       setSaving(false);
     }
@@ -376,9 +371,10 @@ function UpgradeRulesPanel() {
   const toggleRule = async (rule: UpgradeRule) => {
     try {
       await http.patch(`/admin/upgrades/rules/${rule.id}`, { isActive: !rule.isActive });
+      toast.success(rule.isActive ? "Rule deactivated" : "Rule activated");
       await loadRules();
     } catch (err) {
-      setError(isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to update rule.");
+      toast.error("Couldn't update rule", isAxiosError(err) ? err.response?.data?.message ?? err.message : "Failed to update rule.");
     }
   };
 
@@ -390,7 +386,6 @@ function UpgradeRulesPanel() {
           <p className="page-subtitle">Configure backend eligibility paths and requirements.</p>
         </div>
       </div>
-      {error && <div style={{ padding: "12px 14px", borderRadius: 10, background: "#fdecea", color: "#c0392b", fontSize: 12, marginBottom: 12 }}>{error}</div>}
       <div className="table-card" style={{ padding: 16, marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <select style={fieldStyle} value={form.fromCategoryId} onChange={(e) => setForm((f) => ({ ...f, fromCategoryId: e.target.value }))}>

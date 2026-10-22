@@ -4,6 +4,7 @@ import { Button, Modal, PageHeader, StatusBadge } from "~/components/prototype-u
 import { PermissionMatrixEditor } from "~/components/permission-matrix-editor";
 import { usePermissions } from "~/providers/permissions";
 import http, { getApiErrorMessage } from "~/utils/http";
+import { useToast } from "~/providers/toast";
 import {
   cloneMatrix,
   emptyMatrix,
@@ -246,8 +247,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ tone: "success" | "error"; title: string; description?: string } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [total, setTotal] = useState(0);
@@ -361,16 +361,6 @@ export default function AdminUsersPage() {
 
   const visibleUsers = useMemo(() => users, [users]);
 
-  function showToast(tone: "success" | "error", title: string, description?: string) {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ tone, title, description });
-    toastTimer.current = setTimeout(() => setToast(null), tone === "error" ? 7000 : 4500);
-  }
-
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
-
   function openCreate() {
     setEditing(null);
     const role: AdminRole = "SECRETARIAT";
@@ -451,11 +441,11 @@ export default function AdminUsersPage() {
 
     try {
       await http.delete(`/admin/users/${deletingUser.id}`);
-      showToast("success", "User deleted", `${displayName(deletingUser)} has been removed.`);
+      toast.success("User deleted", `${displayName(deletingUser)} has been removed.`);
       setDeletingUser(null);
       await loadUsers();
     } catch (error) {
-      showToast("error", "Couldn't delete user", getApiErrorMessage(error, "Failed to delete admin user."));
+      toast.error("Couldn't delete user", getApiErrorMessage(error, "Failed to delete admin user."));
     } finally {
       setSaving(false);
     }
@@ -466,9 +456,9 @@ export default function AdminUsersPage() {
     setActionMenuPosition(null);
     try {
       await http.post(`/admin/users/${user.id}/resend-credentials`);
-      showToast("success", "Welcome email sent", `${user.email} received a new temporary password.`);
+      toast.success("Welcome email sent", `${user.email} received a new temporary password.`);
     } catch (error) {
-      showToast("error", "Couldn't send welcome email", getApiErrorMessage(error, "Failed to resend welcome email."));
+      toast.error("Couldn't send welcome email", getApiErrorMessage(error, "Failed to resend welcome email."));
     }
   }
 
@@ -476,7 +466,7 @@ export default function AdminUsersPage() {
     event.preventDefault();
 
     if (!form.phoneNumber.trim()) {
-      showToast("error", "Phone number required", "Enter a phone number before saving this user.");
+      toast.error("Phone number required", "Enter a phone number before saving this user.");
       return;
     }
 
@@ -515,8 +505,7 @@ export default function AdminUsersPage() {
         });
       }
       setModalOpen(false);
-      showToast(
-        "success",
+      toast.success(
         editing ? "User updated" : "User created",
         editing
           ? `Changes to ${form.firstName} ${form.lastName} were saved.`
@@ -524,8 +513,7 @@ export default function AdminUsersPage() {
       );
       await loadUsers();
     } catch (error) {
-      showToast(
-        "error",
+      toast.error(
         editing ? "Couldn't update user" : "Couldn't create user",
         getApiErrorMessage(error, "Failed to save admin user."),
       );
@@ -617,36 +605,6 @@ export default function AdminUsersPage() {
 
   return (
     <section>
-      {toast && (
-        <div
-          role={toast.tone === "error" ? "alert" : "status"}
-          className="animate-toast-in fixed right-5 top-5 z-[9999] flex w-[calc(100vw-40px)] max-w-[380px] items-start gap-3 rounded-[12px] border bg-white p-3.5 shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
-          style={{ borderColor: toast.tone === "error" ? "#f0b0b0" : "#86efac", borderLeft: `4px solid ${toast.tone === "error" ? "#dc2626" : "#16a34a"}` }}
-        >
-          <span
-            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
-            style={{ background: toast.tone === "error" ? "#dc2626" : "#16a34a" }}
-          >
-            {toast.tone === "success"
-              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="m-0 text-[12.5px] font-bold text-[var(--text)]">{toast.title}</p>
-            {toast.description && (
-              <p className="m-0 mt-0.5 break-words text-[11.5px] leading-snug text-[var(--muted)]">{toast.description}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            aria-label="Dismiss notification"
-            className="shrink-0 text-[var(--muted)] hover:text-[var(--text)]"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
-        </div>
-      )}
       <PageHeader
         title="Users"
         description="Manage portal users and membership application workflow roles"

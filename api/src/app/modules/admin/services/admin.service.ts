@@ -1215,7 +1215,9 @@ export class AdminService {
   /**
    * Create a single member account (admin-initiated)
    */
-  async createMember(dto: CreateMemberDto): Promise<UserEntity> {
+  async createMember(
+    dto: CreateMemberDto,
+  ): Promise<{ member: UserEntity; welcomeEmailQueued: boolean }> {
     const category = dto.membershipCategoryId
       ? await this.membershipCategoryRepository.findOne({
           where: { id: dto.membershipCategoryId },
@@ -1256,78 +1258,81 @@ export class AdminService {
     await this.userService.assignMembershipId(user.id);
     const created = await this.userRepository.findOneBy({ id: user.id });
 
-    void this.messagingQueue
-      .enqueuePortalWelcomeEmail({
+    let welcomeEmailQueued = false;
+    try {
+      const queued = await this.messagingQueue.enqueuePortalWelcomeEmail({
         email: user.email,
         firstName: user.firstName ?? 'Member',
         role: user.role,
         temporaryPassword,
         portal: AuthPortal.MEMBER_PORTAL,
-      })
-      .catch((error: any) => {
-        this.logger.warn(
-          `Failed to queue member welcome email to ${user.email}: ${error.message}`,
-        );
       });
+      welcomeEmailQueued = Boolean(queued?.success);
+      if (!welcomeEmailQueued) {
+        this.logger.warn(
+          `Member welcome email to ${user.email} was not queued: ${queued?.error ?? 'unknown error'}`,
+        );
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to queue member welcome email to ${user.email}: ${error.message}`,
+      );
+    }
 
-    return created ?? user;
+    return { member: created ?? user, welcomeEmailQueued };
   }
 
   /**
-   * Issue fresh temporary passwords to every active member portal account and
-   * queue their replacement credentials. A password is restored if its email
-   * cannot be queued, so a member is never locked out by a queue failure.
+   * Issue a fresh temporary password to one member and email it. The previous
+   * password is restored if the email cannot be queued, so a failed send never
+   * locks the member out.
    */
-  async resendAllMemberCredentials(): Promise<{
-    eligible: number;
-    emailsQueued: number;
-    emailsFailed: number;
-  }> {
-    const members = await this.userRepository.find({
-      where: {
-        role: UserRole.MEMBER,
-        isActive: true,
-      },
+  async resendMemberCredentials(
+    memberId: string,
+  ): Promise<{ email: string; sent: boolean }> {
+    const member = await this.userRepository.findOneBy({
+      id: memberId,
+      role: UserRole.MEMBER,
     });
-    const eligibleMembers = members.filter((member) => member.email?.trim());
-    let emailsQueued = 0;
-    let emailsFailed = 0;
-
-    for (const member of eligibleMembers) {
-      const previousPassword = member.password;
-      const temporaryPassword = this.generateTemporaryPassword();
-      member.password = await bcrypt.hash(temporaryPassword, 10);
-      await this.userRepository.save(member);
-
-      try {
-        const queued = await this.messagingQueue.enqueuePortalWelcomeEmail({
-          email: member.email,
-          firstName: member.firstName ?? 'Member',
-          role: member.role,
-          temporaryPassword,
-          isTemporaryPassword: true,
-          portal: AuthPortal.MEMBER_PORTAL,
-        });
-        if (!queued.success) throw new Error(queued.error || 'Failed to queue email');
-        emailsQueued++;
-      } catch (error) {
-        member.password = previousPassword;
-        await this.userRepository.save(member);
-        emailsFailed++;
-        this.logger.warn(
-          `Failed to queue replacement member credentials for ${member.email}: ${(error as Error).message}`,
-        );
-      }
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    if (!member.email?.trim()) {
+      throw new BadRequestException('This member has no email address on file');
+    }
+    if (!member.isActive) {
+      throw new BadRequestException(
+        'This member account is inactive. Reactivate it before resending credentials.',
+      );
     }
 
-    this.logger.log(
-      `Replacement member credentials: ${emailsQueued} queued, ${emailsFailed} failed, ${eligibleMembers.length} eligible`,
-    );
-    return {
-      eligible: eligibleMembers.length,
-      emailsQueued,
-      emailsFailed,
-    };
+    const previousPassword = member.password;
+    const temporaryPassword = this.generateTemporaryPassword();
+    member.password = await bcrypt.hash(temporaryPassword, 10);
+    await this.userRepository.save(member);
+
+    try {
+      const queued = await this.messagingQueue.enqueuePortalWelcomeEmail({
+        email: member.email,
+        firstName: member.firstName ?? 'Member',
+        role: member.role,
+        temporaryPassword,
+        isTemporaryPassword: true,
+        portal: AuthPortal.MEMBER_PORTAL,
+      });
+      if (!queued.success) throw new Error(queued.error || 'Failed to queue email');
+    } catch (error) {
+      member.password = previousPassword;
+      await this.userRepository.save(member);
+      this.logger.warn(
+        `Failed to queue replacement credentials for ${member.email}: ${(error as Error).message}`,
+      );
+      throw new BadRequestException(
+        'The welcome email could not be sent. The member\'s existing password was kept.',
+      );
+    }
+
+    return { email: member.email, sent: true };
   }
 
   private generateTemporaryPassword(): string {

@@ -4,6 +4,7 @@ import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { AdminEvent, AdminEventPayload, ApiEnvelope, EventAttendeesResponse, EventCategory } from "~/types";
+import { useToast } from "~/providers/toast";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -608,13 +609,12 @@ export default function EventsAndTrainingPage() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [formState, setFormState] = useState<EventFormState>(emptyFormState());
   const [formStep, setFormStep] = useState(0);
-  const [formError, setFormError] = useState<string | null>(null);
+  const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadingSpeakerIndex, setUploadingSpeakerIndex] = useState<number | null>(null);
   const [isUploadingAgendaPdf, setIsUploadingAgendaPdf] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-  const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const baselineFormRef = useRef<EventFormState>(emptyFormState());
 
   const [attendeesView, setAttendeesView] = useState<AttendeesView | null>(null);
@@ -721,14 +721,11 @@ export default function EventsAndTrainingPage() {
     baselineFormRef.current = empty;
     setFormState(empty);
     setFormStep(0);
-    setFormError(null);
-    setDraftNotice(null);
   }
 
   function openCreateModal() {
     setEditingEventId(null);
     setDiscardConfirmOpen(false);
-    setFormError(null);
 
     const draft = readDraft(CREATE_DRAFT_STORAGE_KEY);
     const empty = emptyFormState();
@@ -737,11 +734,10 @@ export default function EventsAndTrainingPage() {
     if (draft && isFormDirty(draft.formState, empty, draft.formStep)) {
       setFormState(draft.formState);
       setFormStep(Math.min(EVENT_FORM_STEPS.length - 1, Math.max(0, draft.formStep)));
-      setDraftNotice("Draft restored from your previous session.");
+      toast.info("Draft restored", "Draft restored from your previous session.");
     } else {
       setFormState(empty);
       setFormStep(0);
-      setDraftNotice(null);
     }
 
     setIsEventModalOpen(true);
@@ -750,7 +746,6 @@ export default function EventsAndTrainingPage() {
   function openEditModal(event: AdminEvent) {
     setEditingEventId(event.id);
     setDiscardConfirmOpen(false);
-    setFormError(null);
 
     const baseline = toFormState(event);
     baselineFormRef.current = baseline;
@@ -759,11 +754,10 @@ export default function EventsAndTrainingPage() {
     if (draft && isFormDirty(draft.formState, baseline, draft.formStep)) {
       setFormState(draft.formState);
       setFormStep(Math.min(EVENT_FORM_STEPS.length - 1, Math.max(0, draft.formStep)));
-      setDraftNotice("Unsaved edits restored from your previous session.");
+      toast.info("Draft restored", "Unsaved edits restored from your previous session.");
     } else {
       setFormState(baseline);
       setFormStep(0);
-      setDraftNotice(null);
     }
 
     setIsEventModalOpen(true);
@@ -773,7 +767,6 @@ export default function EventsAndTrainingPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     setIsUploadingImage(true);
-    setFormError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -783,7 +776,7 @@ export default function EventsAndTrainingPage() {
       });
       updateField("coverImage", data.data.url);
     } catch {
-      setFormError("Failed to upload image. Please try again.");
+      toast.error("Couldn't save event", "Failed to upload image. Please try again.");
     } finally {
       setIsUploadingImage(false);
       event.target.value = "";
@@ -794,7 +787,6 @@ export default function EventsAndTrainingPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadingSpeakerIndex(index);
-    setFormError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -804,7 +796,7 @@ export default function EventsAndTrainingPage() {
       });
       updateSpeaker(index, "photo", data.data.url);
     } catch {
-      setFormError("Failed to upload speaker photo. Please try again.");
+      toast.error("Couldn't save event", "Failed to upload speaker photo. Please try again.");
     } finally {
       setUploadingSpeakerIndex(null);
       event.target.value = "";
@@ -815,12 +807,11 @@ export default function EventsAndTrainingPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.type !== "application/pdf") {
-      setFormError("Agenda file must be a PDF.");
+      toast.error("Couldn't save event", "Agenda file must be a PDF.");
       event.target.value = "";
       return;
     }
     setIsUploadingAgendaPdf(true);
-    setFormError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -830,7 +821,7 @@ export default function EventsAndTrainingPage() {
       });
       updateField("agendaPdf", data.data.url);
     } catch {
-      setFormError("Failed to upload agenda PDF. Please try again.");
+      toast.error("Couldn't save event", "Failed to upload agenda PDF. Please try again.");
     } finally {
       setIsUploadingAgendaPdf(false);
       event.target.value = "";
@@ -856,21 +847,18 @@ export default function EventsAndTrainingPage() {
 
   function goToNextStep() {
     const validationError = validateStep(formState, formStep);
-    if (validationError) { setFormError(validationError); return; }
-    setFormError(null);
+    if (validationError) { toast.error("Couldn't save event", validationError); return; }
     setFormStep((current) => Math.min(EVENT_FORM_STEPS.length - 1, current + 1));
   }
 
   function goToPreviousStep() {
-    setFormError(null);
     setFormStep((current) => Math.max(0, current - 1));
   }
 
   async function saveEvent(publish: boolean) {
     const validationError = validateForm(formState);
-    if (validationError) { setFormError(validationError); return; }
+    if (validationError) { toast.error("Couldn't save event", validationError); return; }
     setIsSubmitting(true);
-    setFormError(null);
     const payload = toPayload(formState, publish);
     try {
       if (isEditing && editingEvent) {
@@ -880,6 +868,10 @@ export default function EventsAndTrainingPage() {
         await http.post<ApiEnvelope<AdminEvent>>("/admin/events", payload);
         clearDraft(CREATE_DRAFT_STORAGE_KEY);
       }
+      toast.success(
+        isEditing ? "Event updated" : publish ? "Event published" : "Event saved as draft",
+        payload.title ? `"${payload.title}" was saved.` : undefined,
+      );
       await loadEvents();
       setIsEventModalOpen(false);
       setDiscardConfirmOpen(false);
@@ -887,7 +879,7 @@ export default function EventsAndTrainingPage() {
       resetFormToEmpty();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setFormError(apiError.response?.data?.message ?? "Failed to save event.");
+      toast.error("Couldn't save event", apiError.response?.data?.message ?? "Failed to save event.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1006,18 +998,6 @@ export default function EventsAndTrainingPage() {
           </div>
         }
       >
-        {draftNotice ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#c5d4f7] bg-[#E7EFFD] px-3 py-2 text-[11.5px] text-[#1565C0]">
-            <span className="font-semibold">{draftNotice}</span>
-            <button
-              type="button"
-              className="text-[11px] font-bold underline"
-              onClick={() => setDraftNotice(null)}
-            >
-              Dismiss
-            </button>
-          </div>
-        ) : null}
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {EVENT_FORM_STEPS.map((step, index) => (
@@ -1027,7 +1007,6 @@ export default function EventsAndTrainingPage() {
               onClick={() => {
                 if (index <= formStep) {
                   setFormStep(index);
-                  setFormError(null);
                 }
               }}
               className={`rounded-[10px] border px-3 py-2 text-left transition-colors ${
@@ -1044,11 +1023,6 @@ export default function EventsAndTrainingPage() {
           ))}
         </div>
 
-        {formError ? (
-          <div className="rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-            {formError}
-          </div>
-        ) : null}
 
         {formStep === 0 ? (
           <div className="space-y-[14px]">

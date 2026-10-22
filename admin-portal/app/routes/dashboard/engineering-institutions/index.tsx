@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 
 type EngineeringInstitution = {
   id: string;
@@ -516,7 +517,7 @@ export default function EngineeringInstitutionsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<InstitutionForm>(EMPTY_FORM);
   const [editTarget, setEditTarget] = useState<EngineeringInstitution | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<EngineeringInstitution | null>(null);
@@ -549,7 +550,6 @@ export default function EngineeringInstitutionsPage() {
   function openCreate() {
     setEditTarget(null);
     setForm(EMPTY_FORM);
-    setSaveError(null);
     setFormOpen(true);
   }
 
@@ -561,7 +561,6 @@ export default function EngineeringInstitutionsPage() {
         institutionType: item.institutionType,
         notes: item.notes ?? "",
       });
-    setSaveError(null);
     setFormOpen(true);
   }
 
@@ -569,12 +568,11 @@ export default function EngineeringInstitutionsPage() {
     event.preventDefault();
 
     if (!form.name.trim()) {
-      setSaveError("Institution name is required.");
+      toast.error("Couldn't save institution", "Institution name is required.");
       return;
     }
 
     setSaving(true);
-    setSaveError(null);
 
     try {
       const payload = {
@@ -592,9 +590,10 @@ export default function EngineeringInstitutionsPage() {
       }
 
       setFormOpen(false);
+      toast.success(editTarget ? "Institution updated" : "Institution added", `${payload.name} was saved.`);
       await loadInstitutions();
     } catch (err) {
-      setSaveError(formatError(err, "Failed to save institution."));
+      toast.error("Couldn't save institution", formatError(err, "Failed to save institution."));
     } finally {
       setSaving(false);
     }
@@ -919,11 +918,6 @@ export default function EngineeringInstitutionsPage() {
         maxWidth={660}
       >
         <form onSubmit={(event) => void saveInstitution(event)}>
-          {saveError && (
-            <div style={{ marginBottom: 14, border: "1px solid #f0b0b0", background: "var(--red-pale)", color: "var(--red)", borderRadius: 8, padding: 10, fontSize: 12 }}>
-              {saveError}
-            </div>
-          )}
 
           <InstitutionFormFields form={form} setForm={setForm} />
 

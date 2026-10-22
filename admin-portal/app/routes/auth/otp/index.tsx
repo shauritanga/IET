@@ -17,6 +17,7 @@ import {
   type PendingTwoFactorSession,
 } from "~/utils/auth";
 import http from "~/utils/http";
+import { useToast } from "~/providers/toast";
 
 type LoginOtpChannel = "sms" | "email";
 
@@ -61,8 +62,7 @@ export default function OtpPage() {
   const loaderData = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [values, setValues] = useState(["", "", "", "", "", ""]);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
   const [seconds, setSeconds] = useState(45);
@@ -106,7 +106,6 @@ export default function OtpPage() {
     nextValues[index] = digit;
     valuesRef.current = nextValues;
     setValues(nextValues);
-    setError(null);
 
     if (digit && index < refs.current.length - 1) {
       refs.current[index + 1]?.focus();
@@ -141,7 +140,6 @@ export default function OtpPage() {
     }
 
     setSubmitting(true);
-    setError(null);
 
     try {
       const response = await http.post<ApiEnvelope<TwoFactorValidationResponse>>("/auth/2fa/validate", {
@@ -152,12 +150,12 @@ export default function OtpPage() {
       const result = response.data.data;
 
       if (!result.verified || !result.accessToken || !result.refreshToken || !result.user) {
-        setError("Invalid security code.");
+        toast.error("Verification failed", "Invalid security code.");
         return;
       }
 
       if (!isAdminRole(result.user.role)) {
-        setError("This account does not have admin portal access.");
+        toast.error("Verification failed", "This account does not have admin portal access.");
         return;
       }
 
@@ -165,7 +163,7 @@ export default function OtpPage() {
       navigate("/dashboard", { replace: true });
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setError(apiError.response?.data?.message ?? "Verification request did not reach the backend.");
+      toast.error("Verification failed", apiError.response?.data?.message ?? "Verification request did not reach the backend.");
     } finally {
       setSubmitting(false);
     }
@@ -175,8 +173,6 @@ export default function OtpPage() {
     if (nextChannel === channel && seconds > 0) return;
 
     setResending(true);
-    setError(null);
-    setInfo(null);
 
     try {
       const response = await http.post<
@@ -198,12 +194,12 @@ export default function OtpPage() {
         channel: result.channel,
       });
       setValues(["", "", "", "", "", ""]);
-      setInfo(result.message);
+      toast.success("Security code sent", result.message);
       setSeconds(45);
       refs.current[0]?.focus();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setError(apiError.response?.data?.message ?? "Failed to send login code.");
+      toast.error("Verification failed", apiError.response?.data?.message ?? "Failed to send login code.");
     } finally {
       setResending(false);
     }
@@ -242,13 +238,7 @@ export default function OtpPage() {
         ))}
       </div>
 
-      {info ? (
-        <div className="mb-[10px] text-center text-[11px] font-semibold text-[#1a6b3c]">{info}</div>
-      ) : null}
 
-      {error ? (
-        <div className="mb-[10px] text-center text-[11px] font-semibold text-[var(--red)]">{error}</div>
-      ) : null}
 
       <button
         type="button"

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -429,22 +430,19 @@ export default function MembershipCategoriesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CategoryForm>(EMPTY_FORM);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<MembershipCategory | null>(null);
   const [editForm, setEditForm] = useState<CategoryForm>(EMPTY_FORM);
-  const [editError, setEditError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<MembershipCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [toast, setToast] = useState<{ msg: string; tone: "success" | "error" } | null>(null);
-
   function showToast(msg: string, tone: "success" | "error" = "success") {
-    setToast({ msg, tone });
-    setTimeout(() => setToast(null), 3200);
+    if (tone === "error") toast.error(msg);
+    else toast.success(msg);
   }
 
   async function fetchCategories() {
@@ -465,7 +463,6 @@ export default function MembershipCategoriesPage() {
 
   function openCreate() {
     setCreateForm(EMPTY_FORM);
-    setCreateError(null);
     setCreateOpen(true);
   }
 
@@ -480,20 +477,18 @@ export default function MembershipCategoriesPage() {
       description: cat.description ?? "",
       isActive: cat.isActive ?? true,
     });
-    setEditError(null);
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!createForm.name.trim()) { setCreateError("Category name is required."); return; }
-    if (createForm.yearlyFee === "") { setCreateError("Annual fee is required."); return; }
-    if (createForm.minYearsExperience === "") { setCreateError("Minimum years of experience is required."); return; }
+    if (!createForm.name.trim()) { toast.error("Couldn't create category", "Category name is required."); return; }
+    if (createForm.yearlyFee === "") { toast.error("Couldn't create category", "Annual fee is required."); return; }
+    if (createForm.minYearsExperience === "") { toast.error("Couldn't create category", "Minimum years of experience is required."); return; }
     if (createForm.level === "" || Number.isNaN(Number(createForm.level)) || Number(createForm.level) < 0) {
-      setCreateError("Level must be 0 or greater.");
+      toast.error("Couldn't create category", "Level must be 0 or greater.");
       return;
     }
     setCreating(true);
-    setCreateError(null);
     try {
       await http.post("/admin/membership-categories", {
         name: createForm.name.trim(),
@@ -509,7 +504,7 @@ export default function MembershipCategoriesPage() {
       showToast("Category created successfully.");
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setCreateError(e.response?.data?.message ?? "Failed to create category.");
+      toast.error("Couldn't create category", e.response?.data?.message ?? "Failed to create category.");
     } finally {
       setCreating(false);
     }
@@ -518,15 +513,14 @@ export default function MembershipCategoriesPage() {
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editTarget) return;
-    if (!editForm.name.trim()) { setEditError("Category name is required."); return; }
-    if (editForm.yearlyFee === "") { setEditError("Annual fee is required."); return; }
-    if (editForm.minYearsExperience === "") { setEditError("Minimum years of experience is required."); return; }
+    if (!editForm.name.trim()) { toast.error("Couldn't update category", "Category name is required."); return; }
+    if (editForm.yearlyFee === "") { toast.error("Couldn't update category", "Annual fee is required."); return; }
+    if (editForm.minYearsExperience === "") { toast.error("Couldn't update category", "Minimum years of experience is required."); return; }
     if (editForm.level === "" || Number.isNaN(Number(editForm.level)) || Number(editForm.level) < 0) {
-      setEditError("Level must be 0 or greater.");
+      toast.error("Couldn't update category", "Level must be 0 or greater.");
       return;
     }
     setEditing(true);
-    setEditError(null);
     try {
       await http.patch(`/admin/membership-categories/${editTarget.id}`, {
         name: editForm.name.trim(),
@@ -542,7 +536,7 @@ export default function MembershipCategoriesPage() {
       showToast("Category updated successfully.");
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setEditError(e.response?.data?.message ?? "Failed to update category.");
+      toast.error("Couldn't update category", e.response?.data?.message ?? "Failed to update category.");
     } finally {
       setEditing(false);
     }
@@ -571,22 +565,6 @@ export default function MembershipCategoriesPage() {
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 9999,
-          background: toast.tone === "error" ? "#dc2626" : "#16a34a",
-          color: "#fff", padding: "11px 18px", borderRadius: 10,
-          fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,.18)",
-          display: "flex", alignItems: "center", gap: 8,
-          animation: "slideIn .2s ease",
-        }}>
-          {toast.tone === "success"
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
-          {toast.msg}
-        </div>
-      )}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -893,9 +871,6 @@ export default function MembershipCategoriesPage() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Membership Category">
         <form onSubmit={handleCreate}>
           <CategoryFormFields form={createForm} setForm={setCreateForm} />
-          {createError && (
-            <p style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4, marginBottom: 0 }}>{createError}</p>
-          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button
               type="button"
@@ -919,9 +894,6 @@ export default function MembershipCategoriesPage() {
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Membership Category">
         <form onSubmit={handleEdit}>
           <CategoryFormFields form={editForm} setForm={setEditForm} />
-          {editError && (
-            <p style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4, marginBottom: 0 }}>{editError}</p>
-          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button
               type="button"

@@ -11,6 +11,7 @@ import type { Route } from "./+types/root";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./app.css";
 import { ThemeProvider } from "~/providers/theme";
+import { ToastProvider } from "~/providers/toast";
 
 const queryClient = new QueryClient();
 const themeInitScript = `
@@ -65,9 +66,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <div className="min-h-screen">
-          <Outlet />
-        </div>
+        <ToastProvider>
+          <div className="min-h-screen">
+            <Outlet />
+          </div>
+        </ToastProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

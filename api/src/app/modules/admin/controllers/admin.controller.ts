@@ -295,8 +295,16 @@ export class AdminController {
   @ApiOperation({ summary: 'Create a single member account' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Member created' })
   async createMember(@Body() dto: CreateMemberDto) {
-    const member = await this.adminService.createMember(dto);
-    return { success: true, data: member, message: 'Member created successfully' };
+    const { member, welcomeEmailQueued } =
+      await this.adminService.createMember(dto);
+    return {
+      success: true,
+      data: member,
+      welcomeEmailQueued,
+      message: welcomeEmailQueued
+        ? `Member created. Login credentials were emailed to ${member.email}.`
+        : 'Member created, but the welcome email could not be sent. Use "Resend credentials" from the member menu.',
+    };
   }
 
   @Get('members/:memberId')
@@ -667,16 +675,19 @@ export class AdminController {
     };
   }
 
-  @Post('members/resend-credentials')
+  @Post('members/:memberId/resend-credentials')
   @ApiOperation({
-    summary: 'Reset passwords and resend welcome credentials to all active members',
+    summary: 'Reset the password and resend welcome credentials to one member',
   })
-  async resendAllMemberCredentials() {
-    const result = await this.adminService.resendAllMemberCredentials();
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async resendMemberCredentials(
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+  ) {
+    const result = await this.adminService.resendMemberCredentials(memberId);
     return {
       success: true,
       data: result,
-      message: `${result.emailsQueued} member welcome emails queued`,
+      message: `Welcome email sent to ${result.email} with a new temporary password`,
     };
   }
 

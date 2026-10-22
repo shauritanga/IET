@@ -3,13 +3,13 @@ import { useState } from "react";
 import { Link } from "react-router";
 import type { AxiosError } from "axios";
 import http from "~/utils/http";
+import { notify } from "~/utils/notify";
 
 const PORTAL = "MEMBER_PORTAL";
 
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [sent, setSent] = useState(false);
 
     const fieldClassName =
@@ -18,7 +18,6 @@ export default function ForgotPasswordPage() {
     async function handleSubmit() {
         if (submitting || !email.trim()) return;
         setSubmitting(true);
-        setError(null);
 
         try {
             await http.post("/auth/forgot-password", {
@@ -28,7 +27,7 @@ export default function ForgotPasswordPage() {
             setSent(true);
         } catch (err) {
             const apiError = err as AxiosError<{ message?: string }>;
-            setError(apiError.response?.data?.message ?? "Something went wrong. Please try again.");
+            notify.error("Couldn't send reset link", apiError.response?.data?.message ?? "Something went wrong. Please try again.");
         } finally {
             setSubmitting(false);
         }
@@ -100,11 +99,6 @@ export default function ForgotPasswordPage() {
                             />
                         </div>
 
-                        {error ? (
-                            <div className="mb-4 rounded-[10px] border border-[#f0b0b0] bg-[var(--iet-red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--iet-red)]">
-                                {error}
-                            </div>
-                        ) : null}
 
                         <button
                             className="auth-btn-main flex w-full items-center justify-center gap-2"

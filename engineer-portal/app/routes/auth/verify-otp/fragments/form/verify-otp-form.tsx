@@ -18,6 +18,7 @@ import {
 } from "~/utils/otp-session"
 import { TOKEN_KEY, USER_KEY } from "~/utils/http"
 import { setToCookie, setToStorage } from "~/utils/storage"
+import { notify } from "~/utils/notify";
 
 function maskEmail(email: string) {
     const [localPart, domain = ""] = email.split("@")
@@ -31,8 +32,6 @@ const VerifyOtpForm = () => {
     const [otpSession, setOtpSession] = useState<OtpSession | null>(() => readOtpSession())
     const [code, setCode] = useState("")
     const [timer, setTimer] = useState(30)
-    const [error, setError] = useState("")
-    const [info, setInfo] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isResending, setIsResending] = useState(false)
 
@@ -104,8 +103,6 @@ const VerifyOtpForm = () => {
         event.preventDefault()
         if (!otpSession) return
 
-        setError("")
-        setInfo("")
         setIsSubmitting(true)
 
         try {
@@ -119,7 +116,7 @@ const VerifyOtpForm = () => {
             }
 
             if (!otpSession.userId) {
-                setError("The sign-in session is incomplete. Please log in again.")
+                notify.error("Verification failed", "The sign-in session is incomplete. Please log in again.")
                 return
             }
 
@@ -129,7 +126,7 @@ const VerifyOtpForm = () => {
             })
 
             if (!result.verified || !result.accessToken || !result.refreshToken || !result.user) {
-                setError(channel === "email" ? "Invalid email code." : "Invalid SMS code.")
+                notify.error("Verification failed", channel === "email" ? "Invalid email code." : "Invalid SMS code.")
                 return
             }
 
@@ -140,7 +137,7 @@ const VerifyOtpForm = () => {
             })
         } catch (error) {
             const apiError = error as TErrorMessage
-            setError(apiError.response?.data.message ?? "Verification failed.")
+            notify.error("Verification failed", apiError.response?.data.message ?? "Verification failed.")
         } finally {
             setIsSubmitting(false)
         }
@@ -149,17 +146,15 @@ const VerifyOtpForm = () => {
     const handleResendEmailVerification = async () => {
         if (!otpSession || otpSession.flow !== "email-verification" || timer > 0) return
 
-        setError("")
-        setInfo("")
         setIsResending(true)
 
         try {
             await resendOtp({ email: otpSession.email })
-            setInfo("Verification code resent.")
+            notify.success("Code resent", "Check your inbox for the new verification code.")
             setTimer(30)
         } catch (error) {
             const apiError = error as TErrorMessage
-            setError(apiError.response?.data.message ?? "Failed to resend verification code.")
+            notify.error("Couldn't resend code", apiError.response?.data.message ?? "Failed to resend verification code.")
         } finally {
             setIsResending(false)
         }
@@ -170,8 +165,6 @@ const VerifyOtpForm = () => {
         // Same-channel resend respects cooldown; switching channel is always allowed.
         if (nextChannel === channel && timer > 0) return
 
-        setError("")
-        setInfo("")
         setIsResending(true)
 
         try {
@@ -189,11 +182,11 @@ const VerifyOtpForm = () => {
                     result.channel === "email" ? result.destination : otpSession.emailDestination,
             })
             setCode("")
-            setInfo(result.message)
+            notify.success("Code sent", result.message)
             setTimer(30)
         } catch (error) {
             const apiError = error as TErrorMessage
-            setError(apiError.response?.data.message ?? "Failed to send login code.")
+            notify.error("Couldn't send login code", apiError.response?.data.message ?? "Failed to send login code.")
         } finally {
             setIsResending(false)
         }
@@ -229,12 +222,6 @@ const VerifyOtpForm = () => {
                         value={code}
                         onChange={(event) => setCode(event.target.value)}
                     />
-                    {info ? (
-                        <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: "#1a6b3c", fontWeight: 600 }}>
-                            {info}
-                        </div>
-                    ) : null}
-                    <div className="auth-err" style={{ textAlign: "center", marginTop: 8 }}>{error}</div>
                 </div>
 
                 <button className="auth-btn-main" type="submit" style={{ maxWidth: 280, margin: "0 auto" }} disabled={isSubmitting}>

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router";
 import http from "~/utils/http";
 import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 
 type MemberDetails = {
   id: string;
@@ -221,11 +222,9 @@ export default function MemberDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [cardInfo, setCardInfo] = useState<MembershipCardResponse | null>(null);
   const [cardBusy, setCardBusy] = useState(false);
-  const [cardMessage, setCardMessage] = useState<string | null>(null);
-  const [cardError, setCardError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const toast = useToast();
   const [editSaved, setEditSaved] = useState(false);
   const [editForm, setEditForm] = useState({ title: "", firstName: "", middleName: "", lastName: "", email: "", phoneNumber: "" });
 
@@ -271,7 +270,6 @@ export default function MemberDetailsPage() {
       email: details.email ?? "",
       phoneNumber: details.phoneNumber ?? "",
     });
-    setEditError(null);
     setEditSaved(false);
     setEditing(true);
   }
@@ -299,16 +297,16 @@ export default function MemberDetailsPage() {
       return;
     }
     setEditSaving(true);
-    setEditError(null);
     try {
       await http.patch(`/admin/members/${memberId}`, payload);
       const { data } = await http.get<ApiEnvelope<MemberDetails>>(`/admin/members/${memberId}`);
       setMember(data.data);
       setEditing(false);
       setEditSaved(true);
+      toast.success("Member updated", "Member details were saved.");
     } catch (err) {
       const e = err as AxiosError<{ message?: string; errors?: Array<{ message?: string }> }>;
-      setEditError(e.response?.data?.errors?.[0]?.message ?? e.response?.data?.message ?? "Failed to update member.");
+      toast.error("Couldn't update member", e.response?.data?.errors?.[0]?.message ?? e.response?.data?.message ?? "Failed to update member.");
     } finally {
       setEditSaving(false);
     }
@@ -317,8 +315,6 @@ export default function MemberDetailsPage() {
   async function runCardAction(action: "issue" | "ready-for-collection" | "collected" | "pdf") {
     if (!memberId) return;
     setCardBusy(true);
-    setCardError(null);
-    setCardMessage(null);
     try {
       if (action === "pdf") {
         const response = await http.get(`/admin/members/${memberId}/membership-card/pdf`, {
@@ -331,7 +327,7 @@ export default function MemberDetailsPage() {
         anchor.download = `IET-Membership-Card-${member?.membershipId ?? memberId}.pdf`;
         anchor.click();
         URL.revokeObjectURL(url);
-        setCardMessage("Card PDF downloaded for printing.");
+        toast.success("Membership card", "Card PDF downloaded for printing.");
         return;
       }
 
@@ -342,11 +338,11 @@ export default function MemberDetailsPage() {
             ? `/admin/members/${memberId}/membership-card/ready-for-collection`
             : `/admin/members/${memberId}/membership-card/collected`;
       const { data } = await http.post<ApiEnvelope<MembershipCardSummary>>(path, {});
-      setCardMessage(data.message ?? "Updated.");
+      toast.success("Membership card", data.message ?? "Updated.");
       await loadCard();
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setCardError(e.response?.data?.message ?? "Membership card action failed.");
+      toast.error("Membership card", e.response?.data?.message ?? "Membership card action failed.");
     } finally {
       setCardBusy(false);
     }
@@ -419,7 +415,6 @@ export default function MemberDetailsPage() {
                   <button type="button" onClick={startEditing} style={{ border: "1px solid var(--border)", background: "var(--white)", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, color: "var(--red-dark)", cursor: "pointer" }}>
                     Edit details
                   </button>
-                  {editSaved && <span style={{ fontSize: 11.5, color: "#166534" }}>Details updated.</span>}
                 </div>
               )}
               {editing ? (
@@ -451,7 +446,6 @@ export default function MemberDetailsPage() {
                       {["Eng.", "Dr.", "Prof.", "Mr.", "Ms.", "Mrs."].map((title) => <option key={title} value={title}>{title}</option>)}
                     </select>
                   </label>
-                  {editError && <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: "var(--red)" }}>{editError}</div>}
                   <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
                     <button type="button" onClick={saveEdit} disabled={editSaving} style={{ background: "var(--red-dark)", color: "white", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: editSaving ? 0.6 : 1 }}>
                       {editSaving ? "Saving…" : "Save changes"}
@@ -509,16 +503,6 @@ export default function MemberDetailsPage() {
                     </span>
                   ) : null}
                 </div>
-                {cardError ? (
-                  <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, color: "var(--red)" }}>
-                    {cardError}
-                  </div>
-                ) : null}
-                {cardMessage ? (
-                  <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, color: "#15803d" }}>
-                    {cardMessage}
-                  </div>
-                ) : null}
                 {canManageCard ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     <button

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -272,22 +273,19 @@ export default function DisciplinesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<DisciplineForm>(EMPTY_FORM);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
 
   const [editTarget, setEditTarget] = useState<Discipline | null>(null);
   const [editForm, setEditForm] = useState<DisciplineForm>(EMPTY_FORM);
-  const [editError, setEditError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Discipline | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [toast, setToast] = useState<{ msg: string; tone: "success" | "error" } | null>(null);
-
   function showToast(msg: string, tone: "success" | "error" = "success") {
-    setToast({ msg, tone });
-    setTimeout(() => setToast(null), 3200);
+    if (tone === "error") toast.error(msg);
+    else toast.success(msg);
   }
 
   async function fetchDisciplines() {
@@ -342,21 +340,18 @@ export default function DisciplinesPage() {
 
   function openCreate() {
     setCreateForm(EMPTY_FORM);
-    setCreateError(null);
     setCreateOpen(true);
   }
 
   function openEdit(d: Discipline) {
     setEditTarget(d);
     setEditForm({ name: d.name, parentId: d.parentId ?? "", isActive: d.isActive });
-    setEditError(null);
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!createForm.name.trim()) { setCreateError("Discipline name is required."); return; }
+    if (!createForm.name.trim()) { toast.error("Couldn't create discipline", "Discipline name is required."); return; }
     setCreating(true);
-    setCreateError(null);
     try {
       await http.post("/admin/disciplines", {
         name: createForm.name.trim(),
@@ -368,7 +363,7 @@ export default function DisciplinesPage() {
       showToast("Discipline created.");
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setCreateError(e.response?.data?.message ?? "Failed to create discipline.");
+      toast.error("Couldn't create discipline", e.response?.data?.message ?? "Failed to create discipline.");
     } finally {
       setCreating(false);
     }
@@ -377,9 +372,8 @@ export default function DisciplinesPage() {
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editTarget) return;
-    if (!editForm.name.trim()) { setEditError("Discipline name is required."); return; }
+    if (!editForm.name.trim()) { toast.error("Couldn't update discipline", "Discipline name is required."); return; }
     setEditing(true);
-    setEditError(null);
     try {
       await http.patch(`/admin/disciplines/${editTarget.id}`, {
         name: editForm.name.trim(),
@@ -391,7 +385,7 @@ export default function DisciplinesPage() {
       showToast("Discipline updated.");
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setEditError(e.response?.data?.message ?? "Failed to update discipline.");
+      toast.error("Couldn't update discipline", e.response?.data?.message ?? "Failed to update discipline.");
     } finally {
       setEditing(false);
     }
@@ -414,16 +408,6 @@ export default function DisciplinesPage() {
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 9999,
-          background: toast.tone === "error" ? "#dc2626" : "#16a34a",
-          color: "#fff", padding: "11px 18px", borderRadius: 10,
-          fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,.18)",
-        }}>
-          {toast.msg}
-        </div>
-      )}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -545,7 +529,6 @@ export default function DisciplinesPage() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Discipline">
         <form onSubmit={handleCreate}>
           <DisciplineFormFields form={createForm} setForm={setCreateForm} topLevel={topLevel} />
-          {createError && <p style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4, marginBottom: 0 }}>{createError}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={() => setCreateOpen(false)} style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Cancel</button>
             <button type="submit" disabled={creating} style={{ fontSize: 12, fontWeight: 700, color: "white", background: creating ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: creating ? "not-allowed" : "pointer" }}>{creating ? "Creating…" : "Create Discipline"}</button>
@@ -557,7 +540,6 @@ export default function DisciplinesPage() {
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Discipline">
         <form onSubmit={handleEdit}>
           <DisciplineFormFields form={editForm} setForm={setEditForm} topLevel={topLevel} excludeId={editTarget?.id} />
-          {editError && <p style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4, marginBottom: 0 }}>{editError}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <button type="button" onClick={() => setEditTarget(null)} style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>Cancel</button>
             <button type="submit" disabled={editing} style={{ fontSize: 12, fontWeight: 700, color: "white", background: editing ? "var(--muted)" : "var(--red)", border: "none", borderRadius: 8, padding: "8px 20px", cursor: editing ? "not-allowed" : "pointer" }}>{editing ? "Saving…" : "Save Changes"}</button>

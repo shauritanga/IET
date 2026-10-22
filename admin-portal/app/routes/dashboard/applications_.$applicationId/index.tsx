@@ -6,6 +6,7 @@ import { usePermissions } from "~/providers/permissions";
 import http from "~/utils/http";
 import { getStoredUser } from "~/utils/auth";
 import type { ApiEnvelope } from "~/types";
+import { useToast } from "~/providers/toast";
 
 type ReviewStage =
   | "SECRETARIAT_REVIEW"
@@ -205,13 +206,12 @@ export default function ApplicationReviewPage() {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const toast = useToast();
   const [actionPending, setActionPending] = useState(false);
   const [comments, setComments] = useState("");
   const [categoryChoice, setCategoryChoice] = useState("");
   const [categoryReason, setCategoryReason] = useState("");
   const [categoryPending, setCategoryPending] = useState(false);
-  const [categoryMessage, setCategoryMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [membershipClass, setMembershipClass] = useState("MIET");
   const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
   const [assigneesLoading, setAssigneesLoading] = useState(false);
@@ -311,15 +311,14 @@ export default function ApplicationReviewPage() {
   async function performAction(action: string) {
     if (!detail) return;
     if (["EVALUATOR_RECOMMEND", "MPDC_RECOMMEND", "COUNCIL_RECOMMEND", "REJECT", "RETURN_FOR_CHANGES"].includes(action) && !comments.trim()) {
-      setActionError("Comments or reason are required for this action.");
+      toast.error("Couldn't complete action", "Comments or reason are required for this action.");
       return;
     }
     if (needsAssigneePicker(action) && !selectedAssigneeId) {
-      setActionError(`Select a ${assigneeLabel.toLowerCase()} before advancing.`);
+      toast.error("Couldn't complete action", `Select a ${assigneeLabel.toLowerCase()} before advancing.`);
       return;
     }
     setActionPending(true);
-    setActionError(null);
     try {
       const payload: Record<string, string | undefined> = {
         action,
@@ -334,10 +333,11 @@ export default function ApplicationReviewPage() {
       await http.patch(`/admin/applications/${detail.id}/stage`, payload);
       setComments("");
       setSelectedAssigneeId("");
+      toast.success("Application updated", "The review action was recorded.");
       await loadDetail();
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
-      setActionError(apiErr.response?.data?.message ?? "Action failed. Please try again.");
+      toast.error("Couldn't complete action", apiErr.response?.data?.message ?? "Action failed. Please try again.");
     } finally {
       setActionPending(false);
     }
@@ -346,7 +346,6 @@ export default function ApplicationReviewPage() {
   async function handleChangeCategory() {
     if (!detail || !categoryChoice || categoryChoice === detail.appliedMembershipClass) return;
     setCategoryPending(true);
-    setCategoryMessage(null);
     try {
       await http.patch(`/admin/applications/${detail.id}/category`, {
         membershipClass: categoryChoice,
@@ -354,11 +353,11 @@ export default function ApplicationReviewPage() {
       });
       setCategoryReason("");
       setCategoryChoice("");
-      setCategoryMessage({ tone: "ok", text: "Category updated. The applicant has been notified." });
+      toast.success("Category updated", "The applicant has been notified.");
       await loadDetail();
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
-      setCategoryMessage({ tone: "error", text: apiErr.response?.data?.message ?? "Failed to change category." });
+      toast.error("Couldn't change category", apiErr.response?.data?.message ?? "Failed to change category.");
     } finally {
       setCategoryPending(false);
     }
@@ -441,9 +440,6 @@ export default function ApplicationReviewPage() {
                     </button>
                   </div>
                   <p className="text-[11px] text-[var(--muted)]">The applicant is notified by email and SMS; the application is not returned to them.</p>
-                  {categoryMessage && (
-                    <p className={`text-[11.5px] ${categoryMessage.tone === "ok" ? "text-green-700" : "text-[var(--red)]"}`}>{categoryMessage.text}</p>
-                  )}
                 </div>
               )}
             </Section>
@@ -608,11 +604,6 @@ export default function ApplicationReviewPage() {
                   </label>
                 )}
 
-                {actionError && (
-                  <div className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-                    {actionError}
-                  </div>
-                )}
 
                 <div className="space-y-2">
                   {canAct && primaryAction && (

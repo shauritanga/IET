@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Send, Trash2, Wallet } from "lucide-react";
 import { Button, Modal, StatusBadge } from "~/components/prototype-ui";
 import { usePermissions } from "~/providers/permissions";
+import { useToast } from "~/providers/toast";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 
@@ -206,14 +207,10 @@ export default function PaymentsPage() {
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [sendLinkTarget, setSendLinkTarget] = useState<PaymentRecord | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const toast = useToast();
 
   const showPaymentActions = canUpdatePayments || canDeletePayments("payments");
 
-  function showToast(message: string, ms = 3500) {
-    setToast(message);
-    setTimeout(() => setToast(null), ms);
-  }
 
   // Only actual (failed/cancelled) payment records may be deleted — never
   // membership-fee rows or completed/in-flight payments.
@@ -244,11 +241,11 @@ export default function PaymentsPage() {
     try {
       await http.delete(`/admin/payments/${deleteTarget.id}`);
       setDeleteTarget(null);
-      showToast("Payment deleted.");
+      toast.success("Payment deleted");
       await loadPayments();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      showToast(apiError.response?.data?.message ?? "Failed to delete payment.", 4000);
+      toast.error("Action failed", apiError.response?.data?.message ?? "Failed to delete payment.");
     } finally {
       setDeleting(false);
     }
@@ -261,11 +258,11 @@ export default function PaymentsPage() {
         `/admin/payments/${p.id}/check-status`,
       );
       const status = res.data.data?.status;
-      showToast(status ? `Status: ${status}` : "Status refreshed.");
+      toast.info("Payment status", status ? `Current status: ${status}` : "Status refreshed.");
       await loadPayments();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      showToast(apiError.response?.data?.message ?? "Failed to check status.", 4000);
+      toast.error("Action failed", apiError.response?.data?.message ?? "Failed to check status.");
     } finally {
       setCheckingId(null);
     }
@@ -281,11 +278,11 @@ export default function PaymentsPage() {
       const { sentEmail, sentSms } = res.data.data ?? {};
       const channels = [sentEmail && "email", sentSms && "SMS"].filter(Boolean).join(" & ");
       setSendLinkTarget(null);
-      showToast(channels ? `Payment link sent by ${channels}.` : "Payment link generated.");
+      toast.success(channels ? `Payment link sent by ${channels}` : "Payment link generated");
       await loadPayments();
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      showToast(apiError.response?.data?.message ?? "Failed to send payment link.", 4000);
+      toast.error("Action failed", apiError.response?.data?.message ?? "Failed to send payment link.");
     } finally {
       setSendingLink(false);
     }
@@ -731,11 +728,6 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      {toast && (
-        <div className="animate-toast-in fixed right-5 top-5 z-[6000] rounded-[10px] bg-[#111] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
-          {toast}
-        </div>
-      )}
 
       <Modal
         title="Delete Payment"

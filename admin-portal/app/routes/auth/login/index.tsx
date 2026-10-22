@@ -15,6 +15,7 @@ import {
   TOKEN_KEY,
 } from "~/utils/auth";
 import http from "~/utils/http";
+import { useToast } from "~/providers/toast";
 
 const PORTAL = "ADMIN_PORTAL";
 
@@ -35,7 +36,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,7 +53,6 @@ export default function AdminLoginPage() {
   async function handleSubmit() {
     if (submitting) return;
     setSubmitting(true);
-    setError(null);
     clearSession();
 
     try {
@@ -79,7 +79,7 @@ export default function AdminLoginPage() {
       }
 
       if (!isAdminRole(result.user.role)) {
-        setError("This account does not have admin portal access.");
+        toast.error("Sign-in failed", "This account does not have admin portal access.");
         return;
       }
 
@@ -87,7 +87,7 @@ export default function AdminLoginPage() {
       navigate("/dashboard", { replace: true });
     } catch (error) {
       const apiError = error as AxiosError<{ message?: string }>;
-      setError(apiError.response?.data?.message ?? "Login request did not reach the backend.");
+      toast.error("Sign-in failed", apiError.response?.data?.message ?? "Login request did not reach the backend.");
     } finally {
       setSubmitting(false);
     }
@@ -171,11 +171,6 @@ export default function AdminLoginPage() {
           </Link>
         </div>
 
-        {error ? (
-          <div className="mt-4 rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-            {error}
-          </div>
-        ) : null}
 
         <button
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-[8px] bg-[var(--red)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red-mid)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"

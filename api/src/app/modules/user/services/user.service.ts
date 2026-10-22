@@ -158,13 +158,19 @@ export class UserService {
       throw new BadRequestException('Database functionality is disabled');
     }
 
+    const email = userDto.email.toLowerCase().trim();
+
     try {
-      // Check if email already exists
-      const existingUser = await this.userRepository.findOneBy({
-        email: userDto.email,
-      });
+      // Include soft-deleted rows: the unique constraint on email still applies to them
+      const existingUser = await this.userRepository
+        .createQueryBuilder('user')
+        .withDeleted()
+        .where('LOWER(user.email) = :email', { email })
+        .getOne();
       if (existingUser) {
-        throw new BadRequestException('User with this email already exists');
+        throw new BadRequestException(
+          'An account with this email address already exists. Sign in or reset your password instead.',
+        );
       }
 
       // Check if phone number already exists (if provided)
@@ -174,13 +180,13 @@ export class UserService {
         });
         if (existingPhone) {
           throw new BadRequestException(
-            'User with this phone number already exists',
+            'An account with this phone number already exists.',
           );
         }
       }
 
       const user = new UserEntity();
-      user.email = userDto.email.toLowerCase().trim();
+      user.email = email;
       user.title = userDto.title;
       user.firstName = userDto.firstName;
       user.middleName = userDto.middleName;
@@ -229,7 +235,15 @@ export class UserService {
         throw error;
       }
       this.logger.error(`Failed to create user: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to create user: ' + error.message);
+      // Unique violation raced past the checks above (e.g. two simultaneous sign-ups)
+      if (error?.code === '23505') {
+        throw new BadRequestException(
+          'An account with these details already exists. Sign in or reset your password instead.',
+        );
+      }
+      throw new BadRequestException(
+        'We could not create the account. Please try again.',
+      );
     }
   }
 

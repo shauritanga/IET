@@ -1,6 +1,7 @@
 import type { AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { usePermissions } from "~/providers/permissions";
+import { useToast } from "~/providers/toast";
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import {
@@ -111,8 +112,7 @@ export default function CommunicationSendPage() {
   const [templates, setTemplates] = useState<CommunicationTemplate[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<SendSummary | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     let active = true;
@@ -131,7 +131,7 @@ export default function CommunicationSendPage() {
       } catch (err) {
         if (!active) return;
         const e = err as AxiosError<{ message?: string }>;
-        setError(e.response?.data?.message ?? "Failed to load communication options.");
+        toast.error("Couldn't load options", e.response?.data?.message ?? "Failed to load communication options.");
       } finally {
         if (active) setLoadingOptions(false);
       }
@@ -176,27 +176,25 @@ export default function CommunicationSendPage() {
 
   async function handleSend(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
 
     if (loadingOptions) {
-      setError("Communication data is still loading.");
+      toast.error("Couldn\'t send message", "Communication data is still loading.");
       return;
     }
     if (!form.message.trim()) {
-      setError("Message body is required.");
+      toast.error("Couldn\'t send message", "Message body is required.");
       return;
     }
     if (typeHasEmail(form.type) && !form.subject.trim()) {
-      setError("Subject is required for email messages.");
+      toast.error("Couldn\'t send message", "Subject is required for email messages.");
       return;
     }
     if (form.recipients === "GROUP" && !form.groupId.trim()) {
-      setError("Select a membership category for the recipient group.");
+      toast.error("Couldn\'t send message", "Select a membership category for the recipient group.");
       return;
     }
     if (form.recipients === "GROUP" && categories.length === 0) {
-      setError("No membership categories are available.");
+      toast.error("Couldn\'t send message", "No membership categories are available.");
       return;
     }
 
@@ -210,7 +208,11 @@ export default function CommunicationSendPage() {
         message: form.message.trim(),
       });
 
-      setSuccess(data.data);
+      const summary = data.data;
+      const counts = `${summary.successfulCount} of ${summary.recipientCount} recipients reached.`;
+      if (summary.status === "FAILED") toast.error("Message failed to send", `${summary.failedCount} of ${summary.recipientCount} deliveries failed.`);
+      else if (summary.failedCount > 0) toast.info("Message sent with some failures", `${counts} ${summary.failedCount} failed.`);
+      else toast.success("Message sent", counts);
       setForm((prev) => ({
         ...EMPTY_FORM,
         type: prev.type,
@@ -218,7 +220,7 @@ export default function CommunicationSendPage() {
       }));
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
-      setError(e.response?.data?.message ?? "Failed to send message.");
+      toast.error("Couldn't send message", e.response?.data?.message ?? "Failed to send message.");
     } finally {
       setSending(false);
     }
@@ -239,25 +241,7 @@ export default function CommunicationSendPage() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ background: "var(--red-pale)", border: "1px solid #f0b0b0", borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "var(--red)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <span>{error}</span>
-        </div>
-      )}
 
-      {success && (
-        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "12px 16px", fontSize: 12, color: "#166534" }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            {success.status === "FAILED" ? "Message completed with failures" : "Message sent successfully"}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "#166534" }}>
-            <span>{success.recipientCount} recipients</span>
-            <span>{success.successfulCount} sent</span>
-            <span>{success.failedCount} failed</span>
-            <span>{success.sentAt ? formatDateTime(success.sentAt) : formatDateTime(success.createdAt)}</span>
-          </div>
-        </div>
-      )}
 
       <div style={{ background: "var(--white)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden" }}>
         <form onSubmit={(event) => void handleSend(event)} style={{ padding: 22 }}>

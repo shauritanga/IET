@@ -64,7 +64,7 @@ export function Layout({children}: { children: React.ReactNode }) {
 export default function App() {
     return <ThemeProvider>
         <AuthProvider>
-            <QueryClientProvider client={queryClient}><Toaster position="top-center"/> <Outlet/> </QueryClientProvider>
+            <QueryClientProvider client={queryClient}><Toaster position="top-right" toastOptions={{ style: { borderRadius: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 12px 32px rgba(0,0,0,0.16)" } }}/> <Outlet/> </QueryClientProvider>
         </AuthProvider>
     </ThemeProvider>
 

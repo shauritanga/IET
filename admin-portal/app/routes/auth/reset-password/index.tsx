@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { AxiosError } from "axios";
 import http from "~/utils/http";
+import { useToast } from "~/providers/toast";
 
 type Requirement = { label: string; test: (pw: string) => boolean };
 
@@ -23,7 +24,7 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [success, setSuccess] = useState(false);
 
   const passwordMet = PASSWORD_REQUIREMENTS.every((r) => r.test(password));
@@ -36,14 +37,13 @@ export default function ResetPasswordPage() {
   async function handleSubmit() {
     if (!canSubmit) return;
     setSubmitting(true);
-    setError(null);
 
     try {
       await http.post("/auth/reset-password", { token, password, confirmPassword });
       setSuccess(true);
     } catch (err) {
       const apiError = err as AxiosError<{ message?: string }>;
-      setError(apiError.response?.data?.message ?? "Something went wrong. Please try again.");
+      toast.error("Couldn't reset password", apiError.response?.data?.message ?? "Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -193,11 +193,6 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {error ? (
-          <div className="mb-4 rounded-[10px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">
-            {error}
-          </div>
-        ) : null}
 
         <button
           className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-[var(--red)] px-4 py-[13px] text-[13.5px] font-bold text-white transition hover:bg-[var(--red-mid)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)]"

@@ -7,6 +7,7 @@ import { MobileCardList, MobileCard, CardFieldGrid } from "~/components/mobile-c
 import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import { usePermissions } from "~/providers/permissions";
+import { useToast } from "~/providers/toast";
 
 type ReviewStage =
   | "SECRETARIAT_REVIEW"
@@ -143,7 +144,7 @@ export default function ApplicationsPage() {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ApplicationRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const toast = useToast();
 
   async function loadApplications() {
     setLoading(true);
@@ -167,20 +168,19 @@ export default function ApplicationsPage() {
 
   function openDelete(row: ApplicationRow) {
     setDeleteTarget(row);
-    setDeleteError(null);
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    setDeleteError(null);
     try {
       await http.delete(`/admin/applications/${deleteTarget.id}`);
       setRows((current) => current.filter((row) => row.id !== deleteTarget.id));
+      toast.success("Application deleted", `${deleteTarget.applicantName ?? "The application"} was removed.`);
       setDeleteTarget(null);
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
-      setDeleteError(apiErr.response?.data?.message ?? "Failed to delete application.");
+      toast.error("Couldn't delete application", apiErr.response?.data?.message ?? "Failed to delete application.");
     } finally {
       setDeleting(false);
     }
@@ -429,7 +429,6 @@ export default function ApplicationsPage() {
             <p className="text-[11px] leading-5 text-[var(--muted)]">
               This permanently removes the application, its submitted details, document records, references, and review history. The applicant&rsquo;s portal account is not deleted.
             </p>
-            {deleteError ? <p className="rounded-[8px] border border-[#f0b0b0] bg-[var(--red-pale)] px-3 py-2 text-[11.5px] font-semibold text-[var(--red)]">{deleteError}</p> : null}
           </div>
         ) : null}
       </Modal>
