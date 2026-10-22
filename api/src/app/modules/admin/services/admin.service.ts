@@ -2553,7 +2553,7 @@ export class AdminService {
 
   /**
    * Categories whose applications skip the evaluator stage: Graduate (GIET),
-   * the three Affiliates, Companion (CompIET) and Student. Matched on the
+   * the three Affiliates, Affiliate Students, Companion (CompIET) and Student. Matched on the
    * applied category name or code, since registrations store either.
    */
   private static readonly EVALUATOR_EXEMPT_CATEGORIES = new Set([
@@ -2572,6 +2572,9 @@ export class AdminService {
     'student',
     'student member',
     'st.iet',
+    'affiliate students',
+    'affiliate student',
+    'aff. st. iet',
   ]);
 
   private skipsEvaluatorReview(
