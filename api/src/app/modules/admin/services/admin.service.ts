@@ -1207,6 +1207,8 @@ export class AdminService {
       joiningDate: user.joiningDate,
       expiryDate: user.membershipExpiryDate,
       lastPaymentDate: paymentMap.get(user.id) || null,
+      isLocked: !!user.lockedUntil && user.lockedUntil > new Date(),
+      lockedUntil: user.lockedUntil ?? null,
     }));
 
     return {
@@ -1347,6 +1349,28 @@ export class AdminService {
     }
 
     return { email: member.email, sent: true };
+  }
+
+  /**
+   * Clear a login lockout so the member can sign in again immediately.
+   */
+  async unlockMember(memberId: string): Promise<{ email: string; unlocked: boolean }> {
+    const member = await this.userRepository.findOneBy({
+      id: memberId,
+      role: UserRole.MEMBER,
+    });
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    const wasLocked = !!member.lockedUntil && member.lockedUntil > new Date();
+    await this.userRepository.update(
+      { id: member.id },
+      { failedLoginAttempts: 0, lockedUntil: null },
+    );
+    this.logger.log(
+      `Member ${member.email} unlocked by admin (was ${wasLocked ? 'locked' : 'not locked'})`,
+    );
+    return { email: member.email, unlocked: wasLocked };
   }
 
   private generateTemporaryPassword(): string {

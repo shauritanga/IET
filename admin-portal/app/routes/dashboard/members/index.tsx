@@ -21,6 +21,8 @@ type MemberRow = MemberSummary & {
   membershipStatus?: string | null;
   engineeringDiscipline?: string | null;
   expiryDate?: string | null;
+  isLocked?: boolean;
+  lockedUntil?: string | null;
 };
 
 type MembershipCategory = {
@@ -208,6 +210,14 @@ function ViewIcon() {
     </svg>
   );
 }
+function UnlockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 7.5-2" />
+    </svg>
+  );
+}
 function MailIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -283,6 +293,27 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function AccessPill({ member }: { member: MemberRow }) {
+  if (!member.isLocked) {
+    return <span style={{ fontSize: 11, color: "var(--muted)" }}>Open</span>;
+  }
+  const until = member.lockedUntil
+    ? new Date(member.lockedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+  return (
+    <span
+      title="Too many failed sign-in attempts"
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fef2f2", color: "#b91c1c", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+      Locked{until ? ` until ${until}` : ""}
+    </span>
+  );
+}
+
 function MemberAvatar({ member, size = 34, fontSize = 11 }: { member: MemberRow; size?: number; fontSize?: number }) {
   const [failed, setFailed] = useState(false);
   const showImage = member.profilePhotoUrl && !failed;
@@ -325,11 +356,13 @@ function MemberActionMenu({
   onView,
   onRenew,
   onResendCredentials,
+  onUnlock,
   onDelete,
 }: {
   onView: () => void;
   onRenew?: () => void;
   onResendCredentials?: () => void;
+  onUnlock?: () => void;
   onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -441,6 +474,13 @@ function MemberActionMenu({
               onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
               onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
               <MailIcon /> Resend credentials
+            </button>
+          ) : null}
+          {onUnlock ? (
+            <button type="button" onClick={() => { setOpen(false); onUnlock(); }} style={itemStyle}
+              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg)")}
+              onMouseOut={(e) => (e.currentTarget.style.background = "none")}>
+              <UnlockIcon /> Unlock account
             </button>
           ) : null}
           {onDelete ? (
@@ -749,6 +789,19 @@ export default function MembersPage() {
     }
   }
 
+  async function handleUnlock(member: MemberRow) {
+    try {
+      const { data } = await http.post<ApiEnvelope<{ email: string; unlocked: boolean }>>(
+        `/admin/members/${member.id}/unlock`,
+      );
+      toast.success("Account unlocked", `${data.data?.email ?? member.email} can sign in again.`);
+      void loadMembers();
+    } catch (err) {
+      const e = err as AxiosError<{ message?: string }>;
+      toast.error("Couldn't unlock account", e.response?.data?.message ?? "Could not unlock this account.");
+    }
+  }
+
   function openRenew(member: MemberRow) {
     const configuredAmount = member.membershipClass ? feeConfig[member.membershipClass] : undefined;
     setRenewTarget(member);
@@ -958,6 +1011,7 @@ export default function MembersPage() {
             onView={() => navigate(`/dashboard/members/${member.id}`)}
             onRenew={canRenewMembers ? () => openRenew(member) : undefined}
             onResendCredentials={canRenewMembers ? () => void handleResendCredentials(member) : undefined}
+            onUnlock={canRenewMembers && member.isLocked ? () => void handleUnlock(member) : undefined}
             onDelete={canRemoveMembers ? () => openDelete(member) : undefined}
           />
         );
@@ -977,7 +1031,10 @@ export default function MembersPage() {
                       <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{member.email}</div>
                     </div>
                   </div>
-                  <StatusPill status={member.membershipStatus ?? "PENDING"} />
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <StatusPill status={member.membershipStatus ?? "PENDING"} />
+                    {member.isLocked ? <AccessPill member={member} /> : null}
+                  </div>
                 </div>
 
                 {/* Details */}
@@ -1027,7 +1084,7 @@ export default function MembersPage() {
                   <table className="table-proto min-w-full border-separate border-spacing-0">
                     <thead>
                       <tr>
-                        {["Member", "Membership No.", "Grade", "Discipline", "Status", "Actions"].map((h) => (
+                        {["Member", "Membership No.", "Grade", "Discipline", "Status", "Sign-in", "Actions"].map((h) => (
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
@@ -1056,6 +1113,7 @@ export default function MembersPage() {
                           </td>
                           <td style={{ fontSize: 11.5, color: "var(--text)" }}>{member.engineeringDiscipline ?? <span style={{ color: "var(--muted)" }}>—</span>}</td>
                           <td><StatusPill status={member.membershipStatus ?? "PENDING"} /></td>
+                          <td><AccessPill member={member} /></td>
                           <td><ActionButtons member={member} /></td>
                         </tr>
                       ))}

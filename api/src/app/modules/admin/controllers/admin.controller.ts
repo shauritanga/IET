@@ -675,6 +675,20 @@ export class AdminController {
     };
   }
 
+  @Post('members/:memberId/unlock')
+  @ApiOperation({ summary: 'Clear a login lockout for one member' })
+  @ApiParam({ name: 'memberId', type: 'string', format: 'uuid' })
+  async unlockMember(@Param('memberId', ParseUUIDPipe) memberId: string) {
+    const result = await this.adminService.unlockMember(memberId);
+    return {
+      success: true,
+      data: result,
+      message: result.unlocked
+        ? `${result.email} can sign in again`
+        : `${result.email} was not locked`,
+    };
+  }
+
   @Post('members/:memberId/resend-credentials')
   @ApiOperation({
     summary: 'Reset the password and resend welcome credentials to one member',

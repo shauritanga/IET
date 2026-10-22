@@ -1010,10 +1010,15 @@ export class UserService {
       const user = await this.userRepository.findOne({ where: { email: ILike(email) } });
       if (!user) return;
 
-      const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+      // A lock that has already expired starts a fresh count; otherwise a single
+      // wrong password after the lock would immediately re-lock the account.
+      const lockExpired = !!user.lockedUntil && user.lockedUntil <= new Date();
+      const previousAttempts = lockExpired ? 0 : user.failedLoginAttempts || 0;
+      const failedAttempts = previousAttempts + 1;
       const updateData: Partial<UserEntity> = {
         failedLoginAttempts: failedAttempts,
       };
+      if (lockExpired) updateData.lockedUntil = null;
 
       // Lock account after 5 failed attempts for 30 minutes
       if (failedAttempts >= 5) {

@@ -143,6 +143,7 @@ export class PermissionsService {
     if (
       upper === 'POST' &&
       (/\/resend-credentials$/.test(cleaned) ||
+        /\/unlock$/.test(cleaned) ||
         /\/renew$/.test(cleaned) ||
         /\/check-status$/.test(cleaned) ||
         /\/resend-link$/.test(cleaned) ||
