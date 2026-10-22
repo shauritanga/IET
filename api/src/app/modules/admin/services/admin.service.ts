@@ -1246,23 +1246,31 @@ export class AdminService {
       engineeringDiscipline: dto.engineeringDiscipline as any,
     });
 
-    if (category) {
-      user.membershipCategoryId = category.id;
-      user.membershipClass =
-        this.resolveMembershipClassFromCategoryName(category.name) ??
-        user.membershipClass ??
-        MembershipClass.MEMBER;
-      await this.userRepository.save(user);
-    } else if (!user.membershipClass) {
-      user.membershipClass = MembershipClass.MEMBER;
-      await this.userRepository.save(user);
-    }
+    // Don't leave a half-created account behind: a retry would then fail with
+    // "email already exists" and the member would never receive credentials.
+    let created: UserEntity | null;
+    try {
+      if (category) {
+        user.membershipCategoryId = category.id;
+        user.membershipClass =
+          this.resolveMembershipClassFromCategoryName(category.name) ??
+          user.membershipClass ??
+          MembershipClass.MEMBER;
+        await this.userRepository.save(user);
+      } else if (!user.membershipClass) {
+        user.membershipClass = MembershipClass.MEMBER;
+        await this.userRepository.save(user);
+      }
 
-    // Admin-created members bypass the application review flow, so assign a
-    // membership ID immediately - otherwise they'd be invisible in the
-    // Members list, which only shows users who have one.
-    await this.userService.assignMembershipId(user.id);
-    const created = await this.userRepository.findOneBy({ id: user.id });
+      // Admin-created members bypass the application review flow, so assign a
+      // membership ID immediately - otherwise they'd be invisible in the
+      // Members list, which only shows users who have one.
+      await this.userService.assignMembershipId(user.id);
+      created = await this.userRepository.findOneBy({ id: user.id });
+    } catch (error) {
+      await this.userRepository.delete({ id: user.id });
+      throw error;
+    }
 
     let welcomeEmailQueued = false;
     try {
