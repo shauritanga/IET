@@ -88,6 +88,7 @@ export class MessagingQueueService {
     role: string;
     temporaryPassword?: string;
     isTemporaryPassword?: boolean;
+    existingAccount?: boolean;
     portal: AuthPortal;
   }): Promise<EmailResult> {
     return this.enqueueNamedEmail('portal-welcome', params);

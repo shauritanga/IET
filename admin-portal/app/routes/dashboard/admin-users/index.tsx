@@ -262,6 +262,7 @@ export default function AdminUsersPage() {
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [form, setForm] = useState<AdminUserForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [grantPrompt, setGrantPrompt] = useState<string | null>(null);
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [catalog, setCatalog] = useState<PermissionsCatalog | null>(null);
 
@@ -462,8 +463,8 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function saveUser(event: React.FormEvent) {
-    event.preventDefault();
+  async function saveUser(event?: React.FormEvent, grantToExistingMember = false) {
+    event?.preventDefault();
 
     if (!form.phoneNumber.trim()) {
       toast.error("Phone number required", "Enter a phone number before saving this user.");
@@ -501,18 +502,27 @@ export default function AdminUsersPage() {
           role: form.role,
           isActive: form.isActive,
           disciplineIds,
+          grantToExistingMember: grantToExistingMember || undefined,
           ...permissionPayload,
         });
       }
       setModalOpen(false);
+      setGrantPrompt(null);
       toast.success(
-        editing ? "User updated" : "User created",
+        editing ? "User updated" : grantToExistingMember ? "Role granted" : "User created",
         editing
           ? `Changes to ${form.firstName} ${form.lastName} were saved.`
-          : `${form.firstName} ${form.lastName} was added. Login credentials were emailed to ${form.email}.`,
+          : grantToExistingMember
+            ? `${form.email} can now use the admin portal with their existing password. Their membership is unchanged.`
+            : `${form.firstName} ${form.lastName} was added. Login credentials were emailed to ${form.email}.`,
       );
       await loadUsers();
     } catch (error) {
+      // The email already belongs to a member: confirm before granting the role to that account.
+      if (!editing && (error as { response?: { status?: number } })?.response?.status === 409) {
+        setGrantPrompt(getApiErrorMessage(error, "This person already has a member account."));
+        return;
+      }
       toast.error(
         editing ? "Couldn't update user" : "Couldn't create user",
         getApiErrorMessage(error, "Failed to save admin user."),
@@ -988,6 +998,28 @@ export default function AdminUsersPage() {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title="Existing member found"
+        open={Boolean(grantPrompt)}
+        onClose={() => !saving && setGrantPrompt(null)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button tone="outline" onClick={() => setGrantPrompt(null)} disabled={saving}>Cancel</Button>
+            <Button tone="dark" onClick={() => void saveUser(undefined, true)} disabled={saving}>
+              {saving ? "Granting..." : "Grant role"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[12px] text-[var(--text)]">{grantPrompt}</p>
+          <p className="text-[11px] text-[var(--muted)]">
+            Their membership, payments and password stay as they are. They will sign in to the admin portal with
+            the password they already use, and they will be emailed about the new access.
+          </p>
+        </div>
       </Modal>
 
       <Modal

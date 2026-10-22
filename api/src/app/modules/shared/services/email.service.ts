@@ -206,6 +206,8 @@ export class EmailService implements OnModuleInit {
     role: string;
     temporaryPassword?: string;
     isTemporaryPassword?: boolean;
+    /** Role granted to a person who already had an account (no new password) */
+    existingAccount?: boolean;
     portal: AuthPortal;
   }): Promise<EmailResult> {
     const isAdminPortal = params.portal === AuthPortal.ADMIN_PORTAL;
@@ -222,13 +224,16 @@ export class EmailService implements OnModuleInit {
       role: params.role,
       temporaryPassword: params.temporaryPassword,
       isTemporaryPassword: params.isTemporaryPassword,
+      existingAccount: params.existingAccount,
       portalLabel,
       loginUrl,
     });
 
     return this.send({
       to: params.email,
-      subject: `Welcome to the IET ${portalLabel}`,
+      subject: params.existingAccount
+        ? `You now have access to the IET ${portalLabel}`
+        : `Welcome to the IET ${portalLabel}`,
       html,
     });
   }
@@ -660,7 +665,11 @@ export class EmailService implements OnModuleInit {
                                         <td style="padding:28px;">
                                             <p style="margin:0 0 14px;font-size:15px;">Hello ${ctx.firstName},</p>
                                             <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#4a3a3a;">
-                                                An IET account has been created for you. You can now sign in to the ${ctx.portalLabel}.
+                                                ${
+                                                  ctx.existingAccount
+                                                    ? `Your existing IET account has been given access to the ${ctx.portalLabel}. Your membership is not affected.`
+                                                    : `An IET account has been created for you. You can now sign in to the ${ctx.portalLabel}.`
+                                                }
                                             </p>
                                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#faf6f6;border:1px solid #eadfdf;border-radius:12px;margin:18px 0;">
                                                 <tr>
@@ -668,9 +677,11 @@ export class EmailService implements OnModuleInit {
                                                         <div><strong>Role:</strong> ${ctx.role}</div>
                                                         <div><strong>Login email:</strong> ${ctx.email}</div>
                                                         ${
-                                                          ctx.temporaryPassword
-                                                            ? `<div><strong>${ctx.isTemporaryPassword === false ? 'Password' : 'Temporary password'}:</strong> ${ctx.temporaryPassword}</div>`
-                                                            : `<div>Use the initial password provided by your administrator.</div>`
+                                                          ctx.existingAccount
+                                                            ? `<div>Sign in with the same email and password you already use.</div>`
+                                                            : ctx.temporaryPassword
+                                                              ? `<div><strong>${ctx.isTemporaryPassword === false ? 'Password' : 'Temporary password'}:</strong> ${ctx.temporaryPassword}</div>`
+                                                              : `<div>Use the initial password provided by your administrator.</div>`
                                                         }
                                                     </td>
                                                 </tr>

@@ -345,7 +345,9 @@ export class CommunicationService {
   ): Promise<Recipient[]> {
     const qb = this.userRepository
       .createQueryBuilder('user')
-      .where('user.role = :role', { role: UserRole.MEMBER });
+      .where('(user.role = :role OR user.membershipId IS NOT NULL)', {
+        role: UserRole.MEMBER,
+      });
 
     if (dto.recipients === 'GROUP') {
       qb.andWhere('user.membershipCategoryId = :groupId', {

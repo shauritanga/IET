@@ -644,9 +644,29 @@ export class AdminService {
     this.assertCanManagePortalUsers(actor);
     this.assertCanAssignRole(actor, dto.role);
 
-    const existing = await this.userRepository.findOneBy({ email: dto.email });
+    const existing = await this.userRepository
+      .createQueryBuilder('user')
+      .withDeleted()
+      .where('LOWER(user.email) = :email', { email: dto.email.toLowerCase().trim() })
+      .getOne();
     if (existing) {
-      throw new BadRequestException('User with this email already exists');
+      if (existing.deletedAt) {
+        throw new BadRequestException(
+          'This email belongs to a deleted account. Restore it or use a different email.',
+        );
+      }
+      if (PORTAL_ROLES.includes(existing.role as (typeof PORTAL_ROLES)[number])) {
+        throw new BadRequestException(
+          `This person already has the ${existing.role} role. Edit them from the Users list instead.`,
+        );
+      }
+      // Same person, already a member: grant the role on their existing account.
+      if (!dto.grantToExistingMember) {
+        throw new ConflictException(
+          `${existing.fullName || existing.email} already has a member account${existing.membershipId ? ` (${existing.membershipId})` : ''}. Grant them this role on their existing account?`,
+        );
+      }
+      return this.grantPortalRoleToExistingUser(existing, dto);
     }
 
     const requiresTwoFactor = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
@@ -723,6 +743,72 @@ export class AdminService {
       ...this.toAdminUserSummary(saved, disciplines),
       credentialsEmailQueued: true,
       temporaryPasswordIssued: true,
+    };
+  }
+
+  /**
+   * Give an existing member account an admin-portal role. Their membership data
+   * and password are untouched; they keep signing in with the same credentials.
+   */
+  private async grantPortalRoleToExistingUser(
+    existing: UserEntity,
+    dto: CreateAdminUserDto,
+  ) {
+    const requiresTwoFactor = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
+      dto.role,
+    );
+    const phoneNumber = dto.phoneNumber?.trim() || existing.phoneNumber;
+    if (requiresTwoFactor && !phoneNumber) {
+      throw new BadRequestException(
+        'A phone number is required for Admin/Super Admin accounts because two-factor authentication is mandatory for these roles.',
+      );
+    }
+
+    existing.role = dto.role;
+    existing.isActive = dto.isActive ?? existing.isActive;
+    existing.phoneNumber = phoneNumber;
+    if (requiresTwoFactor) {
+      existing.enable2FA = true;
+      existing.twoFASecret =
+        existing.twoFASecret ?? this.generateTwoFactorSecret(existing.email);
+    }
+    existing.customPermissions = this.permissionsService.normalizeForStorage(
+      dto.role,
+      dto.permissions as ResourcePermissions | undefined,
+      dto.useRoleDefaults,
+    );
+    const saved = await this.userRepository.save(existing);
+
+    if (isPanelRole(dto.role) && dto.disciplineIds) {
+      await this.setUserDisciplines(saved.id, dto.disciplineIds);
+    }
+
+    this.logger.log(
+      `Granted ${dto.role} to existing member account ${saved.email} (${saved.membershipId ?? 'no membership ID'})`,
+    );
+
+    let credentialsEmailQueued = false;
+    try {
+      const result = await this.messagingQueue.enqueuePortalWelcomeEmail({
+        email: saved.email,
+        firstName: saved.firstName ?? 'there',
+        role: saved.role,
+        existingAccount: true,
+        portal: AuthPortal.ADMIN_PORTAL,
+      });
+      credentialsEmailQueued = Boolean(result.success);
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to queue role-granted email to ${saved.email}: ${error.message}`,
+      );
+    }
+
+    const disciplines = await this.getUserDisciplines(saved.id);
+    return {
+      ...this.toAdminUserSummary(saved, disciplines),
+      credentialsEmailQueued,
+      temporaryPasswordIssued: false,
+      existingMemberAccount: true,
     };
   }
 
@@ -1022,13 +1108,12 @@ export class AdminService {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     // Member stats
-    // "Members" are approved members only (portal role MEMBER with a membership
-    // ID); applicants and admin/staff accounts are not counted.
+    // "Members" are approved members only (anyone with a membership ID, even if
+    // they also hold an admin role); applicants and staff-only accounts are not counted.
     const memberBase = () =>
       this.userRepository
         .createQueryBuilder('user')
-        .where('user.role = :memberRole', { memberRole: UserRole.MEMBER })
-        .andWhere('user.membershipId IS NOT NULL');
+        .where('user.membershipId IS NOT NULL');
     const totalMembers = await memberBase().getCount();
     const activeMembers = await memberBase()
       .andWhere('user.membershipStatus = :active', {
@@ -1145,7 +1230,6 @@ export class AdminService {
     // Members list; applicants who signed up but haven't passed review yet
     // live on the separate Applications page instead.
     queryBuilder.andWhere('user.membershipId IS NOT NULL');
-    queryBuilder.andWhere('user.role = :memberRole', { memberRole: UserRole.MEMBER });
 
     if (status) {
       queryBuilder.andWhere('user.membershipStatus = :status', { status });
@@ -1233,8 +1317,7 @@ export class AdminService {
         .createQueryBuilder('user')
         .select('user.membershipStatus', 'status')
         .addSelect('COUNT(*)', 'count')
-        .where('user.role = :memberRole', { memberRole: UserRole.MEMBER })
-        .andWhere('user.membershipId IS NOT NULL')
+        .where('user.membershipId IS NOT NULL')
         .groupBy('user.membershipStatus')
         .getRawMany();
     const countFor = (value: MembershipStatus) =>
@@ -1340,12 +1423,14 @@ export class AdminService {
   async resendMemberCredentials(
     memberId: string,
   ): Promise<{ email: string; sent: boolean }> {
-    const member = await this.userRepository.findOneBy({
-      id: memberId,
-      role: UserRole.MEMBER,
-    });
+    const member = await this.userRepository.findOneBy({ id: memberId });
     if (!member) {
       throw new NotFoundException('Member not found');
+    }
+    if (member.role !== UserRole.MEMBER) {
+      throw new BadRequestException(
+        `This member also has the ${member.role} role and uses the same password for the admin portal. Reset it from the Users page instead.`,
+      );
     }
     if (!member.email?.trim()) {
       throw new BadRequestException('This member has no email address on file');
@@ -1389,10 +1474,7 @@ export class AdminService {
    * Clear a login lockout so the member can sign in again immediately.
    */
   async unlockMember(memberId: string): Promise<{ email: string; unlocked: boolean }> {
-    const member = await this.userRepository.findOneBy({
-      id: memberId,
-      role: UserRole.MEMBER,
-    });
+    const member = await this.userRepository.findOneBy({ id: memberId });
     if (!member) {
       throw new NotFoundException('Member not found');
     }
@@ -2073,10 +2155,7 @@ export class AdminService {
     email: string;
     phoneNumber?: string | null;
   }> {
-    const user = await this.userRepository.findOneBy({
-      id: memberId,
-      role: UserRole.MEMBER,
-    });
+    const user = await this.userRepository.findOneBy({ id: memberId });
     if (!user) {
       throw new NotFoundException('Member not found');
     }
@@ -2191,6 +2270,11 @@ export class AdminService {
     const user = await this.userRepository.findOneBy({ id: memberId });
     if (!user) {
       throw new NotFoundException('Member not found');
+    }
+    if (user.role !== UserRole.MEMBER) {
+      throw new BadRequestException(
+        `This member also has the ${user.role} role, so deleting them would remove their admin access. Remove the role from the Users page first.`,
+      );
     }
 
     user.isActive = false;
@@ -3110,7 +3194,8 @@ export class AdminService {
             membershipExpiryDate:
               membershipExpiryDate ?? user.membershipExpiryDate,
             annualMembershipFee: latestPaidFee?.amount ?? user.annualMembershipFee,
-            role: UserRole.MEMBER,
+            // Never demote someone who also holds an admin role
+            role: user.role ?? UserRole.MEMBER,
             isActive: true,
           });
           await this.userRepository.save(user);

@@ -168,8 +168,11 @@ export class UserService {
         .where('LOWER(user.email) = :email', { email })
         .getOne();
       if (existingUser) {
+        // Staff already hold an account; they apply for membership by signing in.
         throw new BadRequestException(
-          'An account with this email address already exists. Sign in or reset your password instead.',
+          existingUser.role !== UserRole.MEMBER
+            ? 'This email already has an IET staff account. Sign in with your existing password to apply for membership.'
+            : 'An account with this email address already exists. Sign in or reset your password instead.',
         );
       }
 

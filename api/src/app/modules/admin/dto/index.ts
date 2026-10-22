@@ -512,6 +512,14 @@ export class CreateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   useRoleDefaults?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Confirm granting this role to a person who already has a member account with the same email',
+  })
+  @IsOptional()
+  @IsBoolean()
+  grantToExistingMember?: boolean;
 }
 
 export class UpdateAdminUserDto {
