@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { formatFullName, nameSearchSql } from '../../../common/utils/full-name';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, LessThan, Not } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -409,6 +410,7 @@ export class AdminService {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
+      middleName: user.middleName,
       lastName: user.lastName,
       fullName: user.fullName,
       phoneNumber: user.phoneNumber,
@@ -614,7 +616,7 @@ export class AdminService {
     }
     if (search) {
       qb.andWhere(
-        '(user.email ILIKE :search OR user.firstName ILIKE :search OR user.lastName ILIKE :search)',
+        `(user.email ILIKE :search OR ${nameSearchSql('user', ':search')})`,
         { search: `%${search}%` },
       );
     }
@@ -684,6 +686,7 @@ export class AdminService {
     const user = this.userRepository.create({
       email: dto.email,
       firstName: dto.firstName,
+      middleName: dto.middleName || undefined,
       lastName: dto.lastName,
       phoneNumber: dto.phoneNumber,
       role: dto.role,
@@ -1004,6 +1007,7 @@ export class AdminService {
     }
     if (typeof dto.isActive === 'boolean') user.isActive = dto.isActive;
     if (dto.firstName !== undefined) user.firstName = dto.firstName;
+    if (dto.middleName !== undefined) user.middleName = dto.middleName || undefined;
     if (dto.lastName !== undefined) user.lastName = dto.lastName;
     if (dto.phoneNumber !== undefined) user.phoneNumber = dto.phoneNumber;
 
@@ -1254,7 +1258,7 @@ export class AdminService {
     }
     if (search) {
       queryBuilder.andWhere(
-        '(user.email ILIKE :search OR user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.membershipId ILIKE :search)',
+        `(user.email ILIKE :search OR user.membershipId ILIKE :search OR ${nameSearchSql('user', ':search')})`,
         { search: `%${search}%` },
       );
     }
@@ -1646,9 +1650,7 @@ export class AdminService {
     const term = search?.trim();
     if (term) {
       queryBuilder.andWhere(
-        `(user.firstName ILIKE :term OR user.lastName ILIKE :term OR user.email ILIKE :term
-          OR reg.referenceNumber ILIKE :term
-          OR CONCAT_WS(' ', user.firstName, user.lastName) ILIKE :term)`,
+        `(user.email ILIKE :term OR reg.referenceNumber ILIKE :term OR ${nameSearchSql('user', ':term')})`,
         { term: `%${term}%` },
       );
     }
@@ -2970,7 +2972,7 @@ export class AdminService {
         receiptNumber: payment.receiptNumber,
         receiptUrl: payment.receiptUrl,
         memberName: payment.user
-          ? `${payment.user.firstName ?? ''} ${payment.user.lastName ?? ''}`.trim() ||
+          ? formatFullName(payment.user) ||
             payment.user.email
           : 'Unknown',
         memberEmail: payment.user?.email ?? null,
@@ -2999,7 +3001,7 @@ export class AdminService {
         receiptNumber: fee.receiptNumber ?? null,
         receiptUrl: fee.receiptUrl ?? null,
         memberName: fee.user
-          ? `${fee.user.firstName ?? ''} ${fee.user.lastName ?? ''}`.trim() ||
+          ? formatFullName(fee.user) ||
             fee.user.email
           : 'Unknown',
         memberEmail: fee.user?.email ?? null,
@@ -3234,14 +3236,34 @@ export class AdminService {
           });
           await this.userRepository.save(user);
           result.updated++;
+          if (!user.firstName?.trim() || !user.lastName?.trim()) {
+            result.warnings.push({
+              row: row.rowNumber,
+              field: 'NAME',
+              value: user.email,
+              reason: 'Member is missing a first or last name; please complete it on the member page.',
+            });
+          }
         } else {
+          if (
+            !this.cleanImportValue(values.firstname) ||
+            !this.cleanImportValue(values.lastname)
+          ) {
+            result.skipped++;
+            result.errors.push({
+              row: row.rowNumber,
+              membershipId,
+              reason: 'First name and last name are required to create a member',
+            });
+            continue;
+          }
           const tempPassword = this.generateTemporaryPassword();
           const hashed = await bcrypt.hash(tempPassword, 10);
           user = this.userRepository.create({
             email,
             password: hashed,
             membershipId,
-            firstName: this.cleanImportValue(values.firstname) || email.split('@')[0],
+            firstName: this.cleanImportValue(values.firstname),
             middleName: this.cleanImportValue(values.middlename),
             lastName: this.cleanImportValue(values.lastname),
             phoneNumber: this.cleanImportValue(values.phone),

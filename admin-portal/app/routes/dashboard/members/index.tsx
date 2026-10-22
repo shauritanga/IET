@@ -667,6 +667,10 @@ export default function MembersPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!createForm.firstName.trim() || !createForm.lastName.trim()) {
+      toast.error("Couldn't create member", "First name and last name are required.");
+      return;
+    }
     if (!createForm.email.trim()) { toast.error("Couldn't create member", "Email is required."); return; }
     if (categoriesLoading) { toast.error("Couldn't create member", "Membership categories are still loading."); return; }
     if (categoriesError) { toast.error("Couldn't create member", categoriesError); return; }
@@ -1151,14 +1155,14 @@ export default function MembersPage() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Add New Member">
         <form onSubmit={(e) => void handleCreate(e)}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px" }}>
-            <FormField label="First Name">
-              <input style={inputStyle} value={createForm.firstName} onChange={setField("firstName")} placeholder="Joram" />
+            <FormField label="First Name" required>
+              <input style={inputStyle} value={createForm.firstName} onChange={setField("firstName")} placeholder="Joram" required />
             </FormField>
-            <FormField label="Middle Name">
+            <FormField label="Middle Name (optional)">
               <input style={inputStyle} value={createForm.middleName} onChange={setField("middleName")} placeholder="Allan" />
             </FormField>
-            <FormField label="Last Name">
-              <input style={inputStyle} value={createForm.lastName} onChange={setField("lastName")} placeholder="Jackson" />
+            <FormField label="Last Name" required>
+              <input style={inputStyle} value={createForm.lastName} onChange={setField("lastName")} placeholder="Jackson" required />
             </FormField>
           </div>
 

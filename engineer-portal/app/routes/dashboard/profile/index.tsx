@@ -50,6 +50,7 @@ const Profile = () => {
     const profile = data?.data
 
     const [firstName, setFirstName] = useState("")
+    const [middleName, setMiddleName] = useState("")
     const [lastName, setLastName] = useState("")
     const [phone, setPhone] = useState("")
     const [location, setLocation] = useState("")
@@ -61,6 +62,7 @@ const Profile = () => {
     useEffect(() => {
         if (!profile) return
         setFirstName(profile.firstName ?? "")
+        setMiddleName(profile.middleName ?? "")
         setLastName(profile.lastName ?? "")
         setPhone(profile.phoneNumber ?? "")
         setLocation(profile.location ?? profile.latestApplication?.educations?.find((education) => education.location)?.location ?? "")
@@ -70,7 +72,7 @@ const Profile = () => {
     }, [profile])
 
     const handleSave = () => {
-        const payload: Record<string, string> = { firstName, lastName, location, employer }
+        const payload: Record<string, string> = { firstName, middleName, lastName, location, employer }
         if (phone.trim()) payload.phoneNumber = phone.trim()
         if (discipline.trim()) payload.engineeringDiscipline = discipline.trim()
         saveProfile(payload)
@@ -100,7 +102,7 @@ const Profile = () => {
     }
 
     const initials = getInitials(profile?.firstName, profile?.lastName)
-    const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : ""
+    const fullName = profile ? [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ") : ""
     const latestApplication = profile?.latestApplication
     const currentExperience = latestApplication?.experiences?.find((experience) => experience.isCurrent)
     const displayDiscipline = profile?.engineeringDiscipline || latestApplication?.engineeringDiscipline || ""
@@ -179,13 +181,22 @@ const Profile = () => {
                 <div className="card">
                     <div className="card-head"><span className="card-title">Personal Information</span></div>
                     <div className="card-body">
-                        <div className="form-row">
+                        <div className="form-row" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
                             <div className="form-group">
                                 <label className="form-label">First Name</label>
                                 <input
                                     className="form-input"
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
+                                    disabled={isPending}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Middle Name (optional)</label>
+                                <input
+                                    className="form-input"
+                                    value={middleName}
+                                    onChange={(e) => setMiddleName(e.target.value)}
                                     disabled={isPending}
                                 />
                             </div>

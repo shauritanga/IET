@@ -14,7 +14,7 @@ type Props = {
 
 const ProfileSummaryCard = ({profile, isPending}: Props) => {
 
-const fullName = profile ? `${profile.firstName} ${profile.lastName}` : "";
+const fullName = profile ? [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ") : "";
 
     const initials = fullName
     ?.split(" ")

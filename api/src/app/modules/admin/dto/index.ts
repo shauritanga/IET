@@ -354,12 +354,12 @@ export class CreateMemberDto {
   @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
-  @ApiPropertyOptional({ example: 'Joram' })
-  @IsOptional()
+  @ApiProperty({ example: 'Joram' })
+  @IsNotEmpty({ message: 'First name is required' })
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  firstName?: string;
+  firstName: string;
 
   @ApiPropertyOptional({ example: 'Allan' })
   @IsOptional()
@@ -368,12 +368,12 @@ export class CreateMemberDto {
   @Transform(({ value }) => value?.trim())
   middleName?: string;
 
-  @ApiPropertyOptional({ example: 'Jackson' })
-  @IsOptional()
+  @ApiProperty({ example: 'Jackson' })
+  @IsNotEmpty({ message: 'Last name is required' })
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  lastName?: string;
+  lastName: string;
 
   @ApiPropertyOptional({ example: '+255712345678' })
   @IsOptional()
@@ -443,6 +443,13 @@ export class CreateAdminUserDto {
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   firstName: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name (optional)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  middleName?: string;
 
   @ApiProperty({ example: 'Officer' })
   @IsNotEmpty()
@@ -529,6 +536,13 @@ export class UpdateAdminUserDto {
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name (optional)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  middleName?: string;
 
   @ApiPropertyOptional({ example: 'Officer' })
   @IsOptional()

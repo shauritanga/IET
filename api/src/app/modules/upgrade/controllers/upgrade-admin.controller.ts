@@ -12,6 +12,7 @@ import {
   HttpCode,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { formatFullName } from '../../../common/utils/full-name';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -63,7 +64,7 @@ export class UpgradeAdminController {
         applicant: app.user
           ? {
               id: app.user.id,
-              fullName: `${app.user.firstName ?? ''} ${app.user.lastName ?? ''}`.trim(),
+              fullName: formatFullName(app.user),
               email: app.user.email,
               membershipId: app.user.membershipId,
             }
@@ -77,7 +78,7 @@ export class UpgradeAdminController {
         reviewer: app.reviewedBy
           ? {
               id: app.reviewedBy.id,
-              fullName: `${app.reviewedBy.firstName ?? ''} ${app.reviewedBy.lastName ?? ''}`.trim(),
+              fullName: formatFullName(app.reviewedBy),
             }
           : null,
       })),

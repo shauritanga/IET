@@ -9,6 +9,7 @@ export const normalizePhoneNumber = (value: string) =>
 
 export const RegistrationFormSchema = z.object({
     firstName: z.string().trim().min(1, "First name is required"),
+    middleName: z.string().trim().optional(),
     lastName: z.string().trim().min(1, "Last name is required"),
     email: z.string().trim().email("Please enter a valid email address"),
     phoneNumber: z
@@ -43,6 +44,7 @@ export const RegistrationFormSchema = z.object({
 export type RegistrationFormValues = z.infer<typeof RegistrationFormSchema>;
 export type RegistrationFormType = {
     firstName: string;
+    middleName?: string;
     lastName: string;
     email: string;
     phoneNumber: string;
@@ -56,6 +58,7 @@ export const useManageRegistrationForm = () => {
         mode: "onTouched",
         defaultValues: {
             firstName: "",
+            middleName: "",
             lastName: "",
             email: "",
             phoneNumber: "",

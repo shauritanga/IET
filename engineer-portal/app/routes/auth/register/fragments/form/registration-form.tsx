@@ -91,6 +91,7 @@ const RegistrationForm = () => {
         try {
             const payload: RegistrationFormType = {
                 firstName: values.firstName.trim(),
+                middleName: values.middleName?.trim() || undefined,
                 lastName: values.lastName.trim(),
                 email: values.email.trim(),
                 phoneNumber: normalizePhoneNumber(values.phoneNumber),
@@ -103,7 +104,7 @@ const RegistrationForm = () => {
             createOtpSession({
                 flow: "email-verification",
                 email: values.email,
-                name: `${values.firstName} ${values.lastName}`.trim(),
+                name: [values.firstName, values.middleName, values.lastName].map((part) => part?.trim()).filter(Boolean).join(" "),
             });
 
             notify.success("Account created", `We sent a verification code to ${values.email}.`);
@@ -126,16 +127,26 @@ const RegistrationForm = () => {
             <div className="auth-sub">Register for your IET Tanzania engineer portal account.</div>
 
             <form onSubmit={form.handleSubmit(handleSubmit)}>
+                <div className="auth-group">
+                    <label className="auth-lbl">First Name</label>
+                    <input
+                        id="firstName"
+                        className="auth-inp"
+                        placeholder="Joram"
+                        {...form.register("firstName")}
+                    />
+                    <div className="auth-err">{form.formState.errors.firstName?.message ?? ""}</div>
+                </div>
                 <div className="auth-grid-2">
                     <div className="auth-group">
-                        <label className="auth-lbl">First Name</label>
+                        <label className="auth-lbl">Middle Name <span style={{ fontWeight: 400, opacity: 0.7 }}>(optional)</span></label>
                         <input
-                            id="firstName"
+                            id="middleName"
                             className="auth-inp"
-                            placeholder="Joram"
-                            {...form.register("firstName")}
+                            placeholder="Allan"
+                            {...form.register("middleName")}
                         />
-                        <div className="auth-err">{form.formState.errors.firstName?.message ?? ""}</div>
+                        <div className="auth-err">{form.formState.errors.middleName?.message ?? ""}</div>
                     </div>
                     <div className="auth-group">
                         <label className="auth-lbl">Last Name</label>
@@ -148,7 +159,6 @@ const RegistrationForm = () => {
                         <div className="auth-err">{form.formState.errors.lastName?.message ?? ""}</div>
                     </div>
                 </div>
-
                 <div className="auth-group">
                     <label className="auth-lbl">Email Address</label>
                     <input

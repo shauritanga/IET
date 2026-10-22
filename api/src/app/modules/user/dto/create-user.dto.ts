@@ -43,11 +43,11 @@ export class CreateUserDto {
     example: 'Joram',
     description: 'First name',
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'First name is required' })
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  firstName?: string;
+  firstName: string;
 
   @ApiPropertyOptional({
     example: 'Allan',
@@ -63,11 +63,11 @@ export class CreateUserDto {
     example: 'Jackson',
     description: 'Last name',
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'Last name is required' })
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  lastName?: string;
+  lastName: string;
 
   @ApiPropertyOptional({
     example: 'MALE',

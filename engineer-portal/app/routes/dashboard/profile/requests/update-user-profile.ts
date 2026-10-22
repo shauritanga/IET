@@ -4,6 +4,7 @@ import type { UserProfile } from "../type"
 
 export type UpdateProfilePayload = {
     firstName?: string
+    middleName?: string
     lastName?: string
     phoneNumber?: string
     location?: string

@@ -28,6 +28,7 @@ type AdminUser = {
   id: string;
   email: string;
   firstName?: string | null;
+  middleName?: string | null;
   lastName?: string | null;
   fullName?: string | null;
   phoneNumber?: string | null;
@@ -43,6 +44,7 @@ type AdminUser = {
 type AdminUserForm = {
   email: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   phoneNumber: string;
   role: AdminRole;
@@ -112,6 +114,7 @@ function isElevatedRole(role: AdminRole): boolean {
 const EMPTY_FORM: AdminUserForm = {
   email: "",
   firstName: "",
+  middleName: "",
   lastName: "",
   phoneNumber: "",
   role: "SECRETARIAT",
@@ -142,7 +145,7 @@ function roleLabel(role?: string | null) {
 }
 
 function initials(user: AdminUser) {
-  const source = user.fullName || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
+  const source = user.fullName || [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") || user.email;
   return source
     .split(/\s+/)
     .slice(0, 2)
@@ -151,7 +154,7 @@ function initials(user: AdminUser) {
 }
 
 function displayName(user: AdminUser) {
-  return user.fullName || `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
+  return user.fullName || [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") || user.email;
 }
 
 function RoleBadge({ role }: { role: AdminRole }) {
@@ -380,6 +383,7 @@ export default function AdminUsersPage() {
     setForm({
       email: user.email,
       firstName: user.firstName ?? "",
+      middleName: user.middleName ?? "",
       lastName: user.lastName ?? "",
       phoneNumber: user.phoneNumber ?? "",
       role: user.role,
@@ -486,6 +490,7 @@ export default function AdminUsersPage() {
       if (editing) {
         await http.patch(`/admin/users/${editing.id}`, {
           firstName: form.firstName,
+          middleName: form.middleName.trim(),
           lastName: form.lastName,
           phoneNumber: form.phoneNumber.trim(),
           role: form.role,
@@ -497,6 +502,7 @@ export default function AdminUsersPage() {
         await http.post("/admin/users", {
           email: form.email,
           firstName: form.firstName,
+          middleName: form.middleName.trim(),
           lastName: form.lastName,
           phoneNumber: form.phoneNumber.trim(),
           role: form.role,
@@ -511,10 +517,10 @@ export default function AdminUsersPage() {
       toast.success(
         editing ? "User updated" : grantToExistingMember ? "Role granted" : "User created",
         editing
-          ? `Changes to ${form.firstName} ${form.lastName} were saved.`
+          ? `Changes to ${[form.firstName, form.middleName, form.lastName].filter(Boolean).join(" ")} were saved.`
           : grantToExistingMember
             ? `${form.email} can now use the admin portal with their existing password. Their membership is unchanged.`
-            : `${form.firstName} ${form.lastName} was added. Login credentials were emailed to ${form.email}.`,
+            : `${[form.firstName, form.middleName, form.lastName].filter(Boolean).join(" ")} was added. Login credentials were emailed to ${form.email}.`,
       );
       await loadUsers();
     } catch (error) {
@@ -814,8 +820,9 @@ export default function AdminUsersPage() {
       >
         <form onSubmit={(event) => void saveUser(event)} className="space-y-[14px]">
           <TextField label="Email" value={form.email} onChange={(value) => setForm((prev) => ({ ...prev, email: value }))} type="email" disabled={Boolean(editing)} required />
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <TextField label="First Name" value={form.firstName} onChange={(value) => setForm((prev) => ({ ...prev, firstName: value }))} required />
+            <TextField label="Middle Name (optional)" value={form.middleName} onChange={(value) => setForm((prev) => ({ ...prev, middleName: value }))} />
             <TextField label="Last Name" value={form.lastName} onChange={(value) => setForm((prev) => ({ ...prev, lastName: value }))} required />
           </div>
           <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} required />

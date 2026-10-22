@@ -7,8 +7,7 @@ import {
   IsEnum,
   Matches,
   IsDateString,
-  IsObject,
-} from 'class-validator';
+  IsObject, MinLength } from 'class-validator';
 import { Gender, Title, EngineeringDiscipline } from '../../../common/enums';
 
 export class UpdateUserDto {
@@ -27,6 +26,7 @@ export class UpdateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MinLength(1, { message: 'First name cannot be empty' })
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   firstName?: string;
@@ -47,6 +47,7 @@ export class UpdateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MinLength(1, { message: 'Last name cannot be empty' })
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
   lastName?: string;

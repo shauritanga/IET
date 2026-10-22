@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { nameSearchSql } from '../../../common/utils/full-name';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { UpgradeRuleEntity } from '../entities/upgrade-rule.entity';
@@ -415,7 +416,7 @@ export class UpgradeService {
 
     if (query.search) {
       qb.andWhere(
-        '(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.email ILIKE :search)',
+        `(user.email ILIKE :search OR ${nameSearchSql('user', ':search')})`,
         { search: `%${query.search}%` },
       );
     }

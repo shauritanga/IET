@@ -10,6 +10,7 @@ import { useToast } from "~/providers/toast";
 
 type AdminProfile = LoginUser & {
   firstName?: string | null;
+  middleName?: string | null;
   lastName?: string | null;
   phoneNumber?: string | null;
   location?: string | null;
@@ -34,7 +35,7 @@ function roleLabel(role?: string | null) {
 }
 
 function initials(profile?: AdminProfile | null) {
-  const source = profile?.fullName || `${profile?.firstName ?? ""} ${profile?.lastName ?? ""}`.trim() || profile?.email || "Admin";
+  const source = profile?.fullName || [profile?.firstName, profile?.middleName, profile?.lastName].filter(Boolean).join(" ") || profile?.email || "Admin";
   return source
     .split(/\s+/)
     .slice(0, 2)
@@ -48,7 +49,7 @@ function updateStoredUser(profile: AdminProfile) {
   const next = {
     ...stored,
     ...profile,
-    fullName: profile.fullName || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || profile.email,
+    fullName: profile.fullName || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ") || profile.email,
   };
   window.localStorage.setItem(USER_KEY, JSON.stringify(next));
   setCookie(USER_KEY, JSON.stringify(next));
@@ -113,6 +114,7 @@ export default function AdminProfilePage() {
 
   const [form, setForm] = useState({
     firstName: "",
+    middleName: "",
     lastName: "",
     phoneNumber: "",
     location: "",
@@ -127,6 +129,7 @@ export default function AdminProfilePage() {
       setProfile(data.data);
       setForm({
         firstName: data.data.firstName ?? "",
+        middleName: data.data.middleName ?? "",
         lastName: data.data.lastName ?? "",
         phoneNumber: data.data.phoneNumber ?? "",
         location: data.data.location ?? "",
@@ -204,7 +207,7 @@ export default function AdminProfilePage() {
     }
   }
 
-  const fullName = profile?.fullName || `${form.firstName} ${form.lastName}`.trim() || profile?.email || "Admin";
+  const fullName = profile?.fullName || [form.firstName, form.middleName, form.lastName].filter(Boolean).join(" ") || profile?.email || "Admin";
 
   return (
     <section>
@@ -254,6 +257,7 @@ export default function AdminProfilePage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <TextField label="First Name" value={form.firstName} onChange={(value) => setForm((prev) => ({ ...prev, firstName: value }))} />
+                <TextField label="Middle Name (optional)" value={form.middleName} onChange={(value) => setForm((prev) => ({ ...prev, middleName: value }))} />
                 <TextField label="Last Name" value={form.lastName} onChange={(value) => setForm((prev) => ({ ...prev, lastName: value }))} />
                 <TextField label="Email" value={profile?.email ?? ""} readOnly />
                 <TextField label="Phone Number" value={form.phoneNumber} onChange={(value) => setForm((prev) => ({ ...prev, phoneNumber: value }))} />

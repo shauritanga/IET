@@ -102,6 +102,7 @@ export class GuestService {
     const registration = new GuestRegistrationEntity();
     registration.eventId = eventId;
     registration.firstName = dto.firstName;
+    registration.middleName = dto.middleName;
     registration.lastName = dto.lastName;
     registration.email = dto.email;
     registration.phoneNumber = dto.phoneNumber;
@@ -428,6 +429,7 @@ export class GuestService {
   }> {
     const fee = new DevelopmentFeeEntity();
     fee.firstName = dto.firstName;
+    fee.middleName = dto.middleName;
     fee.lastName = dto.lastName;
     fee.email = dto.email;
     fee.phoneNumber = dto.phoneNumber;

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { formatFullName } from '../../../common/utils/full-name';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -817,9 +818,7 @@ export class PaymentsService {
     const user = await this.userRepository.findOne({
       where: { id: payment.userId },
     });
-    const name = user
-      ? `${user.firstName} ${user.lastName}`.trim()
-      : 'IET Member';
+    const name = user ? formatFullName(user) || 'IET Member' : 'IET Member';
 
     this.logger.log(`Selcom lookup OK for payment ${payment.id}`);
     return {
@@ -1009,7 +1008,7 @@ export class PaymentsService {
         });
         if (guestReg) {
           payer = {
-            name: `${guestReg.firstName} ${guestReg.lastName}`.trim(),
+            name: formatFullName(guestReg),
             email: guestReg.email,
             phoneNumber: guestReg.phoneNumber,
           };

@@ -6,6 +6,7 @@ import {
   Optional,
   Logger,
 } from '@nestjs/common';
+import { nameSearchSql } from '../../../common/utils/full-name';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from '../entities/user.entity';
 import { ILike, Repository, UpdateResult } from 'typeorm';
@@ -295,7 +296,7 @@ export class UserService {
       // Add search filter if provided
       if (search) {
         queryBuilder.where(
-          '(user.email ILIKE :search OR user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.membershipId ILIKE :search)',
+          `(user.email ILIKE :search OR user.membershipId ILIKE :search OR ${nameSearchSql('user', ':search')})`,
           { search: `%${search}%` },
         );
       }

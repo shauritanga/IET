@@ -9,7 +9,7 @@ import {
   Min,
   MaxLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PaymentMethod } from '../../../common/enums';
 
 // ============================================
@@ -22,6 +22,13 @@ export class GuestEventRegistrationDto {
   @IsString()
   @MaxLength(100)
   firstName: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name (optional)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  middleName?: string;
 
   @ApiProperty({ example: 'Doe', description: 'Last name' })
   @IsNotEmpty()
@@ -118,6 +125,13 @@ export class CreateDevelopmentFeeDto {
   @IsString()
   @MaxLength(100)
   firstName: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name (optional)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  middleName?: string;
 
   @ApiProperty({ example: 'Doe', description: 'Last name' })
   @IsNotEmpty()

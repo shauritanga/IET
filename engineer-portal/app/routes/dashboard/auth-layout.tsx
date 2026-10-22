@@ -24,6 +24,7 @@ type UserProfileSessionSource = {
     email: string
     fullName?: string | null
     firstName?: string | null
+    middleName?: string | null
     lastName?: string | null
     profilePhotoUrl?: string | null
     membershipStatus?: string | null
@@ -103,7 +104,7 @@ export default function AuthLayout() {
                 if (cancelled || !profile) return
 
                 const name = profile.fullName?.trim()
-                    || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim()
+                    || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ")
                     || profile.email
 
                 const nextSession = createAuthSession({
@@ -141,7 +142,7 @@ export default function AuthLayout() {
                 const profile = response.data.data
                 if (cancelled || !profile) return
                 const name = profile.fullName?.trim()
-                    || `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim()
+                    || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ")
                     || profile.email
                 const nextSession = createAuthSession({
                     email: profile.email,

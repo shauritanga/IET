@@ -1,5 +1,5 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { EventEntity } from '../../events/entities/event.entity';
 import {
@@ -38,6 +38,10 @@ export class GuestRegistrationEntity extends BaseEntity {
   @ApiProperty({ example: 'John', description: 'First name' })
   @Column()
   firstName: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name' })
+  @Column({ type: 'varchar', nullable: true })
+  middleName?: string;
 
   @ApiProperty({ example: 'Doe', description: 'Last name' })
   @Column()
@@ -174,6 +178,8 @@ export class GuestRegistrationEntity extends BaseEntity {
   // COMPUTED PROPERTIES
   // ============================================
   get fullName(): string {
-    return `${this.firstName} ${this.lastName}`;
+    return [this.firstName, this.middleName, this.lastName]
+      .filter(Boolean)
+      .join(' ');
   }
 }

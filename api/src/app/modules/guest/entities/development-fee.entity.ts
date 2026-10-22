@@ -1,5 +1,5 @@
 import { Entity, Column, Index } from 'typeorm';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { PaymentStatus, PaymentMethod } from '../../../common/enums';
 
@@ -21,6 +21,10 @@ export class DevelopmentFeeEntity extends BaseEntity {
   @ApiProperty({ example: 'John', description: 'First name' })
   @Column()
   firstName: string;
+
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name' })
+  @Column({ type: 'varchar', nullable: true })
+  middleName?: string;
 
   @ApiProperty({ example: 'Doe', description: 'Last name' })
   @Column()
@@ -105,6 +109,8 @@ export class DevelopmentFeeEntity extends BaseEntity {
   // COMPUTED PROPERTIES
   // ============================================
   get fullName(): string {
-    return `${this.firstName} ${this.lastName}`;
+    return [this.firstName, this.middleName, this.lastName]
+      .filter(Boolean)
+      .join(' ');
   }
 }

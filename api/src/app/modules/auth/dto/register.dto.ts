@@ -51,19 +51,26 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Password confirmation is required' })
   confirmPassword: string;
 
-  @ApiPropertyOptional({ example: 'Joram', description: 'First name' })
-  @IsOptional()
+  @ApiProperty({ example: 'Joram', description: 'First name' })
+  @IsNotEmpty({ message: 'First name is required' })
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  firstName?: string;
+  firstName: string;
 
-  @ApiPropertyOptional({ example: 'Jackson', description: 'Last name' })
+  @ApiPropertyOptional({ example: 'Allan', description: 'Middle name (optional)' })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   @Transform(({ value }) => value?.trim())
-  lastName?: string;
+  middleName?: string;
+
+  @ApiProperty({ example: 'Jackson', description: 'Last name' })
+  @IsNotEmpty({ message: 'Last name is required' })
+  @IsString()
+  @MaxLength(100)
+  @Transform(({ value }) => value?.trim())
+  lastName: string;
 
   @ApiProperty({
     example: '+255657000000',
