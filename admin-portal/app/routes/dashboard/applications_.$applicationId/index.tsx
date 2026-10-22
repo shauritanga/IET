@@ -27,6 +27,7 @@ type ApplicationDetail = {
   email: string;
   applicant: { id: string; fullName: string; email: string; phoneNumber?: string };
   appliedMembershipClass?: string;
+  skipsEvaluator?: boolean;
   engineeringDiscipline?: string;
   status: AppStatus;
   reviewStage?: ReviewStage;
@@ -182,6 +183,7 @@ function getPrimaryAction(
   }
 
   if (!isSecretariat) return null;
+  if (stage === "SECRETARIAT_REVIEW" && detail?.skipsEvaluator) return { action: "SECRETARIAT_ADVANCE_TO_MPDC", label: "Assign MPDC Member and Advance" };
   if (stage === "SECRETARIAT_REVIEW") return { action: "ASSIGN_EVALUATOR", label: "Assign Evaluator and Advance" };
   if (stage === "SECRETARIAT_EVALUATOR_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_MPDC", label: "Assign MPDC Member and Advance" };
   if (stage === "SECRETARIAT_MPDC_RECOMMENDATION") return { action: "SECRETARIAT_ADVANCE_TO_COUNCIL", label: "Assign Council Member and Advance" };

@@ -823,7 +823,10 @@ export class AdminService {
     let role: UserRole;
     let users: UserEntity[];
 
-    if (stage === ApplicationReviewStage.SECRETARIAT_REVIEW) {
+    if (
+      stage === ApplicationReviewStage.SECRETARIAT_REVIEW &&
+      !this.skipsEvaluatorReview(registration)
+    ) {
       role = UserRole.EVALUATOR;
       const discipline = registration.engineeringDiscipline;
       if (!discipline) {
@@ -853,7 +856,10 @@ export class AdminService {
       };
     }
 
-    if (stage === ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION) {
+    if (
+      stage === ApplicationReviewStage.SECRETARIAT_REVIEW ||
+      stage === ApplicationReviewStage.SECRETARIAT_EVALUATOR_RECOMMENDATION
+    ) {
       role = UserRole.MPDC;
     } else if (stage === ApplicationReviewStage.SECRETARIAT_MPDC_RECOMMENDATION) {
       role = UserRole.COUNCIL;
@@ -1568,6 +1574,7 @@ export class AdminService {
         phoneNumber: registration.user.phoneNumber,
       },
       appliedMembershipClass: registration.appliedMembershipClass,
+      skipsEvaluator: this.skipsEvaluatorReview(registration),
       engineeringDiscipline: registration.engineeringDiscipline,
       reviewComments: registration.reviewComments,
       rejectionReason: registration.rejectionReason,
@@ -1715,7 +1722,7 @@ export class AdminService {
       throw new BadRequestException('Application is missing a review stage');
     }
 
-    this.assertAllowedStageAction(currentStage, dto.action);
+    this.assertAllowedStageAction(currentStage, dto.action, registration);
     await this.assertCanPerformStageAction(actor, registration, dto.action);
 
     // CLAIM is a self-contained action: it locks the current review stage to
@@ -2544,9 +2551,42 @@ export class AdminService {
     }
   }
 
+  /**
+   * Categories whose applications skip the evaluator stage: Graduate (GIET),
+   * the three Affiliates, Companion (CompIET) and Student. Matched on the
+   * applied category name or code, since registrations store either.
+   */
+  private static readonly EVALUATOR_EXEMPT_CATEGORIES = new Set([
+    'graduate',
+    'giet',
+    'affiliate graduate',
+    'aff-giet',
+    'affiliate fellow',
+    'aff-fiet',
+    'affiliate member',
+    'aff-miet',
+    'companion',
+    'companions',
+    'comp-iet',
+    'compiet',
+    'student',
+    'student member',
+    'st.iet',
+  ]);
+
+  private skipsEvaluatorReview(
+    registration: Pick<RegistrationEntity, 'appliedMembershipClass'>,
+  ): boolean {
+    const applied = registration.appliedMembershipClass?.trim().toLowerCase();
+    return (
+      !!applied && AdminService.EVALUATOR_EXEMPT_CATEGORIES.has(applied)
+    );
+  }
+
   private assertAllowedStageAction(
     stage: ApplicationReviewStage,
     action: UpdateApplicationStageDto['action'],
+    registration: RegistrationEntity,
   ): void {
     const allowedActions: Record<ApplicationReviewStage, UpdateApplicationStageDto['action'][]> = {
       [ApplicationReviewStage.SECRETARIAT_REVIEW]: [
@@ -2583,6 +2623,18 @@ export class AdminService {
       ],
       [ApplicationReviewStage.APPROVAL_NOTICE_SENT]: [],
     };
+
+    // Exempt categories go straight from Secretariat review to MPDC.
+    if (
+      stage === ApplicationReviewStage.SECRETARIAT_REVIEW &&
+      this.skipsEvaluatorReview(registration)
+    ) {
+      allowedActions[stage] = [
+        'SECRETARIAT_ADVANCE_TO_MPDC',
+        'RETURN_FOR_CHANGES',
+        'REJECT',
+      ];
+    }
 
     if (!allowedActions[stage].includes(action)) {
       throw new BadRequestException(
