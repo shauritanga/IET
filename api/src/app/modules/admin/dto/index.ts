@@ -72,6 +72,14 @@ export class MemberQueryDto {
   @IsOptional()
   @IsEnum(EngineeringDiscipline)
   discipline?: EngineeringDiscipline;
+
+  @ApiPropertyOptional({
+    example: 'locked',
+    description: 'Set to "locked" to list only members currently locked out of sign-in',
+  })
+  @IsOptional()
+  @IsString()
+  access?: string;
 }
 
 export class ApplicationQueryDto {

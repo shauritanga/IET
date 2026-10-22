@@ -1121,11 +1121,15 @@ export class AdminService {
       membershipCategoryId,
       search,
       discipline,
+      access,
     } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository.createQueryBuilder('user');
     queryBuilder.leftJoinAndSelect('user.membershipCategory', 'membershipCategory');
+    if (access === 'locked') {
+      queryBuilder.andWhere('user.lockedUntil > NOW()');
+    }
     // Only approved members (i.e. issued a membership ID) belong in the
     // Members list; applicants who signed up but haven't passed review yet
     // live on the separate Applications page instead.

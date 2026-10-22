@@ -554,6 +554,7 @@ export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [classFilter, setClassFilter] = useState("");
+  const [lockedOnly, setLockedOnly] = useState(false);
   const [total, setTotal] = useState(0);
   const [view, setView] = useState<"list" | "grid">("list");
   const [page, setPage] = useState(1);
@@ -600,6 +601,7 @@ export default function MembersPage() {
     if (statusFilter) params.set("status", statusFilter);
     if (classFilter) params.set("membershipCategoryId", classFilter);
     if (search) params.set("search", search);
+    if (lockedOnly) params.set("access", "locked");
     try {
       const { data } = await http.get<ApiEnvelope<MemberRow[]>>(`/admin/members?${params}`);
       setMembers(data.data ?? []);
@@ -617,7 +619,7 @@ export default function MembersPage() {
     const t = setTimeout(() => void loadMembers(), search ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, classFilter]);
+  }, [search, statusFilter, classFilter, lockedOnly]);
 
   useEffect(() => {
     async function loadFeeConfig() {
@@ -965,10 +967,19 @@ export default function MembersPage() {
           <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--muted)" }}><ChevronIcon /></span>
         </div>
 
-        {(search || statusFilter || classFilter) && (
+        <button
+          type="button"
+          aria-pressed={lockedOnly}
+          onClick={() => setLockedOnly((value) => !value)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: lockedOnly ? "#fef2f2" : "var(--white)", color: lockedOnly ? "#b91c1c" : "var(--text)", border: `1.5px solid ${lockedOnly ? "#fca5a5" : "var(--border)"}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+        >
+          <UnlockIcon /> Locked only
+        </button>
+
+        {(search || statusFilter || classFilter || lockedOnly) && (
           <button
             className="hidden sm:block"
-            onClick={() => { setSearch(""); setStatusFilter(""); setClassFilter(""); }}
+            onClick={() => { setSearch(""); setStatusFilter(""); setClassFilter(""); setLockedOnly(false); }}
             style={{ fontSize: 11.5, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: "0 4px", fontWeight: 600 }}
           >
             Clear filters
@@ -1076,7 +1087,7 @@ export default function MembersPage() {
                     <UsersIcon />
                   </div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--red-dark)", marginBottom: 4 }}>No members found</p>
-                  <p style={{ fontSize: 11.5, color: "var(--muted)" }}>{search || statusFilter || classFilter ? "Try adjusting your filters." : "Add your first member to get started."}</p>
+                  <p style={{ fontSize: 11.5, color: "var(--muted)" }}>{search || statusFilter || classFilter || lockedOnly ? "Try adjusting your filters." : "Add your first member to get started."}</p>
                 </div>
               ) : view === "list" ? (
                 <>
