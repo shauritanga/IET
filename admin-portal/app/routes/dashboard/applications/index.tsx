@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router";
 import { Trash2 } from "lucide-react";
@@ -8,6 +8,7 @@ import http from "~/utils/http";
 import type { ApiEnvelope } from "~/types";
 import { usePermissions } from "~/providers/permissions";
 import { useToast } from "~/providers/toast";
+import { Pagination } from "~/components/pagination";
 
 type ReviewStage =
   | "SECRETARIAT_REVIEW"
@@ -42,6 +43,8 @@ const CLAIMABLE_STAGES: ReviewStage[] = [
   "MPDC_REVIEW",
   "COUNCIL_REVIEW",
 ];
+
+const PAGE_SIZE = 20;
 
 const STAGE_LABELS: Record<ReviewStage, string> = {
   SECRETARIAT_REVIEW: "Secretariat Review",
@@ -142,29 +145,49 @@ export default function ApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [stageFilter, setStageFilter] = useState("All Stages");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const latestRequest = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState<ApplicationRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const toast = useToast();
 
   async function loadApplications() {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     setPageError(null);
+    const statusEntry = Object.entries(STATUS_LABELS).find(([, label]) => label === statusFilter);
+    const stageEntry = Object.entries(STAGE_LABELS).find(([, label]) => label === stageFilter);
+    const params = new URLSearchParams({
+      status: statusEntry ? statusEntry[0] : "IN_REVIEW,APPROVED,REJECTED,CHANGES_REQUESTED",
+      page: String(page),
+      limit: String(PAGE_SIZE),
+    });
+    if (stageEntry) params.set("reviewStage", stageEntry[0]);
+    if (search.trim()) params.set("search", search.trim());
     try {
-      const { data } = await http.get<ApiEnvelope<ApplicationRow[]>>(
-        "/admin/applications?status=IN_REVIEW,APPROVED,REJECTED,CHANGES_REQUESTED&limit=200",
-      );
+      const { data } = await http.get<ApiEnvelope<ApplicationRow[]>>(`/admin/applications?${params}`);
+      if (requestId !== latestRequest.current) return;
       setRows(data.data ?? []);
+      setTotal(data.meta?.total ?? 0);
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       const apiErr = err as AxiosError<{ message?: string }>;
       setPageError(apiErr.response?.data?.message ?? "Failed to load applications.");
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadApplications();
-  }, []);
+    setPage(1);
+  }, [search, statusFilter, stageFilter]);
+
+  useEffect(() => {
+    const t = setTimeout(() => void loadApplications(), search ? 350 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, statusFilter, stageFilter, page]);
 
   function openDelete(row: ApplicationRow) {
     setDeleteTarget(row);
@@ -175,9 +198,9 @@ export default function ApplicationsPage() {
     setDeleting(true);
     try {
       await http.delete(`/admin/applications/${deleteTarget.id}`);
-      setRows((current) => current.filter((row) => row.id !== deleteTarget.id));
       toast.success("Application deleted", `${deleteTarget.applicantName ?? "The application"} was removed.`);
       setDeleteTarget(null);
+      void loadApplications();
     } catch (err) {
       const apiErr = err as AxiosError<{ message?: string }>;
       toast.error("Couldn't delete application", apiErr.response?.data?.message ?? "Failed to delete application.");
@@ -189,21 +212,7 @@ export default function ApplicationsPage() {
   const stageOptions = ["All Stages", ...Object.values(STAGE_LABELS)];
   const statusOptions = ["All", ...Object.values(STATUS_LABELS)];
 
-  const visible = useMemo(() => rows.filter((row) => {
-    const stageLabel = row.reviewStage ? STAGE_LABELS[row.reviewStage] : "-";
-    const statusLabel = STATUS_LABELS[row.status] ?? row.status;
-    const term = search.trim().toLowerCase();
-    const matchesSearch =
-      !term ||
-      row.applicantName?.toLowerCase().includes(term) ||
-      row.email?.toLowerCase().includes(term) ||
-      row.referenceNumber?.toLowerCase().includes(term);
-    return (
-      matchesSearch &&
-      (stageFilter === "All Stages" || stageLabel === stageFilter) &&
-      (statusFilter === "All" || statusLabel === statusFilter)
-    );
-  }), [rows, search, stageFilter, statusFilter]);
+  const visible = rows;
 
   return (
     <section>
@@ -400,6 +409,10 @@ export default function ApplicationsPage() {
             </MobileCard>
           ))}
         </MobileCardList>
+      )}
+
+      {!loading && total > 0 && (
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} noun="application" onPageChange={setPage} />
       )}
 
       <Modal

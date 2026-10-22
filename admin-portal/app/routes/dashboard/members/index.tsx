@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import http from "~/utils/http";
 import { useToast } from "~/providers/toast";
+import { Pagination } from "~/components/pagination";
 import { usePermissions } from "~/providers/permissions";
 import type { ApiEnvelope, MemberSummary } from "~/types";
 
@@ -520,7 +521,7 @@ const selectStyle: React.CSSProperties = {
   ...inputStyle, appearance: "none", cursor: "pointer",
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 function ListViewIcon({ active }: { active: boolean }) {
   return (
@@ -586,40 +587,45 @@ export default function MembersPage() {
   const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // stats derived from members list
-  const stats = {
-    total,
-    active: members.filter((m) => m.membershipStatus === "ACTIVE").length,
-    pending: members.filter((m) => m.membershipStatus === "PENDING").length,
-    expired: members.filter((m) => m.membershipStatus === "EXPIRED").length,
-  };
+  // Overall counts come from the server so they cover every member, not just this page
+  const [memberStats, setMemberStats] = useState({ active: 0, pending: 0, expired: 0, total: 0 });
+  const stats = memberStats;
+
+  const latestRequest = useRef(0);
 
   async function loadMembers() {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     setPageError(null);
-    const params = new URLSearchParams({ page: "1", limit: "100" });
+    const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (statusFilter) params.set("status", statusFilter);
     if (classFilter) params.set("membershipCategoryId", classFilter);
     if (search) params.set("search", search);
     if (lockedOnly) params.set("access", "locked");
     try {
       const { data } = await http.get<ApiEnvelope<MemberRow[]>>(`/admin/members?${params}`);
+      if (requestId !== latestRequest.current) return;
       setMembers(data.data ?? []);
       setTotal(data.meta?.total ?? 0);
+      const serverStats = (data.meta as { stats?: { active: number; pending: number; expired: number } } | undefined)?.stats;
+      if (serverStats) setMemberStats({ ...serverStats, total: serverStats.active + serverStats.pending + serverStats.expired });
     } catch (err) {
       const e = err as AxiosError<{ message?: string }>;
       setPageError(e.response?.data?.message ?? "Failed to load members.");
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     setPage(1);
+  }, [search, statusFilter, classFilter, lockedOnly]);
+
+  useEffect(() => {
     const t = setTimeout(() => void loadMembers(), search ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, classFilter, lockedOnly]);
+  }, [search, statusFilter, classFilter, lockedOnly, page]);
 
   useEffect(() => {
     async function loadFeeConfig() {
@@ -1011,11 +1017,7 @@ export default function MembersPage() {
 
       {/* Table / Grid */}
       {(() => {
-        const totalPages = Math.max(1, Math.ceil(members.length / PAGE_SIZE));
-        const safePage = Math.min(page, totalPages);
-        const pageMembers = members.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-        const from = members.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
-        const to = Math.min(safePage * PAGE_SIZE, members.length);
+        const pageMembers = members;
 
         const ActionButtons = ({ member }: { member: MemberRow }) => (
           <MemberActionMenu
@@ -1138,35 +1140,8 @@ export default function MembersPage() {
               )}
             </div>
 
-            {/* Pagination */}
             {!loading && members.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  Showing <strong>{from}–{to}</strong> of <strong>{members.length}</strong> member{members.length !== 1 ? "s" : ""}
-                </span>
-                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage === 1}
-                    style={{ width: 30, height: 30, border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--white)", cursor: safePage === 1 ? "not-allowed" : "pointer", opacity: safePage === 1 ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)", fontSize: 13, fontWeight: 700 }}
-                  >‹</button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button key={p} onClick={() => setPage(p)}
-                      style={{ width: 30, height: 30, border: "1.5px solid", borderRadius: 7, cursor: "pointer", fontSize: 11.5, fontWeight: 700, transition: "all .15s",
-                        borderColor: safePage === p ? "var(--red)" : "var(--border)",
-                        background: safePage === p ? "var(--red)" : "var(--white)",
-                        color: safePage === p ? "white" : "var(--text)" }}
-                    >{p}</button>
-                  ))}
-
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage === totalPages}
-                    style={{ width: 30, height: 30, border: "1.5px solid var(--border)", borderRadius: 7, background: "var(--white)", cursor: safePage === totalPages ? "not-allowed" : "pointer", opacity: safePage === totalPages ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)", fontSize: 13, fontWeight: 700 }}
-                  >›</button>
-                </div>
-              </div>
+              <Pagination page={page} pageSize={PAGE_SIZE} total={total} noun="member" onPageChange={setPage} />
             )}
           </>
         );

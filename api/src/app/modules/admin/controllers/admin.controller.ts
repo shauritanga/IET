@@ -287,6 +287,7 @@ export class AdminController {
         totalPages: result.totalPages,
         hasNextPage: result.page < result.totalPages,
         hasPreviousPage: result.page > 1,
+        stats: result.stats,
       },
     };
   }

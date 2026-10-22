@@ -111,6 +111,11 @@ export class ApplicationQueryDto {
   @IsOptional()
   @IsEnum(ApplicationReviewStage)
   reviewStage?: ApplicationReviewStage;
+
+  @ApiPropertyOptional({ example: 'joram', description: 'Matches applicant name, email or reference number' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 
 export class UpdateApplicationCategoryDto {

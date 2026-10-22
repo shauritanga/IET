@@ -1022,16 +1022,26 @@ export class AdminService {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     // Member stats
-    const totalMembers = await this.userRepository.count();
-    const activeMembers = await this.userRepository.count({
-      where: { membershipStatus: MembershipStatus.ACTIVE },
-    });
-    const expiredMembers = await this.userRepository.count({
-      where: { membershipStatus: MembershipStatus.EXPIRED },
-    });
-    const newThisMonth = await this.userRepository
-      .createQueryBuilder('user')
-      .where('user.createdAt >= :startOfMonth', { startOfMonth })
+    // "Members" are approved members only (portal role MEMBER with a membership
+    // ID); applicants and admin/staff accounts are not counted.
+    const memberBase = () =>
+      this.userRepository
+        .createQueryBuilder('user')
+        .where('user.role = :memberRole', { memberRole: UserRole.MEMBER })
+        .andWhere('user.membershipId IS NOT NULL');
+    const totalMembers = await memberBase().getCount();
+    const activeMembers = await memberBase()
+      .andWhere('user.membershipStatus = :active', {
+        active: MembershipStatus.ACTIVE,
+      })
+      .getCount();
+    const expiredMembers = await memberBase()
+      .andWhere('user.membershipStatus = :expired', {
+        expired: MembershipStatus.EXPIRED,
+      })
+      .getCount();
+    const newThisMonth = await memberBase()
+      .andWhere('user.createdAt >= :startOfMonth', { startOfMonth })
       .getCount();
 
     // Application stats
@@ -1108,6 +1118,7 @@ export class AdminService {
    */
   async listMembers(query: MemberQueryDto): Promise<{
     items: any[];
+    stats: { active: number; pending: number; expired: number };
     total: number;
     page: number;
     pageSize: number;
@@ -1134,6 +1145,7 @@ export class AdminService {
     // Members list; applicants who signed up but haven't passed review yet
     // live on the separate Applications page instead.
     queryBuilder.andWhere('user.membershipId IS NOT NULL');
+    queryBuilder.andWhere('user.role = :memberRole', { memberRole: UserRole.MEMBER });
 
     if (status) {
       queryBuilder.andWhere('user.membershipStatus = :status', { status });
@@ -1215,8 +1227,26 @@ export class AdminService {
       lockedUntil: user.lockedUntil ?? null,
     }));
 
+    // Overall counts for the summary cards, independent of filters and paging.
+    const statusRows: Array<{ status: string; count: string }> =
+      await this.userRepository
+        .createQueryBuilder('user')
+        .select('user.membershipStatus', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .where('user.role = :memberRole', { memberRole: UserRole.MEMBER })
+        .andWhere('user.membershipId IS NOT NULL')
+        .groupBy('user.membershipStatus')
+        .getRawMany();
+    const countFor = (value: MembershipStatus) =>
+      Number(statusRows.find((row) => row.status === value)?.count ?? 0);
+
     return {
       items,
+      stats: {
+        active: countFor(MembershipStatus.ACTIVE),
+        pending: countFor(MembershipStatus.PENDING),
+        expired: countFor(MembershipStatus.EXPIRED),
+      },
       total,
       page,
       pageSize: limit,
@@ -1503,7 +1533,7 @@ export class AdminService {
     pageSize: number;
     totalPages: number;
   }> {
-    const { page = 1, limit = 20, status, reviewStage } = query;
+    const { page = 1, limit = 20, status, reviewStage, search } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.registrationRepository
@@ -1527,6 +1557,15 @@ export class AdminService {
     }
     if (reviewStage) {
       queryBuilder.andWhere('reg.reviewStage = :reviewStage', { reviewStage });
+    }
+    const term = search?.trim();
+    if (term) {
+      queryBuilder.andWhere(
+        `(user.firstName ILIKE :term OR user.lastName ILIKE :term OR user.email ILIKE :term
+          OR reg.referenceNumber ILIKE :term
+          OR CONCAT_WS(' ', user.firstName, user.lastName) ILIKE :term)`,
+        { term: `%${term}%` },
+      );
     }
     await this.applyApplicationRoleScope(queryBuilder, actor);
 
